@@ -1,3 +1,5 @@
+# imaia — 多平台个人 AI 助理（IM AI Assistant）
+# 微信适配经 agent-wechat 社区网关（官方无个人号 API）；飞书/钉钉适配器在路线图上
 server:
   # WebUI and control API bind to loopback only.
   address: ${IMAIA_WEB_ADDRESS:127.0.0.1}

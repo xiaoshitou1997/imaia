@@ -1,7 +1,7 @@
-# imaia — agent-wechat 通用事件消费者
+# imaia — 多平台个人 AI 助理（IM AI Assistant）
 
-基于 **Spring Boot 4.0 + Maven + Java 21** 的 [agent-wechat](../README.md) daemon 通用消费者：
-连接 daemon 的 SSE 事件流，按游标断点续传，把事件分发给可插拔的处理器，并回执处理进度。
+基于 **Spring Boot 4.0 + Maven + Java 21** 的多平台个人 AI 助理。平台适配层（adapter）把各 IM 的
+事件流归一化后交给核心链路：AI 自动回复（多模态）、长期记忆、计划任务、人物画像。
 内置 AI 自动回复（magpie 网关，多模态：文本/图片/表情包/视频封面/语音转写），持久化走
 PostgreSQL（会话历史）+ Redis（限流计数），可直接作为自建 agent / bot / 集成的起点。
 

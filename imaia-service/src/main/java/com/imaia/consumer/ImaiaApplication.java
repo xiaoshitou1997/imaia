@@ -5,10 +5,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
- * Generic consumer of the agent-wechat daemon's event stream. It connects to the daemon
- * over HTTP, replays events it has not handled yet, dispatches them to registered
- * {@link com.imaia.consumer.adapter.wechat.DaemonEventHandler} beans and records progress
- * through a local cursor plus the daemon's consumer acknowledgement.
+ * imaia — IM AI Assistant. The wechat adapter (adapter/wechat) consumes the
+ * agent-wechat daemon's event stream and normalizes it through the ImAdapter
+ * contract; the core pipeline (archive → AI → risk → scheduled delivery) stays
+ * platform-agnostic, so adding Feishu/DingTalk means new adapters, not a new core.
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan
