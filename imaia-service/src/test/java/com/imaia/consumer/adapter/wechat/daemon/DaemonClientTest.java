@@ -31,7 +31,7 @@ class DaemonClientTest {
                 .baseUrl(server.url("/").toString())
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer test-token")
                 .build();
-        client = new DaemonClient(webClient, TestProperties.daemon(server.url("/").toString(), "acc1"));
+        client = new DaemonClient(webClient, TestProperties.wechat(server.url("/").toString(), "acc1"));
     }
 
     @AfterEach
@@ -102,7 +102,7 @@ class DaemonClientTest {
                 .addHeader("Content-Type", "application/json"));
         DaemonClient autoClient = new DaemonClient(
                 WebClient.builder().baseUrl(server.url("/").toString()).build(),
-                TestProperties.daemon(server.url("/").toString(), ""));
+                TestProperties.wechat(server.url("/").toString(), ""));
 
         assertThat(autoClient.accountId()).isEqualTo("a9");
         assertThat(autoClient.accountId()).isEqualTo("a9");

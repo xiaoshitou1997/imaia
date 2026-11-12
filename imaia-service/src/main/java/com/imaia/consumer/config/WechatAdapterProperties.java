@@ -3,13 +3,13 @@ package com.imaia.consumer.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Startup bindings only: the wechat adapter's daemon connection and event-stream consumption. The AI
- * persona, model directory and risk policy live in the database (assistant_profile,
- * provider+model, risk_policy) and are edited in the WebUI; they are seeded from
- * migration V9 and take effect without restarts.
+ * Startup bindings of the wechat adapter: the daemon connection and event-stream
+ * consumption. The AI persona, model directory and risk policy live in the database
+ * (assistant_profile, provider+model, risk_policy), are seeded by migration V9 and
+ * are edited in the WebUI without restarts.
  */
-@ConfigurationProperties("imaia")
-public record ConsumerProperties(Daemon daemon, Stream stream) {
+@ConfigurationProperties("imaia.adapter.wechat")
+public record WechatAdapterProperties(boolean enabled, Daemon daemon, Stream stream) {
 
     /** Connection to the agent-wechat daemon. */
     public record Daemon(
@@ -27,7 +27,6 @@ public record ConsumerProperties(Daemon daemon, Stream stream) {
             long reconnectDelayMillis,
             long retryInitialBackoffMillis,
             long retryMaxBackoffMillis,
-            int handlerFailureThreshold,
             boolean exitOnFailure) {
     }
 }

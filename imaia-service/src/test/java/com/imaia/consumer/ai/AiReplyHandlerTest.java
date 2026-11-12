@@ -1,12 +1,14 @@
 package com.imaia.consumer.ai;
 
 import com.imaia.consumer.TestProperties;
-import com.imaia.consumer.config.ConsumerProperties;
+import com.imaia.consumer.config.WechatAdapterProperties;
 import com.imaia.consumer.domain.AssistantProfile;
 import com.imaia.consumer.domain.RiskPolicy;
 import com.imaia.consumer.config.ChatModelFactory;
 import com.imaia.consumer.config.ModelRegistry;
 import com.imaia.consumer.adapter.ImAdapter;
+import com.imaia.consumer.adapter.ImAdapters;
+import com.imaia.consumer.adapter.ImEvent;
 import com.imaia.consumer.adapter.wechat.daemon.DaemonClient;
 import com.imaia.consumer.adapter.WechatAdapter;
 import com.imaia.consumer.repository.MemoryFactRepository;
@@ -17,7 +19,6 @@ import com.imaia.consumer.repository.ScheduledActionRepository;
 import com.imaia.consumer.repository.ImMessageRepository;
 import com.imaia.consumer.repository.ProcessedMessageRepository;
 import com.imaia.consumer.repository.AiMessageRepository;
-import com.imaia.consumer.adapter.wechat.sse.DaemonEvent;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -150,7 +151,7 @@ class AiReplyHandlerTest {
     }
 
     private AiReplyHandler handlerWith(AssistantProfile profile, RiskPolicy risk, boolean imageEnabled) {
-        ConsumerProperties properties = TestProperties.daemon(server.url("/").toString(), "acc1");
+        WechatAdapterProperties properties = TestProperties.wechat(server.url("/").toString(), "acc1");
         ModelRegistry registry = imageEnabled
                 ? TestProperties.modelRegistry(server.url("/").toString())
                 : TestProperties.modelRegistryWithout(server.url("/").toString(),
@@ -173,7 +174,7 @@ class AiReplyHandlerTest {
                 Mockito.mock(ContactRepository.class));
         InMemoryRateLimiter limiter = InMemoryRateLimiter.ofLimits(
                 risk.getRepliesPerThreadPerMinute(), risk.getMaxRepliesPerHour(), risk.getMaxRepliesPerDay());
-        return new AiReplyHandler(adapter, chatService, limiter,
+        return new AiReplyHandler(new ImAdapters(List.of(adapter)), chatService, limiter,
                 noneProvider(), new ImageGenerationClient(registry), new VideoGenerationClient(registry),
                 new AudioSpeechClient(registry), registry, Mockito.mock(PersonAnalyzer.class),
                 Mockito.mock(ScheduledActionRepository.class),
@@ -195,8 +196,8 @@ class AiReplyHandlerTest {
         };
     }
 
-    private DaemonEvent event(String threadId) {
-        return new DaemonEvent("message.committed", "1", null,
+    private ImEvent event(String threadId) {
+        return new ImEvent("wechat", "message.committed", "m1", threadId, "1",
                 mapper.readTree("{\"messageId\":\"m1\",\"threadId\":\"" + threadId + "\"}"));
     }
 

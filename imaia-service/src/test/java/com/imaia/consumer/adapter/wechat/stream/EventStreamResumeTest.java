@@ -1,16 +1,20 @@
 package com.imaia.consumer.adapter.wechat.stream;
 
 import com.imaia.consumer.TestProperties;
-import com.imaia.consumer.config.ConsumerProperties;
+import com.imaia.consumer.adapter.ImAdapter;
+import com.imaia.consumer.adapter.ImAdapters;
+import com.imaia.consumer.adapter.ImEvent;
+import com.imaia.consumer.adapter.ImEventHandler;
+import com.imaia.consumer.adapter.WechatAdapter;
 import com.imaia.consumer.adapter.wechat.cursor.CursorStore;
 import com.imaia.consumer.adapter.wechat.daemon.DaemonClient;
-import com.imaia.consumer.adapter.wechat.dispatch.EventDispatcher;
-import com.imaia.consumer.adapter.wechat.dispatch.EventStreamPipeline;
-import com.imaia.consumer.adapter.wechat.DaemonEventHandler;
-import com.imaia.consumer.adapter.wechat.handler.LoggingMessageHandler;
-import com.imaia.consumer.adapter.wechat.sse.DaemonEvent;
 import com.imaia.consumer.adapter.wechat.sse.DaemonEventDecoder;
 import com.imaia.consumer.adapter.wechat.sse.EventStreamClient;
+import com.imaia.consumer.adapter.wechat.WechatPlatformSource;
+import com.imaia.consumer.config.WechatAdapterProperties;
+import com.imaia.consumer.dispatch.EventDispatcher;
+import com.imaia.consumer.handler.LoggingMessageHandler;
+import com.imaia.consumer.repository.ProcessedMessageRepository;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -18,6 +22,7 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -32,9 +37,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end behaviour of the stream pipeline against a simulated daemon: decoding,
- * handler dispatch, cursor persistence, consumer acknowledgement and resuming with
- * {@code after=} after a clean connection close.
+ * End-to-end behaviour of the wechat event line against a simulated daemon: decoding,
+ * normalization, handler dispatch, cursor persistence, consumer acknowledgement and
+ * resuming with {@code after=} after a clean connection close.
  */
 class EventStreamResumeTest {
 
@@ -42,7 +47,7 @@ class EventStreamResumeTest {
     private CursorStore cursorStore;
     private final Queue<String> streamRequests = new ConcurrentLinkedQueue<>();
     private final Queue<String> ackBodies = new ConcurrentLinkedQueue<>();
-    private final List<DaemonEvent> handled = Collections.synchronizedList(new ArrayList<>());
+    private final List<ImEvent> handled = Collections.synchronizedList(new ArrayList<>());
 
     @BeforeEach
     void startServer() throws IOException {
@@ -116,31 +121,37 @@ class EventStreamResumeTest {
         WebClient webClient = WebClient.builder()
                 .baseUrl(server.url("/").toString())
                 .build();
-        ConsumerProperties properties = TestProperties.daemon(server.url("/").toString(), "acc1");
+        WechatAdapterProperties properties = TestProperties.wechat(server.url("/").toString(), "acc1");
         DaemonClient daemonClient = new DaemonClient(webClient, properties);
         DaemonEventDecoder decoder = new DaemonEventDecoder(JsonMapper.builder().build());
-        LoggingMessageHandler loggingHandler = new LoggingMessageHandler(daemonClient);
-        DaemonEventHandler recorder = new DaemonEventHandler() {
+        WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(ProcessedMessageRepository.class));
+        LoggingMessageHandler loggingHandler = new LoggingMessageHandler(new ImAdapters(List.of(adapter)));
+        ImEventHandler recorder = new ImEventHandler() {
             @Override
-            public boolean supports(String eventType) {
+            public boolean supports(String kind) {
                 return true;
             }
 
             @Override
-            public void handle(DaemonEvent event) {
+            public void handle(ImEvent event) {
                 handled.add(event);
             }
         };
-        EventDispatcher dispatcher = new EventDispatcher(List.of(loggingHandler, recorder),
-                cursorStore, daemonClient, properties);
-        EventStreamPipeline pipeline = new EventStreamPipeline(
-                new EventStreamClient(webClient, decoder), daemonClient, dispatcher, cursorStore, properties);
+        WechatPlatformSource source = new WechatPlatformSource(
+                new EventStreamClient(webClient, decoder), daemonClient, cursorStore, properties);
+        EventDispatcher dispatcher = new EventDispatcher(source, List.of(loggingHandler, recorder),
+                TestProperties.dispatch());
 
-        pipeline.source().take(3).blockLast(Duration.ofSeconds(15));
+        source.events(dispatcher::onEvent)
+                .take(3)
+                .blockLast(Duration.ofSeconds(15));
 
-        assertThat(handled).extracting(DaemonEvent::cursor).containsExactly("1", "2", "3");
-        assertThat(handled).extracting(DaemonEvent::kind)
+        assertThat(handled).extracting(ImEvent::kind)
                 .containsExactly("message.committed", "message.committed", "thread.updated");
+        assertThat(handled).extracting(ImEvent::messageId)
+                .containsExactly("m1", "m1", null);
+        assertThat(handled).extracting(ImEvent::receipt)
+                .containsExactly("1", "2", "3");
         assertThat(cursorStore.load()).isEqualTo("3");
         assertThat(ackBodies).containsExactly(
                 "{\"cursor\":\"1\"}", "{\"cursor\":\"2\"}", "{\"cursor\":\"3\"}");

@@ -1,6 +1,6 @@
 package com.imaia.consumer.adapter.wechat.daemon;
 
-import com.imaia.consumer.config.ConsumerProperties;
+import com.imaia.consumer.config.WechatAdapterProperties;
 import com.imaia.consumer.adapter.wechat.daemon.dto.EventAckRequest;
 import com.imaia.consumer.adapter.wechat.daemon.dto.Message;
 import com.imaia.consumer.adapter.wechat.daemon.dto.SendReceipt;
@@ -29,11 +29,11 @@ import org.springframework.web.util.UriBuilder;
 public class DaemonClient {
 
     private final WebClient daemonWebClient;
-    private final ConsumerProperties properties;
+    private final WechatAdapterProperties properties;
     private final Object accountLock = new Object();
     private volatile String accountId;
 
-    public DaemonClient(WebClient daemonWebClient, ConsumerProperties properties) {
+    public DaemonClient(WebClient daemonWebClient, WechatAdapterProperties properties) {
         this.daemonWebClient = daemonWebClient;
         this.properties = properties;
     }

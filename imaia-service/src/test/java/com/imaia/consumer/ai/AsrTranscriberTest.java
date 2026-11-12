@@ -1,7 +1,6 @@
 package com.imaia.consumer.ai;
 
 import com.imaia.consumer.TestProperties;
-import com.imaia.consumer.config.ConsumerProperties;
 import com.imaia.consumer.config.ModelRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;

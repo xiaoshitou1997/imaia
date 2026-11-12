@@ -1,7 +1,7 @@
 package com.imaia.consumer.web;
 
 import com.imaia.consumer.ai.AssistantProfileService;
-import com.imaia.consumer.config.ConsumerProperties;
+import com.imaia.consumer.config.WechatAdapterProperties;
 import com.imaia.consumer.ai.PersonAnalyzer;
 import com.imaia.consumer.ai.RiskPolicyService;
 import com.imaia.consumer.config.ModelRegistry;
@@ -77,7 +77,7 @@ public class AdminApiController {
     private final ModelRegistry modelRegistry;
     private final AssistantProfileService profileService;
     private final RiskPolicyService riskService;
-    private final ConsumerProperties properties;
+    private final WechatAdapterProperties properties;
 
     public AdminApiController(ImAdapter adapter, ContactRepository contacts,
             ImMessageRepository wechatMessages, ProcessedMessageRepository processedMessages,
@@ -86,7 +86,7 @@ public class AdminApiController {
             ModelCallLogRepository callLogs, PersonAnalysisRepository analyses,
             PersonAnalyzer personAnalyzer, ProviderRepository providers, ModelRepository models,
             ModelRegistry modelRegistry, AssistantProfileService profileService,
-            RiskPolicyService riskService, ConsumerProperties properties) {
+            RiskPolicyService riskService, WechatAdapterProperties properties) {
         this.adapter = adapter;
         this.contacts = contacts;
         this.wechatMessages = wechatMessages;

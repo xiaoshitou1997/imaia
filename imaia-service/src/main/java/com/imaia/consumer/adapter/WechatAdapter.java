@@ -7,11 +7,12 @@ import com.imaia.consumer.domain.ImMessage;
 import com.imaia.consumer.domain.ProcessedMessage;
 import com.imaia.consumer.repository.ProcessedMessageRepository;
 import tools.jackson.databind.JsonNode;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
-import java.util.function.Consumer;
 
 /**
  * The wechat platform adapter over the agent-wechat daemon: SSE event stream,
@@ -21,7 +22,9 @@ import java.util.function.Consumer;
 @Component
 public class WechatAdapter implements ImAdapter {
 
-    private static final String PLATFORM = "wechat";
+    public static final String PLATFORM = "wechat";
+
+    private static final String GROUP_THREAD_SUFFIX = "@chatroom";
 
     private final DaemonClient daemonClient;
     private final ProcessedMessageRepository processedMessages;
@@ -108,12 +111,20 @@ public class WechatAdapter implements ImAdapter {
 
     @Override
     public void sendText(String threadId, String text, String idempotencyKey) {
-        daemonClient.sendText(threadId, text, idempotencyKey);
+        try {
+            daemonClient.sendText(threadId, text, idempotencyKey);
+        } catch (WebClientResponseException failure) {
+            throw translateConflict(failure, idempotencyKey);
+        }
     }
 
     @Override
     public void sendMedia(String threadId, String kind, String storageRef, String idempotencyKey) {
-        daemonClient.sendMedia(threadId, kind, storageRef, idempotencyKey);
+        try {
+            daemonClient.sendMedia(threadId, kind, storageRef, idempotencyKey);
+        } catch (WebClientResponseException failure) {
+            throw translateConflict(failure, idempotencyKey);
+        }
     }
 
     @Override
@@ -122,15 +133,17 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public void startStream(Consumer<ImMessage> onMessage) {
-        // The wechat event stream is consumed by the daemon SSE pipeline wired at startup;
-        // this hook exists so future webhook-style adapters can feed the same core.
-        throw new UnsupportedOperationException("wechat stream is wired by the daemon pipeline");
+    public boolean isGroupThread(String threadId) {
+        return threadId != null && threadId.endsWith(GROUP_THREAD_SUFFIX);
     }
 
-    @Override
-    public void stopStream() {
-        // nothing to stop — see startStream
+    /** The daemon answers 409 when the key was already delivered; the core sees a neutral duplicate. */
+    private RuntimeException translateConflict(WebClientResponseException failure, String idempotencyKey) {
+        if (failure.getStatusCode().value() == HttpStatus.CONFLICT.value()) {
+            return new DuplicateSendException("Send " + idempotencyKey
+                    + " was already delivered under this idempotency key.");
+        }
+        return failure;
     }
 
     private static ImAdapter.MediaBytes toMediaBytes(DaemonClient.MediaBytes bytes) {

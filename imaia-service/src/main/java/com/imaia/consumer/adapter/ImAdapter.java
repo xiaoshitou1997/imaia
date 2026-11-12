@@ -2,8 +2,6 @@ package com.imaia.consumer.adapter;
 
 import com.imaia.consumer.domain.ImMessage;
 
-import java.util.function.Consumer;
-
 /**
  * The IM platform contract: everything the core pipeline (archive → AI → risk →
  * scheduled delivery → artifacts) knows about a messaging platform. Platform
@@ -24,7 +22,7 @@ public interface ImAdapter {
     String accountId();
 
     /** Fetches one message by its platform id, normalized to the archived shape.
-     * Throws DaemonContractException when the fetched identity drifts from the event. */
+     * Throws ImContractException when the fetched identity drifts from the event. */
     ImMessage fetchMessage(String messageId);
 
     /** Whether this adapter already handled the message (idempotency gate). */
@@ -41,19 +39,16 @@ public interface ImAdapter {
      * Returns null when no preview is available. */
     MediaBytes downloadPreview(String messageId);
 
-    /** Sends text into a thread; the idempotency key prevents double-send on retry. */
+    /** Sends text into a thread; the idempotency key prevents double-send on retry.
+     * Throws DuplicateSendException when this key was already delivered. */
     void sendText(String threadId, String text, String idempotencyKey);
 
-    /** Uploads and sends generated media. */
+    /** Uploads and sends generated media; see sendText for the key semantics. */
     void sendMedia(String threadId, String kind, String storageRef, String idempotencyKey);
 
     /** Uploads bytes and returns the platform storage reference. */
     String uploadMedia(byte[] data, String filename, String mimeType);
 
-    /** Starts consuming the platform event stream, dispatching normalized messages.
-     * Reserved for webhook-style adapters; the wechat stream is wired by the daemon pipeline. */
-    void startStream(Consumer<ImMessage> onMessage);
-
-    /** Stops the stream. */
-    void stopStream();
+    /** Whether a thread id belongs to a group conversation on this platform. */
+    boolean isGroupThread(String threadId);
 }

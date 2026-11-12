@@ -27,7 +27,7 @@ class RedisCursorStoreTest {
         redis = mock(StringRedisTemplate.class);
         ops = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(ops);
-        store = new RedisCursorStore(redis, TestProperties.daemon("http://127.0.0.1:6174", "acc1"));
+        store = new RedisCursorStore(redis, TestProperties.wechat("http://127.0.0.1:6174", "acc1"));
     }
 
     @Test

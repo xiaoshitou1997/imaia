@@ -24,7 +24,7 @@ class WebClientConfig {
     }
 
     @Bean
-    WebClient daemonWebClient(ConsumerProperties properties) {
+    WebClient daemonWebClient(WechatAdapterProperties properties) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(properties.daemon().connectTimeoutMillis()))
                 .build();

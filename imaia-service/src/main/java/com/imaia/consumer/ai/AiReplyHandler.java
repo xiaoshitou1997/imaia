@@ -1,26 +1,25 @@
 package com.imaia.consumer.ai;
 
 import com.imaia.consumer.config.ModelRegistry;
+import com.imaia.consumer.adapter.DuplicateSendException;
 import com.imaia.consumer.adapter.ImAdapter;
+import com.imaia.consumer.adapter.ImAdapters;
+import com.imaia.consumer.adapter.ImEvent;
+import com.imaia.consumer.adapter.ImEventHandler;
 import com.imaia.consumer.domain.AssistantProfile;
 import com.imaia.consumer.domain.RiskPolicy;
-import com.imaia.consumer.adapter.wechat.daemon.DaemonContractException;
 import com.imaia.consumer.domain.ImMessage;
-import com.imaia.consumer.adapter.wechat.DaemonEventHandler;
 import com.imaia.consumer.domain.AiArtifact;
 import com.imaia.consumer.repository.AiArtifactRepository;
 import com.imaia.consumer.repository.MemoryFactRepository;
 import com.imaia.consumer.domain.ScheduledAction;
 import com.imaia.consumer.repository.ScheduledActionRepository;
 import com.imaia.consumer.repository.ImMessageRepository;
-import com.imaia.consumer.adapter.wechat.sse.DaemonEvent;
-import com.imaia.consumer.adapter.wechat.sse.EventPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
@@ -30,27 +29,25 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
-import tools.jackson.databind.JsonNode;
-
 /**
- * Answers incoming WeChat messages in the configured threads through the chat
- * endpoint: plain text goes to the model, images and stickers to vision, videos via
- * their cover frame, and voice through the optional ASR endpoint. The model's reply
- * may carry intent markers — generated media is uploaded and sent back, reminders are
- * persisted and fired by the reminder runner, memory facts are stored for recall, and
- * [ANALYZE: …] triggers a per-contact profile from the message archive. Group
- * messages that pass the @mention gate also receive the recent chat context.
+ * Answers incoming messages in the configured threads through the chat endpoint, on
+ * any platform: plain text goes to the model, images and stickers to vision, videos
+ * via their cover frame, and voice through the optional ASR endpoint. The model's
+ * reply may carry intent markers — generated media is uploaded and sent back,
+ * reminders are persisted and fired by the reminder runner, memory facts are stored
+ * for recall, and [ANALYZE: …] triggers a per-contact profile from the message
+ * archive. Group messages that pass the @mention gate also receive the recent chat
+ * context.
  *
  * <p>Off by default and restricted to the explicit thread allowlist; outgoing
  * messages never trigger a reply. Volume caps, quiet hours, a minimum message
- * length and a randomized reply delay keep the automated behavior under the
- * threshold where WeChat risk control starts caring about a personal account.
+ * length and a randomized reply delay keep the automated behavior unremarkable.
  * Idempotency keys derive from the triggering message id, and a local
  * processed-message record keeps replays silent even across restarts.
  */
 @Component
 @ConditionalOnProperty(prefix = "imaia.ai", name = "enabled", havingValue = "true")
-public class AiReplyHandler implements DaemonEventHandler {
+public class AiReplyHandler implements ImEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AiReplyHandler.class);
     private static final int TEXT_MESSAGE_TYPE = 1;
@@ -59,11 +56,10 @@ public class AiReplyHandler implements DaemonEventHandler {
     private static final int VIDEO_MESSAGE_TYPE = 43;
     private static final int STICKER_MESSAGE_TYPE = 47;
     private static final String INCOMING_DIRECTION = "incoming";
-    private static final String GROUP_THREAD_SUFFIX = "@chatroom";
     private static final int GROUP_CONTEXT_MESSAGES = 12;
     private static final int GROUP_CONTEXT_MAX_CHARS = 4_000;
 
-    private final ImAdapter adapter;
+    private final ImAdapters adapters;
     private final AiChatService chatService;
     private final ReplyRateLimiter rateLimiter;
     private final ObjectProvider<AsrTranscriber> transcriberProvider;
@@ -79,7 +75,7 @@ public class AiReplyHandler implements DaemonEventHandler {
     private final AssistantProfileService profiles;
     private final RiskPolicyService risk;
 
-    public AiReplyHandler(ImAdapter adapter, AiChatService chatService,
+    public AiReplyHandler(ImAdapters adapters, AiChatService chatService,
             ReplyRateLimiter rateLimiter,
             ObjectProvider<AsrTranscriber> transcriberProvider,
             ImageGenerationClient imageClient, VideoGenerationClient videoClient,
@@ -87,7 +83,7 @@ public class AiReplyHandler implements DaemonEventHandler {
             ScheduledActionRepository actions, AiArtifactRepository artifacts,
             MemoryFactRepository memoryFacts, ImMessageRepository archivedMessages,
             AssistantProfileService profiles, RiskPolicyService risk) {
-        this.adapter = adapter;
+        this.adapters = adapters;
         this.chatService = chatService;
         this.rateLimiter = rateLimiter;
         this.transcriberProvider = transcriberProvider;
@@ -104,16 +100,16 @@ public class AiReplyHandler implements DaemonEventHandler {
         this.risk = risk;
     }
 
-
     @Override
-    public boolean supports(String eventType) {
-        return "message.committed".equals(eventType);
+    public boolean supports(String kind) {
+        return KIND_MESSAGE_COMMITTED.equals(kind);
     }
 
     @Override
-    public void handle(DaemonEvent event) {
-        String messageId = EventPayload.requiredText(event.data(), "messageId");
-        String threadId = EventPayload.requiredText(event.data(), "threadId");
+    public void handle(ImEvent event) {
+        String messageId = event.messageId();
+        String threadId = event.threadId();
+        ImAdapter adapter = adapters.forPlatform(event.platform());
         if (!replyThreads().contains(threadId)) {
             return;
         }
@@ -129,13 +125,12 @@ public class AiReplyHandler implements DaemonEventHandler {
         if (!INCOMING_DIRECTION.equals(message.getDirection())) {
             return;
         }
-        if (profiles.current().isRequireGroupMention() && threadId.endsWith(GROUP_THREAD_SUFFIX)
-                && !message.isMentioned()) {
+        boolean groupChat = adapter.isGroupThread(threadId);
+        if (profiles.current().isRequireGroupMention() && groupChat && !message.isMentioned()) {
             log.debug("Group message without mention stays as context: thread={} message={}.", threadId, messageId);
             return;
         }
-        boolean groupChat = threadId.endsWith(GROUP_THREAD_SUFFIX);
-        PromptContent content = buildContent(message);
+        PromptContent content = buildContent(message, adapter);
         if (content == null) {
             return;
         }
@@ -144,7 +139,7 @@ public class AiReplyHandler implements DaemonEventHandler {
                     + "to keep automated traffic unremarkable.", threadId, messageId);
             return;
         }
-        String groupContext = groupChat ? recentGroupContext(threadId, messageId) : null;
+        String groupContext = groupChat ? recentGroupContext(adapter, threadId, messageId) : null;
         List<GeneratedMedia> generated = new ArrayList<>();
         AiChatService.ChatReply reply = content.image() == null
                 ? chatService.complete(threadId, content.userText(), null, null, groupContext,
@@ -156,10 +151,11 @@ public class AiReplyHandler implements DaemonEventHandler {
             return;
         }
         String keyPrefix = "imaia-ai-" + messageId;
-        sendReply(threadId, reply, keyPrefix, content.fromVoice(), generated);
-        executeIntents(threadId, reply, keyPrefix, message.getSenderId());
+        sendReply(adapter, threadId, reply, keyPrefix, content.fromVoice(), generated);
+        executeIntents(adapter, threadId, reply, keyPrefix, message.getSenderId());
         adapter.markProcessed(messageId, threadId);
-        log.info("AI reply sent to thread={} for message={} ({}).", threadId, messageId, content.kindLabel());
+        log.info("AI reply sent on platform={} to thread={} for message={} ({}).",
+                event.platform(), threadId, messageId, content.kindLabel());
     }
 
     /**
@@ -168,24 +164,24 @@ public class AiReplyHandler implements DaemonEventHandler {
      * memory facts are stored per-thread, and analysis requests produce a follow-up
      * profile message from the archive.
      */
-    private void sendReply(String threadId, AiChatService.ChatReply reply, String keyPrefix,
-            boolean fromVoice, List<GeneratedMedia> generated) {
+    private void sendReply(ImAdapter adapter, String threadId, AiChatService.ChatReply reply,
+            String keyPrefix, boolean fromVoice, List<GeneratedMedia> generated) {
         String text = reply.text();
         if (text != null && !text.isBlank()) {
             if (fromVoice && profiles.current().isTtsReply()) {
-                sendVoiceReply(threadId, text, keyPrefix);
+                sendVoiceReply(adapter, threadId, text, keyPrefix);
             } else {
                 sendWithConflictGuard(keyPrefix,
                         () -> adapter.sendText(threadId, text, keyPrefix));
             }
         }
-        sendGenerated(threadId, reply.imagePrompts(), "image", "png", keyPrefix + "-img");
-        sendGenerated(threadId, reply.videoPrompts(), "video", "mp4", keyPrefix + "-vid");
-        sendCollected(threadId, generated, keyPrefix);
+        sendGenerated(adapter, threadId, reply.imagePrompts(), "image", "png", keyPrefix + "-img");
+        sendGenerated(adapter, threadId, reply.videoPrompts(), "video", "mp4", keyPrefix + "-vid");
+        sendCollected(adapter, threadId, generated, keyPrefix);
     }
 
     /** Voice-in, voice-out: synthesize the reply through the tts route; text on failure. */
-    private void sendVoiceReply(String threadId, String text, String keyPrefix) {
+    private void sendVoiceReply(ImAdapter adapter, String threadId, String text, String keyPrefix) {
         try {
             byte[] mp3 = ttsClient.synthesize(text);
             String sourceId = adapter.uploadMedia(mp3, "imaia-voice-reply.mp3", "audio/mpeg");
@@ -198,61 +194,60 @@ public class AiReplyHandler implements DaemonEventHandler {
         }
     }
 
-    private void executeIntents(String threadId, AiChatService.ChatReply reply,
+    private void executeIntents(ImAdapter adapter, String threadId, AiChatService.ChatReply reply,
             String keyPrefix, String senderId) {
-        {
-            for (IntentParser.ReminderIntent reminder : reply.reminders()) {
-                actions.save(new ScheduledAction(
-                        adapter.accountId(), adapter.platform(), threadId, ScheduledAction.ACTION_SEND_TEXT,
-                        reminder.content(), null,
-                        reminder.remindAt().atZone(java.time.ZoneId.systemDefault()).toInstant(),
-                        null, "ai", java.time.Instant.now()));
-                log.info("Reminder scheduled for thread={} at {}.", threadId, reminder.remindAt());
-            }
-            for (String fact : reply.memories()) {
-                memoryFacts.save(new com.imaia.consumer.domain.MemoryFact(
-                        adapter.accountId(), "thread", threadId, fact, threadId, java.time.Instant.now()));
-                log.info("Memory fact stored for thread={}.", threadId);
-            }
-            for (String name : reply.analyses()) {
-                try {
-                    String profile = personAnalyzer.analyze(name);
-                    String analysisText = profile == null
-                            ? "归档里还没有「" + name + "」的聊天记录，暂时无法分析。"
-                            : "关于「" + name + "」的分析：\n" + profile;
-                    sendWithConflictGuard(keyPrefix + "-analyze",
-                            () -> adapter.sendText(threadId, analysisText,
-                                    keyPrefix + "-analyze"));
-                } catch (RuntimeException failure) {
-                    log.warn("Analysis for '{}' failed: {}", name, failure.getMessage());
-                }
+        for (IntentParser.ReminderIntent reminder : reply.reminders()) {
+            actions.save(new ScheduledAction(
+                    adapter.accountId(), adapter.platform(), threadId, ScheduledAction.ACTION_SEND_TEXT,
+                    reminder.content(), null,
+                    reminder.remindAt().atZone(java.time.ZoneId.systemDefault()).toInstant(),
+                    null, "ai", java.time.Instant.now()));
+            log.info("Reminder scheduled for thread={} at {}.", threadId, reminder.remindAt());
+        }
+        for (String fact : reply.memories()) {
+            memoryFacts.save(new com.imaia.consumer.domain.MemoryFact(
+                    adapter.accountId(), "thread", threadId, fact, threadId, java.time.Instant.now()));
+            log.info("Memory fact stored for thread={}.", threadId);
+        }
+        for (String name : reply.analyses()) {
+            try {
+                String profile = personAnalyzer.analyze(name);
+                String analysisText = profile == null
+                        ? "归档里还没有「" + name + "」的聊天记录，暂时无法分析。"
+                        : "关于「" + name + "」的分析：\n" + profile;
+                sendWithConflictGuard(keyPrefix + "-analyze",
+                        () -> adapter.sendText(threadId, analysisText,
+                                keyPrefix + "-analyze"));
+            } catch (RuntimeException failure) {
+                log.warn("Analysis for '{}' failed: {}", name, failure.getMessage());
             }
         }
     }
 
-    private void sendGenerated(String threadId, java.util.List<String> prompts,
-            String daemonKind, String extension, String keyPrefix) {
+    private void sendGenerated(ImAdapter adapter, String threadId, List<String> prompts,
+            String mediaKind, String extension, String keyPrefix) {
         int index = 0;
         for (String prompt : prompts) {
             index++;
             String key = keyPrefix + index;
             try {
-                byte[] media = "image".equals(daemonKind)
+                byte[] media = "image".equals(mediaKind)
                         ? imageClient.generate(prompt)
                         : videoClient.generate(prompt);
-                String sourceId = adapter.uploadMedia(media, "imaia-" + daemonKind + "-" + index + "." + extension,
-                        "image".equals(daemonKind) ? "image/png" : "video/mp4");
+                String sourceId = adapter.uploadMedia(media, "imaia-" + mediaKind + "-" + index + "." + extension,
+                        "image".equals(mediaKind) ? "image/png" : "video/mp4");
                 sendWithConflictGuard(key,
-                        () -> adapter.sendMedia(threadId, daemonKind, sourceId, key));
+                        () -> adapter.sendMedia(threadId, mediaKind, sourceId, key));
             } catch (RuntimeException failure) {
                 log.warn("Generation or send failed for {} prompt '{}': {}",
-                        daemonKind, prompt, failure.getMessage());
+                        mediaKind, prompt, failure.getMessage());
             }
         }
     }
 
     /** Delivers the media the chat model generated through native tool calls. */
-    private void sendCollected(String threadId, List<GeneratedMedia> generated, String keyPrefix) {
+    private void sendCollected(ImAdapter adapter, String threadId, List<GeneratedMedia> generated,
+            String keyPrefix) {
         int index = 0;
         for (GeneratedMedia media : generated) {
             index++;
@@ -273,22 +268,18 @@ public class AiReplyHandler implements DaemonEventHandler {
         }
     }
 
-    /** 409 means an earlier replayed attempt already sent under this key; never resend. */
+    /** The earlier replayed attempt already sent under this key; never resend. */
     private void sendWithConflictGuard(String key, Runnable send) {
         try {
             send.run();
-        } catch (WebClientResponseException conflict) {
-            if (conflict.getStatusCode().value() == 409) {
-                log.warn("Send {} conflicts with an earlier send under the same idempotency key; "
-                        + "treating as answered.", key);
-            } else {
-                throw conflict;
-            }
+        } catch (DuplicateSendException conflict) {
+            log.warn("Send {} conflicts with an earlier send under the same idempotency key; "
+                    + "treating as answered.", key);
         }
     }
 
     /** Recent archived lines of the group, as a context block for the model. */
-    private String recentGroupContext(String threadId, String excludeMessageId) {
+    private String recentGroupContext(ImAdapter adapter, String threadId, String excludeMessageId) {
         try {
             String accountId = adapter.accountId();
             var recent = archivedMessages
@@ -326,7 +317,7 @@ public class AiReplyHandler implements DaemonEventHandler {
     }
 
     /** Turns one supported message type into the prompt content, or null to stay silent. */
-    private PromptContent buildContent(ImMessage message) {
+    private PromptContent buildContent(ImMessage message, ImAdapter adapter) {
         return switch (message.getProviderType()) {
             case TEXT_MESSAGE_TYPE -> {
                 String body = message.getBody();
@@ -340,16 +331,16 @@ public class AiReplyHandler implements DaemonEventHandler {
                 yield new PromptContent(body, null, false);
             }
             case IMAGE_MESSAGE_TYPE -> modelRegistry.chatSupportsImages()
-                    ? fetchVisionContent(message.getMessageId(), "用户发来一张图片，请看图后回复")
+                    ? fetchVisionContent(adapter, message.getMessageId(), "用户发来一张图片，请看图后回复")
                     : tooDim(message, "image");
             case VOICE_MESSAGE_TYPE -> modelRegistry.hasProtocol(ModelRegistry.PROTOCOL_TRANSCRIPTION)
-                    ? fetchVoiceContent(message.getMessageId())
+                    ? fetchVoiceContent(adapter, message.getMessageId())
                     : tooDim(message, "voice");
             case VIDEO_MESSAGE_TYPE -> modelRegistry.chatSupportsImages()
-                    ? fetchPreviewContent(message.getMessageId(), "用户发来一个视频，这是它的封面帧")
+                    ? fetchPreviewContent(adapter, message.getMessageId(), "用户发来一个视频，这是它的封面帧")
                     : tooDim(message, "video");
             case STICKER_MESSAGE_TYPE -> modelRegistry.chatSupportsImages()
-                    ? fetchPreviewContent(message.getMessageId(), "用户发来一个表情包")
+                    ? fetchPreviewContent(adapter, message.getMessageId(), "用户发来一个表情包")
                     : tooDim(message, "sticker");
             default -> {
                 log.debug("Unsupported message type {} stays unanswered: message={}.", message.getProviderType(), message.getMessageId());
@@ -359,7 +350,7 @@ public class AiReplyHandler implements DaemonEventHandler {
     }
 
     /** Downloads the image bytes and builds a vision prompt; media trouble stays silent. */
-    private PromptContent fetchVisionContent(String messageId, String label) {
+    private PromptContent fetchVisionContent(ImAdapter adapter, String messageId, String label) {
         try {
             ImAdapter.MediaBytes bytes = adapter.downloadAsset(messageId, "image");
             return bytes == null ? null : new PromptContent(label, bytes, false);
@@ -371,7 +362,7 @@ public class AiReplyHandler implements DaemonEventHandler {
     }
 
     /** Voice goes through the optional ASR endpoint; without it voice stays unanswered. */
-    private PromptContent fetchVoiceContent(String messageId) {
+    private PromptContent fetchVoiceContent(ImAdapter adapter, String messageId) {
         AsrTranscriber transcriber = transcriberProvider.getIfAvailable();
         if (transcriber == null) {
             log.debug("Voice message arrived but no ASR endpoint is configured; skipped: message={}.", messageId);
@@ -396,7 +387,7 @@ public class AiReplyHandler implements DaemonEventHandler {
     }
 
     /** Video and sticker messages carry an auto-downloaded preview; vision reads that. */
-    private PromptContent fetchPreviewContent(String messageId, String label) {
+    private PromptContent fetchPreviewContent(ImAdapter adapter, String messageId, String label) {
         try {
             ImAdapter.MediaBytes bytes = adapter.downloadPreview(messageId);
             return bytes == null ? null : new PromptContent(label, bytes, false);
@@ -405,28 +396,6 @@ public class AiReplyHandler implements DaemonEventHandler {
                     messageId, failure.getMessage());
             return null;
         }
-    }
-    /** Picks an asset of the given kind and returns its cached bytes, downloading if pending. */
-
-    /** Prefers an available asset of the kind; falls back to the first of the kind. */
-    private static JsonNode pickAsset(JsonNode assets, String kind) {
-        JsonNode first = null;
-        for (JsonNode asset : assets) {
-            JsonNode assetKind = asset.get("kind");
-            if (assetKind == null || !assetKind.isString() || !kind.equals(assetKind.asString())) {
-                continue;
-            }
-            JsonNode state = asset.get("state");
-            JsonNode url = asset.get("contentUrl");
-            if (state != null && state.isString() && "available".equals(state.asString())
-                    && url != null && url.isString() && !url.asString().isBlank()) {
-                return asset;
-            }
-            if (first == null) {
-                first = asset;
-            }
-        }
-        return first;
     }
 
     /** Sleeps a randomized human-ish interval; false when interrupted during shutdown. */
@@ -447,7 +416,7 @@ public class AiReplyHandler implements DaemonEventHandler {
         }
     }
 
-    /** Whether the given local time falls inside the risk policy\u0027s quiet window. */
+    /** Whether the given local time falls inside the risk policy's quiet window. */
     boolean isQuietHours(LocalTime now) {
         RiskPolicy policy = risk.current();
         LocalTime start = parseQuiet(policy.getQuietHoursStart());

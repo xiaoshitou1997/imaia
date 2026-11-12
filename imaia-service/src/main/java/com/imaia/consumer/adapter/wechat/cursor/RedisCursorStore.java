@@ -1,6 +1,6 @@
 package com.imaia.consumer.adapter.wechat.cursor;
 
-import com.imaia.consumer.config.ConsumerProperties;
+import com.imaia.consumer.config.WechatAdapterProperties;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +18,7 @@ public class RedisCursorStore implements CursorStore {
     private final String key;
     private String memory;
 
-    public RedisCursorStore(StringRedisTemplate redis, ConsumerProperties properties) {
+    public RedisCursorStore(StringRedisTemplate redis, WechatAdapterProperties properties) {
         this.redis = redis;
         this.key = "imaia:cursor:" + properties.stream().consumerName();
     }

@@ -1,7 +1,6 @@
 package com.imaia.consumer.ai;
 
 import com.imaia.consumer.TestProperties;
-import com.imaia.consumer.config.ConsumerProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;

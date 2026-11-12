@@ -1,6 +1,5 @@
 package com.imaia.consumer.ai;
 
-import com.imaia.consumer.config.ConsumerProperties;
 import com.imaia.consumer.domain.ImMessage;
 import com.imaia.consumer.adapter.ImAdapter;
 import com.imaia.consumer.repository.ImMessageRepository;
@@ -11,8 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Synthesizes a personality profile of one WeChat contact from their archived
- * messages:性格特点、兴趣爱好、近期关注、与账号主人的互动风格。The synthesis runs
+ * Synthesizes a personality profile of one contact from their archived messages:
+ * 性格特点、兴趣爱好、近期关注、与账号主人的互动风格。The synthesis runs
  * through the configured chat endpoint once, with no conversation history attached.
  */
 @Component
@@ -23,14 +22,12 @@ public class PersonAnalyzer {
     private final ImMessageRepository messages;
     private final OpenAiChatCompletion chatCompletion;
     private final ImAdapter adapter;
-    private final ConsumerProperties properties;
 
     public PersonAnalyzer(ImMessageRepository messages, OpenAiChatCompletion chatCompletion,
-            ImAdapter adapter, ConsumerProperties properties) {
+            ImAdapter adapter) {
         this.messages = messages;
         this.chatCompletion = chatCompletion;
         this.adapter = adapter;
-        this.properties = properties;
     }
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(

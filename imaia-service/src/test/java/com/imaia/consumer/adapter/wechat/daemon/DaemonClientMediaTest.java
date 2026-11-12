@@ -34,7 +34,7 @@ class DaemonClientMediaTest {
                 WebClient.builder().baseUrl(server.url("/").toString())
                         .defaultHeader(org.springframework.http.HttpHeaders.AUTHORIZATION, "Bearer test-token")
                         .build(),
-                TestProperties.daemon(server.url("/").toString(), "acc1"));
+                TestProperties.wechat(server.url("/").toString(), "acc1"));
     }
 
     @AfterEach

@@ -2,8 +2,9 @@ package com.imaia.consumer;
 
 import com.imaia.consumer.ai.AssistantProfileService;
 import com.imaia.consumer.ai.RiskPolicyService;
-import com.imaia.consumer.config.ConsumerProperties;
+import com.imaia.consumer.config.DispatchProperties;
 import com.imaia.consumer.config.ModelRegistry;
+import com.imaia.consumer.config.WechatAdapterProperties;
 import com.imaia.consumer.domain.AssistantProfile;
 import com.imaia.consumer.domain.Model;
 import com.imaia.consumer.domain.Provider;
@@ -32,10 +33,14 @@ public final class TestProperties {
     private TestProperties() {
     }
 
-    public static ConsumerProperties daemon(String baseUrl, String account) {
-        return new ConsumerProperties(
-                new ConsumerProperties.Daemon(baseUrl, "test-token", account, 1000, 5),
-                new ConsumerProperties.Stream("imaia", true, 10, 50, 200, 3, false));
+    public static WechatAdapterProperties wechat(String baseUrl, String account) {
+        return new WechatAdapterProperties(true,
+                new WechatAdapterProperties.Daemon(baseUrl, "test-token", account, 1000, 5),
+                new WechatAdapterProperties.Stream("imaia", true, 10, 50, 200, false));
+    }
+
+    public static DispatchProperties dispatch() {
+        return new DispatchProperties(3);
     }
 
     public static Provider provider(String name, String baseUrl) {

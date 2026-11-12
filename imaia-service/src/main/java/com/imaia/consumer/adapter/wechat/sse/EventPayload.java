@@ -17,4 +17,10 @@ public final class EventPayload {
         }
         return value.asString();
     }
+
+    /** Returns the string field, or null when it is absent, not a string or blank. */
+    public static String optionalText(JsonNode data, String field) {
+        JsonNode value = data.get(field);
+        return value != null && value.isString() && !value.asString().isBlank() ? value.asString() : null;
+    }
 }
