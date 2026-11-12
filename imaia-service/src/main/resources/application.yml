@@ -1,0 +1,64 @@
+server:
+  # WebUI and control API bind to loopback only.
+  address: ${IMAIA_WEB_ADDRESS:127.0.0.1}
+  port: ${IMAIA_WEB_PORT:8091}
+
+spring:
+  main:
+    # Embedded servlet server hosts the local WebUI and control API (loopback only).
+    web-application-type: servlet
+  datasource:
+    # PostgreSQL for conversation history, message archive and processed-message records.
+    url: ${IMAIA_PG_URL:jdbc:postgresql://127.0.0.1:15432/infra}
+    username: ${IMAIA_PG_USERNAME:infra}
+    password: ${IMAIA_PG_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  data:
+    redis:
+      # Redis for atomic reply rate-limit counters and the stream cursor;
+      # falls back to in-memory counting on error.
+      host: ${IMAIA_REDIS_HOST:127.0.0.1}
+      port: ${IMAIA_REDIS_PORT:16379}
+      password: ${IMAIA_REDIS_PASSWORD:}
+
+logging:
+  level:
+    reactor:
+      netty: WARN
+    com.imaia.consumer.ai: DEBUG
+
+imaia:
+  daemon:
+    # agent-wechat daemon base URL; the daemon listens on localhost only.
+    base-url: ${IMAIA_DAEMON_BASE_URL:http://127.0.0.1:6174}
+    # Bearer token; create one with: wx tokens create imaia --accounts ACCOUNT_ID --scopes read,media,send
+    # Empty by default so the app fails fast instead of connecting unauthenticated.
+    token: ${IMAIA_DAEMON_TOKEN:}
+    # Account id; empty resolves to the first account the token can read.
+    account: ${IMAIA_DAEMON_ACCOUNT:}
+    connect-timeout-millis: ${IMAIA_CONNECT_TIMEOUT_MILLIS:5000}
+    # Per-call blocking timeout; never applied to the long-lived event stream.
+    call-timeout-seconds: ${IMAIA_CALL_TIMEOUT_SECONDS:15}
+  stream:
+    consumer-name: ${IMAIA_CONSUMER_NAME:imaia}
+    ack-enabled: ${IMAIA_ACK_ENABLED:true}
+    reconnect-delay-millis: ${IMAIA_RECONNECT_DELAY_MILLIS:2000}
+    retry-initial-backoff-millis: ${IMAIA_RETRY_INITIAL_BACKOFF_MS:1000}
+    retry-max-backoff-millis: ${IMAIA_RETRY_MAX_BACKOFF_MS:30000}
+    handler-failure-threshold: ${IMAIA_HANDLER_FAILURE_THRESHOLD:5}
+    exit-on-failure: ${IMAIA_EXIT_ON_FAILURE:true}
+  ai:
+    # Master switch for the AI reply chain (checked by the event handler). The
+    # assistant persona, model directory and risk policy live in the database
+    # (assistant_profile / provider+model / risk_policy) and are edited in the WebUI;
+    # migration V9 seeds them.
+    enabled: ${IMAIA_AI_ENABLED:false}
