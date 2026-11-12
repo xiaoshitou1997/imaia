@@ -33,8 +33,8 @@ public class AiMessage {
     @Column(nullable = false)
     private String platform;
 
-    @Column(name = "thread_id", nullable = false)
-    private String threadId;
+    @Column(name = "conversation_id", nullable = false)
+    private String conversationId;
 
     @Column(nullable = false)
     private String role;
@@ -54,16 +54,16 @@ public class AiMessage {
     protected AiMessage() {
     }
 
-    public AiMessage(String accountId, String platform, String threadId, String role, String content,
+    public AiMessage(String accountId, String platform, String conversationId, String role, String content,
             String sourceMessageId, Instant createdAt) {
-        this(accountId, platform, threadId, role, content, sourceMessageId, null, createdAt);
+        this(accountId, platform, conversationId, role, content, sourceMessageId, null, createdAt);
     }
 
-    public AiMessage(String accountId, String platform, String threadId, String role, String content,
+    public AiMessage(String accountId, String platform, String conversationId, String role, String content,
             String sourceMessageId, String toolName, Instant createdAt) {
         this.accountId = accountId;
         this.platform = platform;
-        this.threadId = threadId;
+        this.conversationId = conversationId;
         this.role = role;
         this.content = content;
         this.sourceMessageId = sourceMessageId;
@@ -83,8 +83,8 @@ public class AiMessage {
         return accountId;
     }
 
-    public String getThreadId() {
-        return threadId;
+    public String getConversationId() {
+        return conversationId;
     }
 
     public String getRole() {

@@ -9,7 +9,7 @@
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>imaia</name>
-    <description>imaia — IM AI Assistant（多平台个人 AI 助理）</description>
+    <description>imaia — 智能聚合中枢 IM（统一会话模型 + 原生 AI；adapter 归一化各 IM 方言）</description>
 
     <modules>
         <module>imaia-service</module>

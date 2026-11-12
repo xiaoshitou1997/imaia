@@ -40,15 +40,15 @@ public class LoggingMessageHandler implements ImEventHandler {
         ImMessage message = adapter.fetchMessage(event.messageId());
         if (!message.getMessageId().equals(event.messageId())
                 || !message.getPlatform().equals(event.platform())
-                || !message.getThreadId().equals(event.threadId())) {
+                || !message.getConversationId().equals(event.conversationId())) {
             throw new ImContractException("Committed message identity mismatch: the event points at "
-                    + event.platform() + "/" + event.threadId() + "/" + event.messageId()
+                    + event.platform() + "/" + event.conversationId() + "/" + event.messageId()
                     + " but the archived message is " + message.getPlatform() + "/"
-                    + message.getThreadId() + "/" + message.getMessageId() + ".");
+                    + message.getConversationId() + "/" + message.getMessageId() + ".");
         }
         log.info("message platform={} thread={} from={} category={} body={}",
                 message.getPlatform(),
-                message.getThreadId(),
+                message.getConversationId(),
                 message.getSenderId() == null ? "unknown" : message.getSenderId(),
                 message.getCategory(),
                 preview(message.getBody()));

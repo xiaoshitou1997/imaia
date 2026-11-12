@@ -36,8 +36,8 @@ public class ScheduledAction {
     @Column(nullable = false)
     private String platform;
 
-    @Column(name = "thread_id", nullable = false)
-    private String threadId;
+    @Column(name = "conversation_id", nullable = false)
+    private String conversationId;
 
     @Column(nullable = false)
     private String action;
@@ -75,11 +75,11 @@ public class ScheduledAction {
     protected ScheduledAction() {
     }
 
-    public ScheduledAction(String accountId, String platform, String threadId, String action, String content,
+    public ScheduledAction(String accountId, String platform, String conversationId, String action, String content,
             String prompt, Instant fireAt, String cron, String createdBy, Instant createdAt) {
         this.accountId = accountId;
         this.platform = platform;
-        this.threadId = threadId;
+        this.conversationId = conversationId;
         this.action = action;
         this.content = content;
         this.prompt = prompt;
@@ -93,7 +93,7 @@ public class ScheduledAction {
     public Long getId() { return id; }
     public String getPlatform() { return platform; }
     public String getAccountId() { return accountId; }
-    public String getThreadId() { return threadId; }
+    public String getConversationId() { return conversationId; }
     public String getAction() { return action; }
     public String getContent() { return content; }
     public String getPrompt() { return prompt; }

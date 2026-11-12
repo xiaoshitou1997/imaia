@@ -25,7 +25,7 @@ public class WechatAdapter implements ImAdapter {
 
     public static final String PLATFORM = "wechat";
 
-    private static final String GROUP_THREAD_SUFFIX = "@chatroom";
+    private static final String GROUP_CONVERSATION_SUFFIX = "@chatroom";
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
@@ -92,8 +92,8 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public void markProcessed(String messageId, String threadId) {
-        ledger.markProcessed(PLATFORM, messageId, threadId);
+    public void markProcessed(String messageId, String conversationId) {
+        ledger.markProcessed(PLATFORM, messageId, conversationId);
     }
 
     @Override
@@ -136,18 +136,18 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public void sendText(String threadId, String text, String idempotencyKey) {
+    public void sendText(String conversationId, String text, String idempotencyKey) {
         try {
-            daemonClient.sendText(threadId, text, idempotencyKey);
+            daemonClient.sendText(conversationId, text, idempotencyKey);
         } catch (WebClientResponseException failure) {
             throw translateConflict(failure, idempotencyKey);
         }
     }
 
     @Override
-    public void sendMedia(String threadId, MediaKind kind, String storageRef, String idempotencyKey) {
+    public void sendMedia(String conversationId, MediaKind kind, String storageRef, String idempotencyKey) {
         try {
-            daemonClient.sendMedia(threadId, kind.value(), storageRef, idempotencyKey);
+            daemonClient.sendMedia(conversationId, kind.value(), storageRef, idempotencyKey);
         } catch (WebClientResponseException failure) {
             throw translateConflict(failure, idempotencyKey);
         }
@@ -159,8 +159,8 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public boolean isGroupThread(String threadId) {
-        return threadId != null && threadId.endsWith(GROUP_THREAD_SUFFIX);
+    public boolean isGroupConversation(String conversationId) {
+        return conversationId != null && conversationId.endsWith(GROUP_CONVERSATION_SUFFIX);
     }
 
     /** The daemon answers 409 when the key was already delivered; the core sees a neutral duplicate. */

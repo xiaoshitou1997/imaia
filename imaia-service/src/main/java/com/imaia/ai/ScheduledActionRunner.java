@@ -99,7 +99,7 @@ public class ScheduledActionRunner implements Runnable {
         try {
             String text = action.getContent();
             if (ScheduledAction.ACTION_SEND_AI_PROMPT.equals(action.getAction())) {
-                text = chatService.completeOnce(adapter, action.getThreadId(), action.getPrompt());
+                text = chatService.completeOnce(adapter, action.getConversationId(), action.getPrompt());
             }
             if (text == null || text.isBlank()) {
                 log.warn("Action {} produced no text; marked failed.", action.getId());
@@ -107,8 +107,8 @@ public class ScheduledActionRunner implements Runnable {
                 actions.save(action);
                 return;
             }
-            adapter.sendText(action.getThreadId(), text, key);
-            log.info("Action {} fired to thread={}.", action.getId(), action.getThreadId());
+            adapter.sendText(action.getConversationId(), text, key);
+            log.info("Action {} fired to thread={}.", action.getId(), action.getConversationId());
             if (action.getCron() != null && !action.getCron().isBlank()) {
                 CronExpression expression = CronExpression.parse(action.getCron());
                 action.setLastFiredAt(Instant.now());

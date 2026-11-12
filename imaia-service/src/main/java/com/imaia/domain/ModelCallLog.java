@@ -18,8 +18,8 @@ public class ModelCallLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "thread_id")
-    private String threadId;
+    @Column(name = "conversation_id")
+    private String conversationId;
 
     @Column(name = "ai_message_id")
     private Long aiMessageId;
@@ -54,11 +54,11 @@ public class ModelCallLog {
     protected ModelCallLog() {
     }
 
-    public ModelCallLog(Long aiMessageId, String threadId, String purpose, String providerName, String modelId,
+    public ModelCallLog(Long aiMessageId, String conversationId, String purpose, String providerName, String modelId,
             Integer promptTokens, Integer completionTokens, Long durationMs, Boolean ok,
             String error, Instant createdAt) {
         this.aiMessageId = aiMessageId;
-        this.threadId = threadId;
+        this.conversationId = conversationId;
         this.purpose = purpose;
         this.providerName = providerName;
         this.modelId = modelId;
@@ -70,7 +70,7 @@ public class ModelCallLog {
         this.createdAt = createdAt;
     }
     public Long getAiMessageId() { return aiMessageId; }
-    public String getThreadId() { return threadId; }
+    public String getConversationId() { return conversationId; }
     public String getPurpose() { return purpose; }
     public String getProviderName() { return providerName; }
     public String getModelId() { return modelId; }

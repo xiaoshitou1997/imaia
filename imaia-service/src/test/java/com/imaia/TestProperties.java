@@ -112,10 +112,10 @@ public final class TestProperties {
                 all.stream().filter(model -> !protocol.equals(model.getProtocol())).toList());
     }
 
-    public static AssistantProfile profile(String systemPrompt, int historyLimit, String replyThreads,
+    public static AssistantProfile profile(String systemPrompt, int historyLimit, String replyConversations,
             boolean requireGroupMention, boolean ttsReply, int minMessageLength,
             long replyDelayMinMs, long replyDelayMaxMs) {
-        return new AssistantProfile(systemPrompt, historyLimit, replyThreads, requireGroupMention,
+        return new AssistantProfile(systemPrompt, historyLimit, replyConversations, requireGroupMention,
                 ttsReply, minMessageLength, replyDelayMinMs, replyDelayMaxMs, true);
     }
 

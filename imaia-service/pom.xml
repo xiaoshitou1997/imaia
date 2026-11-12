@@ -15,7 +15,7 @@
     <artifactId>imaia-service</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <name>imaia-service</name>
-    <description>imaia — IM AI Assistant：多平台个人 AI 助理（当前适配 agent-wechat 微信网关）</description>
+    <description>imaia-service — 智能聚合中枢 IM 的服务端：adapter 归一化（微信/飞书）+ AI 原生链路</description>
 
     <properties>
         <java.version>21</java.version>

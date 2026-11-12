@@ -1,7 +1,11 @@
-# imaia — 多平台个人 AI 助理（IM AI Assistant）
+# imaia — 智能聚合中枢 IM
 
-基于 **Spring Boot 4.0 + Maven + Java 21** 的通用个人 AI 助理：平台适配层（adapter）把各 IM 的
-事件流归一化后交给核心链路——AI 自动回复（多模态）、长期记忆、计划任务、人物画像、全量归档。
+> **定位**：智能聚合中枢 IM——把微信、飞书等 IM 收敛为**一套平台中立的统一会话模型**
+> （conversation），AI 原生运行在这套模型上：自动回复、长期记忆、计划任务、人物画像、
+> 全量归档。每个 IM 只是一种「方言」，adapter 负责翻译；新增平台 = 新增一个 adapter。
+
+基于 **Spring Boot 4.0 + Maven + Java 21**。核心链路（归档 → AI → 风控 → 定时投递）只见
+归一化模型 `ImEvent` / `ImMessage`，不解析平台 id、不拼平台报文、不直连平台 API。
 
 **第一版支持两个平台**：
 
@@ -17,10 +21,11 @@
 
 - **Adapter 全包协议**：连接、鉴权、报文格式、媒体转码、@检测、发送幂等，全部封在
   `adapter/wechat` / `adapter/feishu` 里。
-- **Core 只见归一化模型**：`ImEvent`（platform/kind/messageId/threadId/receipt/raw）+ `ImMessage`
+- **Core 只见归一化模型**：`ImEvent`（platform/kind/messageId/conversationId/receipt/raw）+ `ImMessage`
   （category 语义列），不解析平台 id、不拼平台报文、不直连平台 API。
-- **(platform, threadId) 复合身份**贯穿白名单、归档、限流键（分/时/日三级按平台隔离）、
-  定时任务与幂等记录。
+- **(platform, conversationId) 复合身份**贯穿白名单、归档、限流键（分/时/日三级按平台隔离）、
+  定时任务与幂等记录。wire 层词汇随平台（daemon=threadId、飞书 SDK=chatId），翻译只在
+  adapter 边界发生。
 
 ## 快速开始
 
@@ -109,7 +114,7 @@ magpie 网关（`http://127.0.0.1:3425`，key `magpie`），模型回复发回�
 安全设计（默认全关）：
 
 - `imaia.ai.enabled=false`（默认）：不启用
-- 白名单：`assistant_profile.reply_threads`，条目支持 `wechat:xxx` / `feishu:oc_xxx` 前缀
+- 白名单：`assistant_profile.reply_conversations`，条目支持 `wechat:xxx` / `feishu:oc_xxx` 前缀
   （裸条目跨平台匹配，兼容存量数据）；不在名单里的一律不回
 - 只回 `direction=incoming`；群聊 @ 门控（`require-group-mention`，飞书群默认权限只投递
   @机器人消息，天然满足）；私聊不需要 @
@@ -135,7 +140,7 @@ WebUI 控制端 `http://127.0.0.1:8091/api/*`（概览/联系人/消息/记忆/�
 
 ## 定时主动消息
 
-`assistant_profile.reply_threads` 白名单内的会话可建 `scheduled_action`
+`assistant_profile.reply_conversations` 白名单内的会话可建 `scheduled_action`
 （一次性 `send_text` 或 cron 式 `send_ai_prompt`，WebUI 或 `/api/actions` 创建）：
 执行避开静默时段、带 5-30 秒随机抖动、幂等键由 action id 派生；按行的 `platform` 路由发送。
 

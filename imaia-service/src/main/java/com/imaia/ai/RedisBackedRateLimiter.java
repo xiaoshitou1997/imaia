@@ -41,16 +41,16 @@ public class RedisBackedRateLimiter implements ReplyRateLimiter {
     }
 
     @Override
-    public boolean tryAcquire(String platform, String threadId) {
+    public boolean tryAcquire(String platform, String conversationId) {
         try {
-            return tryAcquireInRedis(platform, threadId);
+            return tryAcquireInRedis(platform, conversationId);
         } catch (DataAccessException failure) {
             if (!degraded) {
                 degraded = true;
                 log.warn("Redis unreachable; falling back to in-memory rate limiting until it returns: {}",
                         failure.getMessage());
             }
-            return memoryFallback().tryAcquire(platform, threadId);
+            return memoryFallback().tryAcquire(platform, conversationId);
         }
     }
 
@@ -60,10 +60,10 @@ public class RedisBackedRateLimiter implements ReplyRateLimiter {
                 policy.getMaxRepliesPerDay()};
     }
 
-    private boolean tryAcquireInRedis(String platform, String threadId) {
+    private boolean tryAcquireInRedis(String platform, String conversationId) {
         int[] limits = currentLimits();
         long now = System.currentTimeMillis();
-        long threadCount = bump("imaia:ai:rl:" + platform + ":t:" + threadId + ":" + now / MINUTE_MILLIS,
+        long threadCount = bump("imaia:ai:rl:" + platform + ":t:" + conversationId + ":" + now / MINUTE_MILLIS,
                 THREAD_TTL.toSeconds());
         long hourCount = bump("imaia:ai:rl:" + platform + ":h:" + now / HOUR_MILLIS, HOUR_TTL.toSeconds());
         long dayCount = bump("imaia:ai:rl:" + platform + ":d:" + DAY_FORMAT.format(Instant.ofEpochMilli(now)),

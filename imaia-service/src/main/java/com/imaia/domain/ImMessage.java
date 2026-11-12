@@ -30,8 +30,8 @@ public class ImMessage {
     @Column(nullable = false)
     private String platform;
 
-    @Column(name = "thread_id", nullable = false)
-    private String threadId;
+    @Column(name = "conversation_id", nullable = false)
+    private String conversationId;
 
     @Column(name = "message_id", nullable = false)
     private String messageId;
@@ -72,14 +72,14 @@ public class ImMessage {
     protected ImMessage() {
     }
 
-    public ImMessage(String accountId, String platform, String threadId, String messageId, String senderId,
+    public ImMessage(String accountId, String platform, String conversationId, String messageId, String senderId,
             String senderName, String direction, Integer providerType, MessageCategory category, boolean mentioned,
             String body, Instant createdAt) {
         this.platform = platform;
         this.category = category;
         this.mentioned = mentioned;
         this.accountId = accountId;
-        this.threadId = threadId;
+        this.conversationId = conversationId;
         this.messageId = messageId;
         this.senderId = senderId;
         this.senderName = senderName;
@@ -103,8 +103,8 @@ public class ImMessage {
         return accountId;
     }
 
-    public String getThreadId() {
-        return threadId;
+    public String getConversationId() {
+        return conversationId;
     }
 
     public String getMessageId() {

@@ -56,7 +56,7 @@ CREATE TABLE assistant_profile (
     id                   INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     system_prompt        TEXT        NOT NULL,
     history_limit        INTEGER     NOT NULL DEFAULT 20,
-    reply_threads        TEXT        NOT NULL DEFAULT '',
+    reply_conversations        TEXT        NOT NULL DEFAULT '',
     require_group_mention BOOLEAN    NOT NULL DEFAULT TRUE,
     tts_reply            BOOLEAN     NOT NULL DEFAULT TRUE,
     min_message_length   INTEGER     NOT NULL DEFAULT 2,
@@ -66,7 +66,7 @@ CREATE TABLE assistant_profile (
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO assistant_profile (id, system_prompt, history_limit, reply_threads,
+INSERT INTO assistant_profile (id, system_prompt, history_limit, reply_conversations,
                                require_group_mention, tts_reply, min_message_length,
                                reply_delay_min_ms, reply_delay_max_ms, enabled)
 VALUES (1, '你是微信群里的AI助手（人设可自定义），用简洁口语化的中文回复，不要用列表。需要画图或生成视频时直接调用对应的工具；需要设置提醒时输出 [REMINDER: yyyy-MM-dd HH:mm | 提醒内容]；需要记住重要事实时输出 [MEMORY: 要记住的事实]；用户要求分析某人时输出 [ANALYZE: 联系人名字或ID]。',

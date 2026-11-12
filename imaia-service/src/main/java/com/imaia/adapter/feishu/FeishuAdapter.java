@@ -91,8 +91,8 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public void markProcessed(String messageId, String threadId) {
-        ledger.markProcessed(PLATFORM, messageId, threadId);
+    public void markProcessed(String messageId, String conversationId) {
+        ledger.markProcessed(PLATFORM, messageId, conversationId);
     }
 
     @Override
@@ -119,18 +119,18 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public void sendText(String threadId, String text, String idempotencyKey) {
-        createMessage(threadId, "text", json(Map.of("text", text)), idempotencyKey);
+    public void sendText(String conversationId, String text, String idempotencyKey) {
+        createMessage(conversationId, "text", json(Map.of("text", text)), idempotencyKey);
     }
 
     @Override
-    public void sendMedia(String threadId, MediaKind kind, String storageRef, String idempotencyKey) {
+    public void sendMedia(String conversationId, MediaKind kind, String storageRef, String idempotencyKey) {
         if (kind == MediaKind.IMAGE) {
-            createMessage(threadId, "image", json(Map.of("image_key", storageRef)), idempotencyKey);
+            createMessage(conversationId, "image", json(Map.of("image_key", storageRef)), idempotencyKey);
         } else {
             // voice/video ride as file messages on feishu (audio bubbles need opus
             // uploads with duration metadata — a later iteration)
-            createMessage(threadId, "file", json(Map.of("file_key", storageRef)), idempotencyKey);
+            createMessage(conversationId, "file", json(Map.of("file_key", storageRef)), idempotencyKey);
         }
     }
 
@@ -180,16 +180,16 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public boolean isGroupThread(String threadId) {
-        return threadId != null && threadId.startsWith(GROUP_THREAD_PREFIX);
+    public boolean isGroupConversation(String conversationId) {
+        return conversationId != null && conversationId.startsWith(GROUP_THREAD_PREFIX);
     }
 
     /** Sends one message into a chat; the uuid (idempotency key) dedupes replays server-side. */
-    private void createMessage(String threadId, String msgType, String content, String idempotencyKey) {
+    private void createMessage(String conversationId, String msgType, String content, String idempotencyKey) {
         CreateMessageReq request = CreateMessageReq.newBuilder()
                 .receiveIdType("chat_id")
                 .createMessageReqBody(CreateMessageReqBody.newBuilder()
-                        .receiveId(threadId)
+                        .receiveId(conversationId)
                         .msgType(msgType)
                         .content(content)
                         .uuid(idempotencyKey)
@@ -198,12 +198,12 @@ public class FeishuAdapter implements ImAdapter {
         try {
             var response = client().im().v1().message().create(request);
             requireSuccess(response.success(), response.getCode(), response.getMsg(),
-                    "send " + msgType + " to " + threadId);
+                    "send " + msgType + " to " + conversationId);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new FeishuApiException("Send to " + threadId + " interrupted.", interrupted);
+            throw new FeishuApiException("Send to " + conversationId + " interrupted.", interrupted);
         } catch (Exception failure) {
-            throw new FeishuApiException("Send to " + threadId + " failed: " + failure.getMessage(), failure);
+            throw new FeishuApiException("Send to " + conversationId + " failed: " + failure.getMessage(), failure);
         }
     }
 

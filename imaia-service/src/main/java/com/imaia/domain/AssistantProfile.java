@@ -25,8 +25,8 @@ public class AssistantProfile {
     @Column(name = "history_limit", nullable = false)
     private int historyLimit;
 
-    @Column(name = "reply_threads", nullable = false)
-    private String replyThreads;
+    @Column(name = "reply_conversations", nullable = false)
+    private String replyConversations;
 
     @Column(name = "require_group_mention", nullable = false)
     private boolean requireGroupMention;
@@ -52,13 +52,13 @@ public class AssistantProfile {
     protected AssistantProfile() {
     }
 
-    public AssistantProfile(String systemPrompt, int historyLimit, String replyThreads,
+    public AssistantProfile(String systemPrompt, int historyLimit, String replyConversations,
             boolean requireGroupMention, boolean ttsReply, int minMessageLength,
             long replyDelayMinMs, long replyDelayMaxMs, boolean enabled) {
         this.id = 1;
         this.systemPrompt = systemPrompt;
         this.historyLimit = historyLimit;
-        this.replyThreads = replyThreads;
+        this.replyConversations = replyConversations;
         this.requireGroupMention = requireGroupMention;
         this.ttsReply = ttsReply;
         this.minMessageLength = minMessageLength;
@@ -71,7 +71,7 @@ public class AssistantProfile {
     public Integer getId() { return id; }
     public String getSystemPrompt() { return systemPrompt; }
     public int getHistoryLimit() { return historyLimit; }
-    public String getReplyThreads() { return replyThreads; }
+    public String getReplyChats() { return replyConversations; }
     public boolean isRequireGroupMention() { return requireGroupMention; }
     public boolean isTtsReply() { return ttsReply; }
     public int getMinMessageLength() { return minMessageLength; }
@@ -82,7 +82,7 @@ public class AssistantProfile {
 
     public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
     public void setHistoryLimit(int historyLimit) { this.historyLimit = historyLimit; }
-    public void setReplyThreads(String replyThreads) { this.replyThreads = replyThreads; }
+    public void setReplyChats(String replyConversations) { this.replyConversations = replyConversations; }
     public void setRequireGroupMention(boolean requireGroupMention) { this.requireGroupMention = requireGroupMention; }
     public void setTtsReply(boolean ttsReply) { this.ttsReply = ttsReply; }
     public void setMinMessageLength(int minMessageLength) { this.minMessageLength = minMessageLength; }

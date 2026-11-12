@@ -1,5 +1,5 @@
 -- Entity layer over the message streams: contacts (friends and groups unify one
--- entity — thread_id IS contact.wxid) and group membership snapshots. The persona
+-- entity — conversation_id IS contact.wxid) and group membership snapshots. The persona
 -- column gives each conversation its own reply style, injected into the system
 -- block per turn. Seeded from the archive so the directory starts populated.
 CREATE TABLE contact (
@@ -18,10 +18,10 @@ CREATE TABLE contact (
 );
 
 INSERT INTO contact (account_id, wxid, kind, first_seen_at, last_seen_at)
-SELECT account_id, thread_id,
-       CASE WHEN thread_id LIKE '%@chatroom' THEN 'group' ELSE 'friend' END,
+SELECT account_id, conversation_id,
+       CASE WHEN conversation_id LIKE '%@chatroom' THEN 'group' ELSE 'friend' END,
        MIN(created_at), MAX(archived_at)
-FROM wechat_message GROUP BY account_id, thread_id;
+FROM wechat_message GROUP BY account_id, conversation_id;
 
 CREATE TABLE group_member (
     id               BIGSERIAL PRIMARY KEY,
@@ -38,6 +38,6 @@ INSERT INTO group_member (account_id, group_contact_id, member_wxid, display_nam
 SELECT DISTINCT ON (m.account_id, c.id, m.sender_id)
        m.account_id, c.id, m.sender_id, m.sender_name, m.archived_at
 FROM wechat_message m
-JOIN contact c ON c.account_id = m.account_id AND c.wxid = m.thread_id
-WHERE m.thread_id LIKE '%@chatroom' AND m.sender_id IS NOT NULL
+JOIN contact c ON c.account_id = m.account_id AND c.wxid = m.conversation_id
+WHERE m.conversation_id LIKE '%@chatroom' AND m.sender_id IS NOT NULL
 ORDER BY m.account_id, c.id, m.sender_id, m.archived_at DESC;

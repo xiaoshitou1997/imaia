@@ -13,11 +13,11 @@ import java.util.List;
 public interface AiMessageRepository extends JpaRepository<AiMessage, Long> {
 
     /** The most recent chat-context messages (user/assistant) of one thread, newest first. */
-    @Query("select m from AiMessage m where m.accountId = :accountId and m.threadId = :threadId"
+    @Query("select m from AiMessage m where m.accountId = :accountId and m.conversationId = :conversationId"
             + " and m.role in ('user', 'assistant') order by m.createdAt desc")
     List<AiMessage> findRecentContext(@Param("accountId") String accountId,
-            @Param("threadId") String threadId, Pageable pageable);
+            @Param("conversationId") String conversationId, Pageable pageable);
 
     /** The most recent messages (all roles) of one thread, newest first (WebUI). */
-    List<AiMessage> findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(String accountId, String threadId);
+    List<AiMessage> findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(String accountId, String conversationId);
 }

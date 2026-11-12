@@ -5,7 +5,7 @@
 CREATE TABLE scheduled_action (
     id                   BIGSERIAL PRIMARY KEY,
     account_id           TEXT        NOT NULL,
-    thread_id            TEXT        NOT NULL,
+    conversation_id            TEXT        NOT NULL,
     action               VARCHAR(16) NOT NULL,
     content              TEXT,
     prompt               TEXT,

@@ -8,7 +8,7 @@ DROP TABLE conversation_turn;
 CREATE TABLE ai_message (
     id                BIGSERIAL PRIMARY KEY,
     account_id        TEXT         NOT NULL,
-    thread_id         TEXT         NOT NULL,
+    conversation_id         TEXT         NOT NULL,
     role              VARCHAR(16)  NOT NULL,
     content           TEXT         NOT NULL,
     source_message_id TEXT,
@@ -16,4 +16,4 @@ CREATE TABLE ai_message (
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_ai_message_thread ON ai_message (account_id, thread_id, created_at DESC);
+CREATE INDEX idx_ai_message_conversation ON ai_message (account_id, conversation_id, created_at DESC);

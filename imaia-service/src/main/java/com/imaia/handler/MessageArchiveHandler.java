@@ -49,13 +49,13 @@ public class MessageArchiveHandler implements ImEventHandler {
     public void handle(ImEvent event) {
         ImAdapter adapter = adapters.forPlatform(event.platform());
         String messageId = event.messageId();
-        String threadId = event.threadId();
+        String conversationId = event.conversationId();
         String accountId = adapter.accountId();
         if (repository.existsByAccountIdAndMessageId(accountId, messageId)) {
             return;
         }
         ImMessage message = adapter.fetchMessage(messageId);
-        if (!message.getThreadId().equals(threadId)) {
+        if (!message.getConversationId().equals(conversationId)) {
             log.debug("Archive skipped: message identity drifted (message={}).", messageId);
             return;
         }
@@ -71,11 +71,11 @@ public class MessageArchiveHandler implements ImEventHandler {
     private void upsertDirectory(String accountId, ImAdapter adapter, ImMessage message) {
         Instant now = Instant.now();
         String platform = adapter.platform();
-        boolean group = adapter.isGroupThread(message.getThreadId());
+        boolean group = adapter.isGroupConversation(message.getConversationId());
         try {
             Contact contact = contacts
-                    .findByAccountIdAndPlatformAndExternalId(accountId, platform, message.getThreadId())
-                    .orElseGet(() -> new Contact(accountId, platform, message.getThreadId(), null,
+                    .findByAccountIdAndPlatformAndExternalId(accountId, platform, message.getConversationId())
+                    .orElseGet(() -> new Contact(accountId, platform, message.getConversationId(), null,
                             group ? Contact.KIND_GROUP : Contact.KIND_FRIEND, now, now, now));
             contact.setLastSeenAt(now);
             final Contact savedContact = contacts.save(contact);
@@ -88,7 +88,7 @@ public class MessageArchiveHandler implements ImEventHandler {
                 groupMembers.save(member);
             }
         } catch (RuntimeException failure) {
-            log.warn("Directory refresh skipped for thread {}: {}", message.getThreadId(),
+            log.warn("Directory refresh skipped for thread {}: {}", message.getConversationId(),
                     failure.getMessage());
         }
     }

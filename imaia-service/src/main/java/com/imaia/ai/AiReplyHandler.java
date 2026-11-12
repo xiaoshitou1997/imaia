@@ -103,13 +103,13 @@ public class AiReplyHandler implements ImEventHandler {
     @Override
     public void handle(ImEvent event) {
         String messageId = event.messageId();
-        String threadId = event.threadId();
+        String conversationId = event.conversationId();
         ImAdapter adapter = adapters.forPlatform(event.platform());
-        if (!whitelisted(adapter.platform(), threadId)) {
+        if (!whitelisted(adapter.platform(), conversationId)) {
             return;
         }
         if (isQuietHours(LocalTime.now())) {
-            log.debug("Quiet hours; holding message without reply: thread={} message={}.", threadId, messageId);
+            log.debug("Quiet hours; holding message without reply: thread={} message={}.", conversationId, messageId);
             return;
         }
         if (adapter.hasProcessed(messageId)) {
@@ -120,37 +120,37 @@ public class AiReplyHandler implements ImEventHandler {
         if (!INCOMING_DIRECTION.equals(message.getDirection())) {
             return;
         }
-        boolean groupChat = adapter.isGroupThread(threadId);
+        boolean groupChat = adapter.isGroupConversation(conversationId);
         if (profiles.current().isRequireGroupMention() && groupChat && !message.isMentioned()) {
-            log.debug("Group message without mention stays as context: thread={} message={}.", threadId, messageId);
+            log.debug("Group message without mention stays as context: thread={} message={}.", conversationId, messageId);
             return;
         }
         PromptContent content = buildContent(message, adapter);
         if (content == null) {
             return;
         }
-        if (!rateLimiter.tryAcquire(adapter.platform(), threadId)) {
+        if (!rateLimiter.tryAcquire(adapter.platform(), conversationId)) {
             log.warn("Reply volume cap reached (thread={} or global hourly/daily cap); skipping reply to {} "
-                    + "to keep automated traffic unremarkable.", threadId, messageId);
+                    + "to keep automated traffic unremarkable.", conversationId, messageId);
             return;
         }
-        String groupContext = groupChat ? recentGroupContext(adapter, threadId, messageId) : null;
+        String groupContext = groupChat ? recentGroupContext(adapter, conversationId, messageId) : null;
         List<GeneratedMedia> generated = new ArrayList<>();
         AiChatService.ChatReply reply = content.image() == null
-                ? chatService.complete(adapter, threadId, content.userText(), null, null, groupContext,
+                ? chatService.complete(adapter, conversationId, content.userText(), null, null, groupContext,
                         generated, messageId)
-                : chatService.complete(adapter, threadId, content.userText(),
+                : chatService.complete(adapter, conversationId, content.userText(),
                         content.image().data(), content.image().contentType(), groupContext,
                         generated, messageId);
         if (!pauseBeforeSend()) {
             return;
         }
         String keyPrefix = "imaia-ai-" + messageId;
-        sendReply(adapter, threadId, reply, keyPrefix, content.fromVoice(), generated);
-        executeIntents(adapter, threadId, reply, keyPrefix, message.getSenderId());
-        adapter.markProcessed(messageId, threadId);
+        sendReply(adapter, conversationId, reply, keyPrefix, content.fromVoice(), generated);
+        executeIntents(adapter, conversationId, reply, keyPrefix, message.getSenderId());
+        adapter.markProcessed(messageId, conversationId);
         log.info("AI reply sent on platform={} to thread={} for message={} ({}).",
-                event.platform(), threadId, messageId, content.kindLabel());
+                event.platform(), conversationId, messageId, content.kindLabel());
     }
 
     /**
@@ -159,50 +159,50 @@ public class AiReplyHandler implements ImEventHandler {
      * memory facts are stored per-thread, and analysis requests produce a follow-up
      * profile message from the archive.
      */
-    private void sendReply(ImAdapter adapter, String threadId, AiChatService.ChatReply reply,
+    private void sendReply(ImAdapter adapter, String conversationId, AiChatService.ChatReply reply,
             String keyPrefix, boolean fromVoice, List<GeneratedMedia> generated) {
         String text = reply.text();
         if (text != null && !text.isBlank()) {
             if (fromVoice && profiles.current().isTtsReply()) {
-                sendVoiceReply(adapter, threadId, text, keyPrefix);
+                sendVoiceReply(adapter, conversationId, text, keyPrefix);
             } else {
                 sendWithConflictGuard(keyPrefix,
-                        () -> adapter.sendText(threadId, text, keyPrefix));
+                        () -> adapter.sendText(conversationId, text, keyPrefix));
             }
         }
-        sendGenerated(adapter, threadId, reply.imagePrompts(), MediaKind.IMAGE, "png", keyPrefix + "-img");
-        sendGenerated(adapter, threadId, reply.videoPrompts(), MediaKind.VIDEO, "mp4", keyPrefix + "-vid");
-        sendCollected(adapter, threadId, generated, keyPrefix);
+        sendGenerated(adapter, conversationId, reply.imagePrompts(), MediaKind.IMAGE, "png", keyPrefix + "-img");
+        sendGenerated(adapter, conversationId, reply.videoPrompts(), MediaKind.VIDEO, "mp4", keyPrefix + "-vid");
+        sendCollected(adapter, conversationId, generated, keyPrefix);
     }
 
     /** Voice-in, voice-out: synthesize the reply through the tts route; text on failure. */
-    private void sendVoiceReply(ImAdapter adapter, String threadId, String text, String keyPrefix) {
+    private void sendVoiceReply(ImAdapter adapter, String conversationId, String text, String keyPrefix) {
         try {
             byte[] mp3 = ttsClient.synthesize(text);
             String sourceId = adapter.uploadMedia(mp3, "imaia-voice-reply.mp3", "audio/mpeg");
             sendWithConflictGuard(keyPrefix,
-                    () -> adapter.sendMedia(threadId, MediaKind.VOICE, sourceId, keyPrefix));
+                    () -> adapter.sendMedia(conversationId, MediaKind.VOICE, sourceId, keyPrefix));
         } catch (RuntimeException failure) {
             log.warn("Voice synthesis failed; replying with text instead: {}", failure.getMessage());
             sendWithConflictGuard(keyPrefix,
-                    () -> adapter.sendText(threadId, text, keyPrefix));
+                    () -> adapter.sendText(conversationId, text, keyPrefix));
         }
     }
 
-    private void executeIntents(ImAdapter adapter, String threadId, AiChatService.ChatReply reply,
+    private void executeIntents(ImAdapter adapter, String conversationId, AiChatService.ChatReply reply,
             String keyPrefix, String senderId) {
         for (IntentParser.ReminderIntent reminder : reply.reminders()) {
             actions.save(new ScheduledAction(
-                    adapter.accountId(), adapter.platform(), threadId, ScheduledAction.ACTION_SEND_TEXT,
+                    adapter.accountId(), adapter.platform(), conversationId, ScheduledAction.ACTION_SEND_TEXT,
                     reminder.content(), null,
                     reminder.remindAt().atZone(java.time.ZoneId.systemDefault()).toInstant(),
                     null, "ai", java.time.Instant.now()));
-            log.info("Reminder scheduled for thread={} at {}.", threadId, reminder.remindAt());
+            log.info("Reminder scheduled for thread={} at {}.", conversationId, reminder.remindAt());
         }
         for (String fact : reply.memories()) {
             memoryFacts.save(new com.imaia.domain.MemoryFact(
-                    adapter.accountId(), "thread", threadId, fact, threadId, java.time.Instant.now()));
-            log.info("Memory fact stored for thread={}.", threadId);
+                    adapter.accountId(), "thread", conversationId, fact, conversationId, java.time.Instant.now()));
+            log.info("Memory fact stored for thread={}.", conversationId);
         }
         for (String name : reply.analyses()) {
             try {
@@ -211,7 +211,7 @@ public class AiReplyHandler implements ImEventHandler {
                         ? "归档里还没有「" + name + "」的聊天记录，暂时无法分析。"
                         : "关于「" + name + "」的分析：\n" + profile;
                 sendWithConflictGuard(keyPrefix + "-analyze",
-                        () -> adapter.sendText(threadId, analysisText,
+                        () -> adapter.sendText(conversationId, analysisText,
                                 keyPrefix + "-analyze"));
             } catch (RuntimeException failure) {
                 log.warn("Analysis for '{}' failed: {}", name, failure.getMessage());
@@ -219,7 +219,7 @@ public class AiReplyHandler implements ImEventHandler {
         }
     }
 
-    private void sendGenerated(ImAdapter adapter, String threadId, List<String> prompts,
+    private void sendGenerated(ImAdapter adapter, String conversationId, List<String> prompts,
             MediaKind kind, String extension, String keyPrefix) {
         int index = 0;
         for (String prompt : prompts) {
@@ -232,7 +232,7 @@ public class AiReplyHandler implements ImEventHandler {
                 String sourceId = adapter.uploadMedia(media, "imaia-" + kind.value() + "-" + index + "." + extension,
                         kind == MediaKind.IMAGE ? "image/png" : "video/mp4");
                 sendWithConflictGuard(key,
-                        () -> adapter.sendMedia(threadId, kind, sourceId, key));
+                        () -> adapter.sendMedia(conversationId, kind, sourceId, key));
             } catch (RuntimeException failure) {
                 log.warn("Generation or send failed for {} prompt '{}': {}",
                         kind, prompt, failure.getMessage());
@@ -241,7 +241,7 @@ public class AiReplyHandler implements ImEventHandler {
     }
 
     /** Delivers the media the chat model generated through native tool calls. */
-    private void sendCollected(ImAdapter adapter, String threadId, List<GeneratedMedia> generated,
+    private void sendCollected(ImAdapter adapter, String conversationId, List<GeneratedMedia> generated,
             String keyPrefix) {
         int index = 0;
         for (GeneratedMedia media : generated) {
@@ -250,8 +250,8 @@ public class AiReplyHandler implements ImEventHandler {
             try {
                 String sourceId = adapter.uploadMedia(media.data(), media.filename(), media.mimeType());
                 sendWithConflictGuard(key,
-                        () -> adapter.sendMedia(threadId, media.kind(), sourceId, key));
-                AiArtifact artifact = new AiArtifact(adapter.accountId(), threadId, media.kind().value(),
+                        () -> adapter.sendMedia(conversationId, media.kind(), sourceId, key));
+                AiArtifact artifact = new AiArtifact(adapter.accountId(), conversationId, media.kind().value(),
                         media.prompt(), media.filename(), AiArtifact.STATUS_DELIVERED,
                         java.time.Instant.now());
                 artifact.setSourceRef(sourceId);
@@ -274,11 +274,11 @@ public class AiReplyHandler implements ImEventHandler {
     }
 
     /** Recent archived lines of the group, as a context block for the model. */
-    private String recentGroupContext(ImAdapter adapter, String threadId, String excludeMessageId) {
+    private String recentGroupContext(ImAdapter adapter, String conversationId, String excludeMessageId) {
         try {
             String accountId = adapter.accountId();
             var recent = archivedMessages
-                    .findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, threadId);
+                    .findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, conversationId);
             StringBuilder context = new StringBuilder();
             int collected = 0;
             for (ImMessage message : recent) {
@@ -462,18 +462,18 @@ public class AiReplyHandler implements ImEventHandler {
 
     /** Whether the (platform, thread) pair is whitelisted; entries carry an optional
      * {@code platform:} prefix, bare thread ids match every platform. */
-    private boolean whitelisted(String platform, String threadId) {
-        for (String entry : profiles.current().getReplyThreads().split(",")) {
+    private boolean whitelisted(String platform, String conversationId) {
+        for (String entry : profiles.current().getReplyChats().split(",")) {
             String value = entry.trim();
             if (value.isEmpty()) {
                 continue;
             }
             int separator = value.indexOf(':');
             if (separator > 0) {
-                if (value.startsWith(platform + ":") && value.substring(separator + 1).equals(threadId)) {
+                if (value.startsWith(platform + ":") && value.substring(separator + 1).equals(conversationId)) {
                     return true;
                 }
-            } else if (value.equals(threadId)) {
+            } else if (value.equals(conversationId)) {
                 return true;
             }
         }

@@ -5,7 +5,7 @@
 CREATE TABLE ai_artifact (
     id               BIGSERIAL PRIMARY KEY,
     account_id       TEXT        NOT NULL,
-    thread_id        TEXT        NOT NULL,
+    conversation_id        TEXT        NOT NULL,
     kind             VARCHAR(16) NOT NULL,
     prompt           TEXT,
     model_id         VARCHAR(128),
@@ -15,11 +15,11 @@ CREATE TABLE ai_artifact (
     status           VARCHAR(16) NOT NULL DEFAULT 'generated',
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_ai_artifact_thread ON ai_artifact (account_id, thread_id, created_at DESC);
+CREATE INDEX idx_ai_artifact_conversation ON ai_artifact (account_id, conversation_id, created_at DESC);
 
 CREATE TABLE model_call_log (
     id                BIGSERIAL PRIMARY KEY,
-    thread_id         TEXT,
+    conversation_id         TEXT,
     purpose           VARCHAR(32) NOT NULL,
     provider_name     VARCHAR(64),
     model_id          VARCHAR(128),

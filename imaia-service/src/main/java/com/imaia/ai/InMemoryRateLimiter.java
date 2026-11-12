@@ -34,9 +34,9 @@ public class InMemoryRateLimiter implements ReplyRateLimiter {
     }
 
     @Override
-    public boolean tryAcquire(String platform, String threadId) {
+    public boolean tryAcquire(String platform, String conversationId) {
         long now = System.currentTimeMillis();
-        String threadKey = platform + ":" + threadId;
+        String threadKey = platform + ":" + conversationId;
         synchronized (this) {
             prune(hourlyReplies, now - HOUR_MILLIS);
             prune(dailyReplies, now - DAY_MILLIS);

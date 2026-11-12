@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/imaia")
 public class ImaiaWebController {
 
-    private static final String LOCAL_CONSOLE_THREAD = "local-console";
+    private static final String LOCAL_CONSOLE_CONVERSATION_ID = "local-console";
 
     private final AiChatService chatService;
     private final ImAdapters adapters;
@@ -42,7 +42,7 @@ public class ImaiaWebController {
     public record AskRequest(String question) {
     }
 
-    public record SendRequest(String threadId, String text) {
+    public record SendRequest(String conversationId, String text) {
     }
 
     /** Talks to the AI directly (local console conversation, persisted separately). */
@@ -51,7 +51,7 @@ public class ImaiaWebController {
         if (request.question() == null || request.question().isBlank()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", "question is empty"));
         }
-        String reply = chatService.complete(adapters.defaultAdapter(), LOCAL_CONSOLE_THREAD,
+        String reply = chatService.complete(adapters.defaultAdapter(), LOCAL_CONSOLE_CONVERSATION_ID,
                 request.question().trim()).text();
         return ResponseEntity.ok(java.util.Map.of("reply", reply));
     }
@@ -63,19 +63,19 @@ public class ImaiaWebController {
      */
     @PostMapping("/send")
     public ResponseEntity<?> send(@RequestBody SendRequest request) {
-        String threadId = request.threadId() == null ? "" : request.threadId().trim();
+        String conversationId = request.conversationId() == null ? "" : request.conversationId().trim();
         String text = request.text() == null ? "" : request.text().trim();
-        if (threadId.isEmpty() || text.isEmpty()) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("error", "threadId and text are required"));
+        if (conversationId.isEmpty() || text.isEmpty()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "conversationId and text are required"));
         }
-        if (!java.util.Arrays.stream(profiles.current().getReplyThreads().split(","))
+        if (!java.util.Arrays.stream(profiles.current().getReplyChats().split(","))
                 .map(String::trim)
-                .anyMatch(t -> t.equals(threadId))) {
+                .anyMatch(t -> t.equals(conversationId))) {
             return ResponseEntity.status(403).body(java.util.Map.of(
                     "error", "thread is not in imaia.ai.reply-threads; add it first"));
         }
         String key = "imaia-manual-" + java.util.UUID.randomUUID();
-        adapters.defaultAdapter().sendText(threadId, text, key);
+        adapters.defaultAdapter().sendText(conversationId, text, key);
         return ResponseEntity.ok(java.util.Map.of("idempotencyKey", key));
     }
 

@@ -2,7 +2,7 @@
 CREATE TABLE reminder (
     id             BIGSERIAL PRIMARY KEY,
     account_id     VARCHAR(128) NOT NULL,
-    thread_id      TEXT         NOT NULL,
+    conversation_id      TEXT         NOT NULL,
     remind_at      TIMESTAMPTZ  NOT NULL,
     content        TEXT         NOT NULL,
     creator_sender VARCHAR(128),
@@ -16,7 +16,7 @@ CREATE TABLE memory_fact (
     account_id  VARCHAR(128) NOT NULL,
     scope       VARCHAR(128) NOT NULL DEFAULT 'global',
     fact        TEXT         NOT NULL,
-    source_thread TEXT,
+    source_conversation TEXT,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_memory_scope ON memory_fact (account_id, scope, created_at DESC);

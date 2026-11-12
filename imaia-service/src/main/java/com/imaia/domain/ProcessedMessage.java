@@ -24,8 +24,8 @@ public class ProcessedMessage {
     @Column(name = "message_id", nullable = false)
     private String messageId;
 
-    @Column(name = "thread_id", nullable = false)
-    private String threadId;
+    @Column(name = "conversation_id", nullable = false)
+    private String conversationId;
 
     @Column(name = "processed_at", nullable = false)
     private Instant processedAt;
@@ -33,16 +33,16 @@ public class ProcessedMessage {
     protected ProcessedMessage() {
     }
 
-    public ProcessedMessage(String platform, String messageId, String threadId, Instant processedAt) {
+    public ProcessedMessage(String platform, String messageId, String conversationId, Instant processedAt) {
         this.platform = platform;
         this.messageId = messageId;
-        this.threadId = threadId;
+        this.conversationId = conversationId;
         this.processedAt = processedAt;
     }
 
     public Long getId() { return id; }
     public String getPlatform() { return platform; }
     public String getMessageId() { return messageId; }
-    public String getThreadId() { return threadId; }
+    public String getConversationId() { return conversationId; }
     public Instant getProcessedAt() { return processedAt; }
 }

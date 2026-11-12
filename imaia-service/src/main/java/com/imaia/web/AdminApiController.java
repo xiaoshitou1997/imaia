@@ -132,7 +132,7 @@ public class AdminApiController {
             for (var message : imMessages.findTop200ByAccountIdOrderByArchivedAtDesc(adapter.accountId())) {
                 if (recent.size() >= 12) break;
                 Map<String, Object> row = new LinkedHashMap<>();
-                row.put("threadId", message.getThreadId());
+                row.put("conversationId", message.getConversationId());
                 row.put("senderName", message.getSenderName());
                 row.put("direction", message.getDirection());
                 row.put("type", message.getProviderType());
@@ -198,17 +198,17 @@ public class AdminApiController {
 
     // ---------- messages ----------
 
-    @GetMapping("/threads/{threadId}/messages")
-    public List<Map<String, Object>> threadMessages(@PathVariable String threadId,
+    @GetMapping("/conversations/{conversationId}/messages")
+    public List<Map<String, Object>> threadMessages(@PathVariable String conversationId,
             @RequestParam(defaultValue = "100") int limit) {
         List<MessageRow> rows = new ArrayList<>();
         for (ImAdapter adapter : adapters.all()) {
             String accountId = adapter.accountId();
-            for (var m : imMessages.findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, threadId)) {
+            for (var m : imMessages.findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, conversationId)) {
                 rows.add(new MessageRow(m.getArchivedAt(), m.getDirection(), m.getSenderId(),
                         m.getSenderName(), m.getProviderType(), m.getBody()));
             }
-            for (var m : aiMessages.findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(accountId, threadId)) {
+            for (var m : aiMessages.findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(accountId, conversationId)) {
                 String body = AiMessage.ROLE_TOOL.equals(m.getRole())
                         ? "[工具 " + m.getToolName() + "] " + m.getContent()
                         : m.getContent();
@@ -251,7 +251,7 @@ public class AdminApiController {
         for (AiArtifact artifact : all) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", artifact.getId());
-            row.put("threadId", artifact.getThreadId());
+            row.put("conversationId", artifact.getConversationId());
             row.put("kind", artifact.getKind());
             row.put("prompt", artifact.getPrompt());
             row.put("modelId", artifact.getModelId());
@@ -277,7 +277,7 @@ public class AdminApiController {
         for (ScheduledAction action : all) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", action.getId());
-            row.put("threadId", action.getThreadId());
+            row.put("conversationId", action.getConversationId());
             row.put("action", action.getAction());
             row.put("content", action.getContent());
             row.put("prompt", action.getPrompt());
@@ -292,14 +292,14 @@ public class AdminApiController {
         return out;
     }
 
-    public record NewAction(String platform, String threadId, String action, String content, String prompt,
+    public record NewAction(String platform, String conversationId, String action, String content, String prompt,
             Instant fireAt, String cron) {
     }
 
     @PostMapping("/actions")
     public ResponseEntity<?> createAction(@RequestBody NewAction request) {
-        if (request.threadId() == null || request.threadId().isBlank()) {
-            return badRequest("threadId is required");
+        if (request.conversationId() == null || request.conversationId().isBlank()) {
+            return badRequest("conversationId is required");
         }
         ImAdapter adapter = request.platform() == null || request.platform().isBlank()
                 ? adapters.defaultAdapter()
@@ -313,7 +313,7 @@ public class AdminApiController {
             return badRequest("fireAt or cron is required");
         }
         ScheduledAction saved = actions.save(new ScheduledAction(adapter.accountId(), adapter.platform(),
-                request.threadId(), action, request.content(), request.prompt(),
+                request.conversationId(), action, request.content(), request.prompt(),
                 request.fireAt(), request.cron(), "user", Instant.now()));
         return ResponseEntity.ok(Map.of("id", saved.getId()));
     }
@@ -398,7 +398,7 @@ public class AdminApiController {
         List<Map<String, Object>> out = new ArrayList<>();
         for (var call : callLogs.findTop100ByOrderByCreatedAtDesc()) {
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("threadId", call.getThreadId());
+            row.put("conversationId", call.getConversationId());
             row.put("purpose", call.getPurpose());
             row.put("providerName", call.getProviderName());
             row.put("modelId", call.getModelId());
@@ -579,7 +579,7 @@ public class AdminApiController {
         return profileService.current();
     }
 
-    public record UpdateProfile(String systemPrompt, Integer historyLimit, String replyThreads,
+    public record UpdateProfile(String systemPrompt, Integer historyLimit, String replyConversations,
             Boolean requireGroupMention, Boolean ttsReply, Integer minMessageLength,
             Long replyDelayMinMs, Long replyDelayMaxMs, Boolean enabled) {
     }
@@ -591,7 +591,7 @@ public class AdminApiController {
             profile.setSystemPrompt(request.systemPrompt());
         }
         if (request.historyLimit() != null && request.historyLimit() >= 2) profile.setHistoryLimit(request.historyLimit());
-        if (request.replyThreads() != null) profile.setReplyThreads(request.replyThreads());
+        if (request.replyConversations() != null) profile.setReplyChats(request.replyConversations());
         if (request.requireGroupMention() != null) profile.setRequireGroupMention(request.requireGroupMention());
         if (request.ttsReply() != null) profile.setTtsReply(request.ttsReply());
         if (request.minMessageLength() != null && request.minMessageLength() >= 0) {

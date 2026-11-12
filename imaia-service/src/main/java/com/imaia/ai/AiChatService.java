@@ -48,13 +48,13 @@ public class AiChatService {
     }
 
     /** Runs the completion with no attached image; tool-generated media is discarded. */
-    public ChatReply complete(ImAdapter adapter, String threadId, String userText) {
-        return complete(adapter, threadId, userText, null, null, null, new ArrayList<>(), null);
+    public ChatReply complete(ImAdapter adapter, String conversationId, String userText) {
+        return complete(adapter, conversationId, userText, null, null, null, new ArrayList<>(), null);
     }
 
     /** Runs the completion, optionally attaching image bytes to the current turn. */
-    public ChatReply complete(ImAdapter adapter, String threadId, String userText, byte[] image, String imageMimeType) {
-        return complete(adapter, threadId, userText, image, imageMimeType, null, new ArrayList<>(), null);
+    public ChatReply complete(ImAdapter adapter, String conversationId, String userText, byte[] image, String imageMimeType) {
+        return complete(adapter, conversationId, userText, image, imageMimeType, null, new ArrayList<>(), null);
     }
 
     /**
@@ -64,33 +64,33 @@ public class AiChatService {
      * history store; the remaining intent markers are parsed out of the final reply.
      * The adapter carries the conversation's platform (identity + history scoping).
      */
-    public ChatReply complete(ImAdapter adapter, String threadId, String userText, byte[] image, String imageMimeType,
+    public ChatReply complete(ImAdapter adapter, String conversationId, String userText, byte[] image, String imageMimeType,
             String groupContext, List<GeneratedMedia> generated, String sourceMessageId) {
         String accountId = adapter.accountId();
         int limit = Math.max(2, profiles.current().getHistoryLimit());
         List<OpenAiChatCompletion.Turn> history = aiMessages
-                .findRecentContext(accountId, threadId, PageRequest.of(0, limit)).stream()
+                .findRecentContext(accountId, conversationId, PageRequest.of(0, limit)).stream()
                 .map(message -> new OpenAiChatCompletion.Turn(
                         AiMessage.ROLE_ASSISTANT.equals(message.getRole()), message.getContent()))
                 .toList();
         OpenAiChatCompletion.ChatResult result = chatCompletion.complete(
-                buildSystemContext(adapter, threadId, accountId, groupContext), history,
+                buildSystemContext(adapter, conversationId, accountId, groupContext), history,
                 userText, image, imageMimeType, chatTools.mediaTools(generated));
         String reply = result.text();
         if (reply == null || reply.isBlank()) {
-            throw new IllegalStateException("Gateway returned no text content on thread " + threadId + ".");
+            throw new IllegalStateException("Gateway returned no text content on thread " + conversationId + ".");
         }
         IntentParser.Intents intents = IntentParser.parse(reply);
         String text = intents.textWithoutMarkers();
         Instant now = Instant.now();
         List<AiMessage> rows = new ArrayList<>();
-        rows.add(new AiMessage(accountId, adapter.platform(), threadId, AiMessage.ROLE_USER, userText, sourceMessageId,
+        rows.add(new AiMessage(accountId, adapter.platform(), conversationId, AiMessage.ROLE_USER, userText, sourceMessageId,
                 now.minusMillis(1)));
         for (OpenAiChatCompletion.ToolExchange exchange : result.toolExchanges()) {
-            rows.add(new AiMessage(accountId, adapter.platform(), threadId, AiMessage.ROLE_TOOL, exchange.result(),
+            rows.add(new AiMessage(accountId, adapter.platform(), conversationId, AiMessage.ROLE_TOOL, exchange.result(),
                     null, exchange.toolName(), now));
         }
-        rows.add(new AiMessage(accountId, adapter.platform(), threadId, AiMessage.ROLE_ASSISTANT, text, null, null, now));
+        rows.add(new AiMessage(accountId, adapter.platform(), conversationId, AiMessage.ROLE_ASSISTANT, text, null, null, now));
         aiMessages.saveAll(rows);
         return new ChatReply(text, intents.images(), intents.videos(),
                 intents.reminders(), intents.memories(), intents.analyses());
@@ -100,21 +100,21 @@ public class AiChatService {
      * One-shot completion with no history read or write — used by scheduled proactive
      * messages where the prompt is an instruction, not part of any conversation.
      */
-    public String completeOnce(ImAdapter adapter, String threadId, String instruction) {
-        String reply = chatCompletion.complete(buildSystemContext(adapter, threadId, null, null),
+    public String completeOnce(ImAdapter adapter, String conversationId, String instruction) {
+        String reply = chatCompletion.complete(buildSystemContext(adapter, conversationId, null, null),
                 List.of(), instruction, null, null);
         if (reply == null || reply.isBlank()) {
-            throw new IllegalStateException("Chat endpoint returned no text on thread " + threadId + ".");
+            throw new IllegalStateException("Chat endpoint returned no text on thread " + conversationId + ".");
         }
         return reply.strip();
     }
 
     /** System prompt + current time + transient group context + remembered facts. */
-    private String buildSystemContext(ImAdapter adapter, String threadId, String accountId, String groupContext) {
+    private String buildSystemContext(ImAdapter adapter, String conversationId, String accountId, String groupContext) {
         StringBuilder system = new StringBuilder(profiles.current().getSystemPrompt());
         system.append("\n\n当前时间：").append(LocalDateTime.now().format(TIME_DISPLAY));
         if (accountId != null) {
-            contacts.findByAccountIdAndPlatformAndExternalId(accountId, adapter.platform(), threadId)
+            contacts.findByAccountIdAndPlatformAndExternalId(accountId, adapter.platform(), conversationId)
                     .map(Contact::getPersona)
                     .filter(persona -> persona != null && !persona.isBlank())
                     .ifPresent(persona -> system.append("\n\n本会话回复风格：").append(persona.strip()));
@@ -127,8 +127,8 @@ public class AiChatService {
             for (var fact : memoryFacts.findTop50ByAccountIdAndScopeTypeOrderByCreatedAtDesc(accountId, "global")) {
                 facts.add(fact.getFact());
             }
-            if (threadId != null) {
-                for (var fact : memoryFacts.findTop50ByAccountIdAndScopeTypeAndScopeIdOrderByCreatedAtDesc(accountId, "thread", threadId)) {
+            if (conversationId != null) {
+                for (var fact : memoryFacts.findTop50ByAccountIdAndScopeTypeAndScopeIdOrderByCreatedAtDesc(accountId, "thread", conversationId)) {
                     facts.add(fact.getFact());
                 }
             }

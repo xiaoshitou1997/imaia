@@ -26,7 +26,7 @@ public class ProcessedMessageLedger {
     }
 
     /** Marks the message processed for this platform. */
-    public void markProcessed(String platform, String messageId, String threadId) {
-        processedMessages.save(new ProcessedMessage(platform, messageId, threadId, Instant.now()));
+    public void markProcessed(String platform, String messageId, String conversationId) {
+        processedMessages.save(new ProcessedMessage(platform, messageId, conversationId, Instant.now()));
     }
 }

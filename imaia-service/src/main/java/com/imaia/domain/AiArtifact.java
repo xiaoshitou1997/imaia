@@ -27,8 +27,8 @@ public class AiArtifact {
     @Column(name = "account_id", nullable = false)
     private String accountId;
 
-    @Column(name = "thread_id", nullable = false)
-    private String threadId;
+    @Column(name = "conversation_id", nullable = false)
+    private String conversationId;
 
     @Column(nullable = false)
     private String kind;
@@ -60,10 +60,10 @@ public class AiArtifact {
     protected AiArtifact() {
     }
 
-    public AiArtifact(String accountId, String threadId, String kind, String prompt,
+    public AiArtifact(String accountId, String conversationId, String kind, String prompt,
             String filename, String status, Instant createdAt) {
         this.accountId = accountId;
-        this.threadId = threadId;
+        this.conversationId = conversationId;
         this.kind = kind;
         this.prompt = prompt;
         this.filename = filename;
@@ -73,7 +73,7 @@ public class AiArtifact {
 
     public Long getId() { return id; }
     public String getAccountId() { return accountId; }
-    public String getThreadId() { return threadId; }
+    public String getConversationId() { return conversationId; }
     public String getKind() { return kind; }
     public String getPrompt() { return prompt; }
     public String getModelId() { return modelId; }

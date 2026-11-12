@@ -5,5 +5,5 @@ package com.imaia.ai;
 public interface ReplyRateLimiter {
 
     /** Whether a reply may be sent in the thread now; consuming a slot when it returns true. */
-    boolean tryAcquire(String platform, String threadId);
+    boolean tryAcquire(String platform, String conversationId);
 }

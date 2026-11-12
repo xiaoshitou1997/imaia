@@ -9,12 +9,12 @@ export interface Overview {
   tokensToday: number
   callsToday: number
   pendingActions: number
-  recent: { threadId: string; senderName: string | null; direction: string; type: number; body: string; time: string }[]
+  recent: { conversationId: string; senderName: string | null; direction: string; type: number; body: string; time: string }[]
 }
 
 export interface Contact {
   id: number
-  wxid: string
+  conversationId: string
   displayName: string
   kind: string
   persona: string | null
@@ -34,7 +34,7 @@ export interface MessageRow {
 
 export interface Artifact {
   id: number
-  threadId: string
+  conversationId: string
   kind: string
   prompt: string | null
   modelId: string | null
@@ -45,7 +45,7 @@ export interface Artifact {
 
 export interface ScheduledAction {
   id: number
-  threadId: string
+  conversationId: string
   action: string
   content: string | null
   prompt: string | null
@@ -68,7 +68,7 @@ export interface MemoryFact {
 }
 
 export interface ModelCall {
-  threadId: string | null
+  conversationId: string | null
   purpose: string
   providerName: string | null
   modelId: string | null
@@ -106,7 +106,7 @@ export interface Provider {
 export interface AssistantProfile {
   systemPrompt: string
   historyLimit: number
-  replyThreads: string
+  replyConversations: string
   requireGroupMention: boolean
   ttsReply: boolean
   minMessageLength: number
@@ -149,12 +149,13 @@ export const api = {
   contacts: () => request<Contact[]>('/contacts'),
   updateContact: (id: number, body: Partial<Pick<Contact, 'persona' | 'remark' | 'muted'>>) =>
     request(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  messages: (wxid: string, limit = 200) =>
-    request<MessageRow[]>(`/threads/${encodeURIComponent(wxid)}/messages?limit=${limit}`),
+  messages: (conversationId: string, limit = 200) =>
+    request<MessageRow[]>(`/conversations/${encodeURIComponent(conversationId)}/messages?limit=${limit}`),
   artifacts: () => request<Artifact[]>('/artifacts'),
   actions: () => request<ScheduledAction[]>('/actions'),
   createAction: (body: {
-    threadId: string
+    platform?: string
+    conversationId: string
     action: string
     content?: string | null
     prompt?: string | null
@@ -186,16 +187,16 @@ export const api = {
   runAnalysis: (contactId: number) =>
     request<{ profile: string }>(`/analysis/${contactId}`, { method: 'POST' }),
   getAnalysis: (contactId: number) => request<{ profile: string }>(`/analysis/${contactId}`),
-  sendText: (threadId: string, text: string) =>
+  sendText: (conversationId: string, text: string) =>
     request<{ sendId: string }>('/imaia/send', {
       method: 'POST',
-      body: JSON.stringify({ threadId, text }),
+      body: JSON.stringify({ conversationId, text }),
     }).catch(() => {
       // 老控制端点在 /imaia 前缀下（非 /api）——直接同源调用
       return fetch('/imaia/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId, text }),
+        body: JSON.stringify({ conversationId, text }),
       }).then((r) => r.json())
     }),
   ask: (question: string) =>

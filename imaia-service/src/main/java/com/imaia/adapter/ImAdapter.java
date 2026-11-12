@@ -31,7 +31,7 @@ public interface ImAdapter {
     boolean hasProcessed(String messageId);
 
     /** Marks the message processed. */
-    void markProcessed(String messageId, String threadId);
+    void markProcessed(String messageId, String conversationId);
 
     /** Transfers (if needed) and downloads the message asset of one category.
      * Returns null when the message carries no such asset. */
@@ -43,14 +43,14 @@ public interface ImAdapter {
 
     /** Sends text into a thread; the idempotency key prevents double-send on retry.
      * Throws DuplicateSendException when this key was already delivered. */
-    void sendText(String threadId, String text, String idempotencyKey);
+    void sendText(String conversationId, String text, String idempotencyKey);
 
     /** Uploads and sends generated media; see sendText for the key semantics. */
-    void sendMedia(String threadId, MediaKind kind, String storageRef, String idempotencyKey);
+    void sendMedia(String conversationId, MediaKind kind, String storageRef, String idempotencyKey);
 
     /** Uploads bytes and returns the platform storage reference. */
     String uploadMedia(byte[] data, String filename, String mimeType);
 
     /** Whether a thread id belongs to a group conversation on this platform. */
-    boolean isGroupThread(String threadId);
+    boolean isGroupConversation(String conversationId);
 }

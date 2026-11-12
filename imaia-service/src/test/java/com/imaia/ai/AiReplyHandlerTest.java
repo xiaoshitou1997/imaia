@@ -143,8 +143,8 @@ class AiReplyHandlerTest {
         server.shutdown();
     }
 
-    private AiReplyHandler handler(String replyThreads) {
-        return handlerWith(TestProperties.profile("test prompt", 4, replyThreads, true, false, 0, 0, 0),
+    private AiReplyHandler handler(String replyConversations) {
+        return handlerWith(TestProperties.profile("test prompt", 4, replyConversations, true, false, 0, 0, 0),
                 TestProperties.risk(6, 60, 100, "", ""), true);
     }
 
@@ -194,9 +194,10 @@ class AiReplyHandlerTest {
         };
     }
 
-    private ImEvent event(String threadId) {
-        return new ImEvent("wechat", "message.committed", "m1", threadId, "1",
-                mapper.readTree("{\"messageId\":\"m1\",\"threadId\":\"" + threadId + "\"}"));
+    private ImEvent event(String conversationId) {
+        // daemon wire 字段是 threadId；ImEvent 归一化为 conversationId
+        return new ImEvent("wechat", "message.committed", "m1", conversationId, "1",
+                mapper.readTree("{\"messageId\":\"m1\",\"threadId\":\"" + conversationId + "\"}"));
     }
 
     @Test

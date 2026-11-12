@@ -34,8 +34,8 @@ public class MemoryFact {
     @Column(nullable = false, columnDefinition = "text")
     private String fact;
 
-    @Column(name = "source_thread")
-    private String sourceThread;
+    @Column(name = "source_conversation")
+    private String sourceChat;
 
     @Column(nullable = false)
     private String kind;
@@ -59,12 +59,12 @@ public class MemoryFact {
     }
 
     public MemoryFact(String accountId, String scopeType, String scopeId, String fact,
-            String sourceThread, Instant createdAt) {
+            String sourceChat, Instant createdAt) {
         this.accountId = accountId;
         this.scopeType = scopeType;
         this.scopeId = scopeId;
         this.fact = fact;
-        this.sourceThread = sourceThread;
+        this.sourceChat = sourceChat;
         this.kind = "fact";
         this.confidence = 1.0f;
         this.status = "active";
@@ -76,7 +76,7 @@ public class MemoryFact {
     public String getScopeType() { return scopeType; }
     public String getScopeId() { return scopeId; }
     public String getFact() { return fact; }
-    public String getSourceThread() { return sourceThread; }
+    public String getSourceThread() { return sourceChat; }
     public String getKind() { return kind; }
     public Float getConfidence() { return confidence; }
     public Long getSourceAiMessageId() { return sourceAiMessageId; }

@@ -9,9 +9,9 @@ import tools.jackson.databind.JsonNode;
  * id) — opaque to the core and only ever handed back to the source's
  * {@link PlatformSource#ack(ImEvent)}.
  *
- * <p>{@code messageId} and {@code threadId} are filled for the kinds that carry a
+ * <p>{@code messageId} and {@code conversationId} are filled for the kinds that carry a
  * message (the core handlers only act on those); other kinds may leave them null.
  */
-public record ImEvent(String platform, String kind, String messageId, String threadId,
+public record ImEvent(String platform, String kind, String messageId, String conversationId,
         String receipt, JsonNode raw) {
 }

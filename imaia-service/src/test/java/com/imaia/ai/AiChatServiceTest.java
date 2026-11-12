@@ -58,7 +58,7 @@ class AiChatServiceTest {
                     String thread = inv.getArgument(1);
                     int limit = ((org.springframework.data.domain.Pageable) inv.getArgument(2)).getPageSize();
                     return saved.stream()
-                            .filter(row -> row.getAccountId().equals(account) && row.getThreadId().equals(thread))
+                            .filter(row -> row.getAccountId().equals(account) && row.getConversationId().equals(thread))
                             .sorted(java.util.Comparator.comparing(AiMessage::getCreatedAt).reversed())
                             .limit(limit)
                             .toList()
@@ -169,7 +169,7 @@ class AiChatServiceTest {
         org.mockito.ArgumentCaptor<List<AiMessage>> savedRows =
                 org.mockito.ArgumentCaptor.forClass(List.class);
         Mockito.verify(aiMessages, Mockito.times(2)).saveAll(savedRows.capture());
-        assertThat(savedRows.getAllValues().stream().flatMap(List::stream).map(AiMessage::getThreadId))
+        assertThat(savedRows.getAllValues().stream().flatMap(List::stream).map(AiMessage::getConversationId))
                 .containsExactly("t1", "t1", "t2", "t2");
     }
 
