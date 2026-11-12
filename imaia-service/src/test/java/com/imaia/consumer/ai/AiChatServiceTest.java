@@ -1,7 +1,7 @@
 package com.imaia.consumer.ai;
 
 import com.imaia.consumer.TestProperties;
-import com.imaia.consumer.config.WechatAdapterProperties;
+import com.imaia.consumer.adapter.wechat.WechatConnection;
 import com.imaia.consumer.config.ChatModelFactory;
 import com.imaia.consumer.config.ModelRegistry;
 import com.imaia.consumer.repository.ContactRepository;
@@ -71,8 +71,8 @@ class AiChatServiceTest {
     }
 
     private AiChatService service(int historyLimit) {
-        WechatAdapterProperties properties = TestProperties.wechat(server.url("/").toString(), "acc1");
-        DaemonClient daemonClient = new DaemonClient(WebClient.create(), properties);
+        WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
+        DaemonClient daemonClient = new DaemonClient(WebClient.create(), connection);
         ImAdapter adapter = Mockito.mock(ImAdapter.class);
         Mockito.when(adapter.accountId()).thenReturn("acc1");
         Mockito.when(adapter.platform()).thenReturn("wechat");

@@ -11,9 +11,9 @@ import java.time.Instant;
 
 /**
  * Entity layer over the message streams: a contact is a friend, a group or an
- * official account, and its wxid IS the thread id of the conversation with it.
- * persona gives the conversation its own reply style; display_name and last_seen
- * are refreshed from the archive on every observed message.
+ * official account, and its external_id IS the thread id of the conversation with
+ * it. persona gives the conversation its own reply style; display_name and
+ * last_seen are refreshed from the archive on every observed message.
  */
 @Entity
 @Table(name = "contact")

@@ -1,11 +1,10 @@
 package com.imaia.consumer.adapter.wechat.sse;
 
-import com.imaia.consumer.adapter.wechat.daemon.DaemonClient;
+import com.imaia.consumer.adapter.wechat.WechatConnection;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 
 /**
@@ -19,11 +18,11 @@ public class EventStreamClient {
             new ParameterizedTypeReference<>() {
             };
 
-    private final WebClient daemonWebClient;
+    private final WechatConnection connection;
     private final DaemonEventDecoder decoder;
 
-    public EventStreamClient(WebClient daemonWebClient, DaemonEventDecoder decoder) {
-        this.daemonWebClient = daemonWebClient;
+    public EventStreamClient(WechatConnection connection, DaemonEventDecoder decoder) {
+        this.connection = connection;
         this.decoder = decoder;
     }
 
@@ -32,7 +31,7 @@ public class EventStreamClient {
      * exists. Frames without a payload are transport keepalives and produce no event.
      */
     public Flux<DaemonEvent> connect(String accountId, String afterCursor) {
-        return daemonWebClient.get()
+        return connection.client().get()
                 .uri(builder -> {
                     builder.path("/v1/accounts/{accountId}/events/stream");
                     if (afterCursor != null) {

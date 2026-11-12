@@ -130,7 +130,6 @@ public class AiChatService {
                 facts.add(fact.getFact());
             }
             if (threadId != null) {
-                String threadScope = "thread:" + threadId;
                 for (var fact : memoryFacts.findTop50ByAccountIdAndScopeTypeAndScopeIdOrderByCreatedAtDesc(accountId, "thread", threadId)) {
                     facts.add(fact.getFact());
                 }

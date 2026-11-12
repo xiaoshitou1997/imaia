@@ -23,10 +23,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -50,11 +48,11 @@ import java.util.concurrent.ThreadLocalRandom;
 public class AiReplyHandler implements ImEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AiReplyHandler.class);
-    private static final int TEXT_MESSAGE_TYPE = 1;
-    private static final int IMAGE_MESSAGE_TYPE = 3;
-    private static final int VOICE_MESSAGE_TYPE = 34;
-    private static final int VIDEO_MESSAGE_TYPE = 43;
-    private static final int STICKER_MESSAGE_TYPE = 47;
+    private static final String CATEGORY_TEXT = "text";
+    private static final String CATEGORY_IMAGE = "image";
+    private static final String CATEGORY_VOICE = "voice";
+    private static final String CATEGORY_VIDEO = "video";
+    private static final String CATEGORY_STICKER = "sticker";
     private static final String INCOMING_DIRECTION = "incoming";
     private static final int GROUP_CONTEXT_MESSAGES = 12;
     private static final int GROUP_CONTEXT_MAX_CHARS = 4_000;
@@ -110,7 +108,7 @@ public class AiReplyHandler implements ImEventHandler {
         String messageId = event.messageId();
         String threadId = event.threadId();
         ImAdapter adapter = adapters.forPlatform(event.platform());
-        if (!replyThreads().contains(threadId)) {
+        if (!whitelisted(adapter.platform(), threadId)) {
             return;
         }
         if (isQuietHours(LocalTime.now())) {
@@ -134,7 +132,7 @@ public class AiReplyHandler implements ImEventHandler {
         if (content == null) {
             return;
         }
-        if (!rateLimiter.tryAcquire(threadId)) {
+        if (!rateLimiter.tryAcquire(adapter.platform(), threadId)) {
             log.warn("Reply volume cap reached (thread={} or global hourly/daily cap); skipping reply to {} "
                     + "to keep automated traffic unremarkable.", threadId, messageId);
             return;
@@ -260,7 +258,7 @@ public class AiReplyHandler implements ImEventHandler {
                         media.prompt(), media.filename(), AiArtifact.STATUS_DELIVERED,
                         java.time.Instant.now());
                 artifact.setSourceRef(sourceId);
-                artifact.setSourceType("daemon");
+                artifact.setSourceType(adapter.platform());
                 artifacts.save(artifact);
             } catch (RuntimeException failure) {
                 log.warn("Delivery of generated {} failed: {}", media.kind(), failure.getMessage());
@@ -316,10 +314,10 @@ public class AiReplyHandler implements ImEventHandler {
         return null;
     }
 
-    /** Turns one supported message type into the prompt content, or null to stay silent. */
+    /** Turns one supported message category into the prompt content, or null to stay silent. */
     private PromptContent buildContent(ImMessage message, ImAdapter adapter) {
-        return switch (message.getProviderType()) {
-            case TEXT_MESSAGE_TYPE -> {
+        return switch (message.getCategory()) {
+            case CATEGORY_TEXT -> {
                 String body = message.getBody();
                 if (body == null || body.isBlank()) {
                     yield null;
@@ -330,20 +328,21 @@ public class AiReplyHandler implements ImEventHandler {
                 }
                 yield new PromptContent(body, null, false);
             }
-            case IMAGE_MESSAGE_TYPE -> modelRegistry.chatSupportsImages()
+            case CATEGORY_IMAGE -> modelRegistry.chatSupportsImages()
                     ? fetchVisionContent(adapter, message.getMessageId(), "用户发来一张图片，请看图后回复")
-                    : tooDim(message, "image");
-            case VOICE_MESSAGE_TYPE -> modelRegistry.hasProtocol(ModelRegistry.PROTOCOL_TRANSCRIPTION)
+                    : tooDim(message, CATEGORY_IMAGE);
+            case CATEGORY_VOICE -> modelRegistry.hasProtocol(ModelRegistry.PROTOCOL_TRANSCRIPTION)
                     ? fetchVoiceContent(adapter, message.getMessageId())
-                    : tooDim(message, "voice");
-            case VIDEO_MESSAGE_TYPE -> modelRegistry.chatSupportsImages()
+                    : tooDim(message, CATEGORY_VOICE);
+            case CATEGORY_VIDEO -> modelRegistry.chatSupportsImages()
                     ? fetchPreviewContent(adapter, message.getMessageId(), "用户发来一个视频，这是它的封面帧")
-                    : tooDim(message, "video");
-            case STICKER_MESSAGE_TYPE -> modelRegistry.chatSupportsImages()
+                    : tooDim(message, CATEGORY_VIDEO);
+            case CATEGORY_STICKER -> modelRegistry.chatSupportsImages()
                     ? fetchPreviewContent(adapter, message.getMessageId(), "用户发来一个表情包")
-                    : tooDim(message, "sticker");
+                    : tooDim(message, CATEGORY_STICKER);
             default -> {
-                log.debug("Unsupported message type {} stays unanswered: message={}.", message.getProviderType(), message.getMessageId());
+                log.debug("Unsupported message category {} stays unanswered: message={}.",
+                        message.getCategory(), message.getMessageId());
                 yield null;
             }
         };
@@ -373,7 +372,7 @@ public class AiReplyHandler implements ImEventHandler {
             if (bytes == null) {
                 return null;
             }
-            String transcript = transcriber.transcribe(bytes.data(), "voice.silk");
+            String transcript = transcriber.transcribe(bytes.data(), audioFilename(bytes.contentType()));
             if (transcript.codePointCount(0, transcript.length()) < profiles.current().getMinMessageLength()) {
                 log.debug("Transcript too short to answer; staying silent: message={}.", messageId);
                 return null;
@@ -396,6 +395,30 @@ public class AiReplyHandler implements ImEventHandler {
                     messageId, failure.getMessage());
             return null;
         }
+    }
+
+    /** ASR multipart needs a filename; the extension hints at the audio container. */
+    private static String audioFilename(String contentType) {
+        String type = contentType == null ? "" : contentType.toLowerCase();
+        if (type.contains("silk")) {
+            return "voice.silk";
+        }
+        if (type.contains("amr")) {
+            return "voice.amr";
+        }
+        if (type.contains("ogg")) {
+            return "voice.opus";
+        }
+        if (type.contains("mp4") || type.contains("m4a")) {
+            return "voice.m4a";
+        }
+        if (type.contains("mpeg") || type.contains("mp3")) {
+            return "voice.mp3";
+        }
+        if (type.contains("wav")) {
+            return "voice.wav";
+        }
+        return "voice.bin";
     }
 
     /** Sleeps a randomized human-ish interval; false when interrupted during shutdown. */
@@ -439,12 +462,24 @@ public class AiReplyHandler implements ImEventHandler {
         }
     }
 
-    /** The current reply whitelist from the assistant profile, parsed fresh per turn. */
-    private Set<String> replyThreads() {
-        return Set.copyOf(Arrays.stream(profiles.current().getReplyThreads().split(","))
-                .map(String::trim)
-                .filter(threadId -> !threadId.isEmpty())
-                .toList());
+    /** Whether the (platform, thread) pair is whitelisted; entries carry an optional
+     * {@code platform:} prefix, bare thread ids match every platform. */
+    private boolean whitelisted(String platform, String threadId) {
+        for (String entry : profiles.current().getReplyThreads().split(",")) {
+            String value = entry.trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+            int separator = value.indexOf(':');
+            if (separator > 0) {
+                if (value.startsWith(platform + ":") && value.substring(separator + 1).equals(threadId)) {
+                    return true;
+                }
+            } else if (value.equals(threadId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** What the model gets for one message: a text prompt plus optional image bytes. */

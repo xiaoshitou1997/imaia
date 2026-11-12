@@ -10,11 +10,9 @@ import com.imaia.consumer.adapter.wechat.sse.CursorExpiredException;
 import com.imaia.consumer.adapter.wechat.sse.DaemonEvent;
 import com.imaia.consumer.adapter.wechat.sse.EventPayload;
 import com.imaia.consumer.adapter.wechat.sse.EventStreamClient;
-import com.imaia.consumer.config.WechatAdapterProperties;
 import com.imaia.consumer.dispatch.TerminalHandlerFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -30,8 +28,6 @@ import java.util.function.Consumer;
  * cursor-rebuild mechanics live here; the core sees a plain event flux plus an ack.
  */
 @Component
-@ConditionalOnProperty(prefix = "imaia.adapter.wechat", name = "enabled", havingValue = "true",
-        matchIfMissing = true)
 public class WechatPlatformSource implements PlatformSource {
 
     private static final Logger log = LoggerFactory.getLogger(WechatPlatformSource.class);
@@ -39,17 +35,17 @@ public class WechatPlatformSource implements PlatformSource {
     private final EventStreamClient streamClient;
     private final DaemonClient daemonClient;
     private final CursorStore cursorStore;
-    private final WechatAdapterProperties properties;
+    private final WechatConnection connection;
     private volatile Consumer<String> resetHook = reason -> {
     };
     private long lastCursorWarnAt;
 
     public WechatPlatformSource(EventStreamClient streamClient, DaemonClient daemonClient,
-            CursorStore cursorStore, WechatAdapterProperties properties) {
+            CursorStore cursorStore, WechatConnection connection) {
         this.streamClient = streamClient;
         this.daemonClient = daemonClient;
         this.cursorStore = cursorStore;
-        this.properties = properties;
+        this.connection = connection;
     }
 
     @Override
@@ -58,15 +54,21 @@ public class WechatPlatformSource implements PlatformSource {
     }
 
     @Override
+    public boolean enabled() {
+        return connection.enabled();
+    }
+
+    @Override
     public void validate() {
-        if (properties.daemon().token() == null || properties.daemon().token().isBlank()) {
+        if (connection.config().token().isBlank()) {
             throw new IllegalStateException("""
-                    imaia.adapter.wechat.daemon.token is empty. Create a scoped token on the daemon, for example:
-                    wx tokens create imaia --accounts ACCOUNT_ID --scopes read
-                    then set IMAIA_DAEMON_TOKEN in the environment.""");
+                    wechat 接入缺少 daemon token。先在 daemon 创建 token，再写进 platform_account 表：
+                    wx tokens create imaia --accounts ACCOUNT_ID --scopes read,media,send
+                    UPDATE platform_account SET config = jsonb_set(config, '{token}', '"<token>"'::jsonb)
+                    WHERE platform = 'wechat';""");
         }
-        if (properties.stream().consumerName() == null || properties.stream().consumerName().isBlank()) {
-            throw new IllegalStateException("imaia.adapter.wechat.stream.consumer-name is empty.");
+        if (connection.config().consumerName() == null || connection.config().consumerName().isBlank()) {
+            throw new IllegalStateException("platform_account(wechat) config.consumer-name is empty.");
         }
     }
 
@@ -91,14 +93,14 @@ public class WechatPlatformSource implements PlatformSource {
                     }
                     long attempt = Math.min(signal.totalRetries(), 16);
                     Duration backoff = Duration.ofMillis(Math.min(
-                            properties.stream().retryInitialBackoffMillis() * (1L << attempt),
-                            properties.stream().retryMaxBackoffMillis()));
+                            connection.config().retryInitialBackoffMillis() * (1L << attempt),
+                            connection.config().retryMaxBackoffMillis()));
                     log.warn("Event stream interrupted, retrying in {} ms: {}",
                             backoff.toMillis(), failure.toString());
                     return Mono.delay(backoff);
                 })))
                 .repeatWhen(completions -> completions.delayElements(
-                        Duration.ofMillis(properties.stream().reconnectDelayMillis())));
+                        Duration.ofMillis(connection.config().reconnectDelayMillis())));
     }
 
     /** Normalizes one decoded daemon event; message events must carry their identity. */
@@ -126,8 +128,8 @@ public class WechatPlatformSource implements PlatformSource {
                         saveFailure.getMessage());
             }
         }
-        if (properties.stream().ackEnabled()) {
-            daemonClient.ackCursor(properties.stream().consumerName(), event.receipt());
+        if (connection.config().ackEnabled()) {
+            daemonClient.ackCursor(connection.config().consumerName(), event.receipt());
         }
     }
 
@@ -138,6 +140,6 @@ public class WechatPlatformSource implements PlatformSource {
 
     @Override
     public boolean exitOnFailure() {
-        return properties.stream().exitOnFailure();
+        return connection.config().exitOnFailure();
     }
 }

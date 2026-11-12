@@ -1,6 +1,6 @@
 package com.imaia.consumer.adapter.wechat.daemon;
 
-import com.imaia.consumer.config.WechatAdapterProperties;
+import com.imaia.consumer.adapter.wechat.WechatConnection;
 import com.imaia.consumer.adapter.wechat.daemon.dto.EventAckRequest;
 import com.imaia.consumer.adapter.wechat.daemon.dto.Message;
 import com.imaia.consumer.adapter.wechat.daemon.dto.SendReceipt;
@@ -29,13 +29,13 @@ import org.springframework.web.util.UriBuilder;
 public class DaemonClient {
 
     private final WebClient daemonWebClient;
-    private final WechatAdapterProperties properties;
+    private final WechatConnection connection;
     private final Object accountLock = new Object();
     private volatile String accountId;
 
-    public DaemonClient(WebClient daemonWebClient, WechatAdapterProperties properties) {
+    public DaemonClient(WebClient daemonWebClient, WechatConnection connection) {
         this.daemonWebClient = daemonWebClient;
-        this.properties = properties;
+        this.connection = connection;
     }
 
     /**
@@ -56,7 +56,7 @@ public class DaemonClient {
     }
 
     private String resolveAccountId() {
-        String configured = properties.daemon().account();
+        String configured = connection.config().account();
         if (configured != null && !configured.isBlank()) {
             return configured.trim();
         }
@@ -263,6 +263,6 @@ public class DaemonClient {
     }
 
     private <T> T blocking(Mono<T> call) {
-        return call.timeout(Duration.ofSeconds(properties.daemon().callTimeoutSeconds())).block();
+        return call.timeout(Duration.ofSeconds(connection.config().callTimeoutSeconds())).block();
     }
 }

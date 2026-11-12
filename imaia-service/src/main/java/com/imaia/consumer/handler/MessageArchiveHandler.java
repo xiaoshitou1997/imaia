@@ -81,7 +81,7 @@ public class MessageArchiveHandler implements ImEventHandler {
             final Contact savedContact = contacts.save(contact);
             if (group && message.getSenderId() != null && !message.getSenderId().isBlank()) {
                 GroupMember member = groupMembers
-                        .findByGroupContactIdAndMemberWxid(savedContact.getId(), message.getSenderId())
+                        .findByGroupContactIdAndMemberExternalId(savedContact.getId(), message.getSenderId())
                         .orElseGet(() -> new GroupMember(accountId, platform, savedContact.getId(),
                                 message.getSenderId(), null, now, now));
                 member.setLastSeenAt(now);

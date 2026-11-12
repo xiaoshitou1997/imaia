@@ -20,7 +20,7 @@ import java.time.Duration;
  */
 abstract class AbstractAiHttpClient {
 
-    static final String USER_AGENT = "imaia-consumer/0.1 (agent-wechat AI endpoint client)";
+    static final String USER_AGENT = "imaia/0.1 (AI endpoint client)";
 
     final Logger log = LoggerFactory.getLogger(getClass());
     final JsonMapper mapper = JsonMapper.builder().build();

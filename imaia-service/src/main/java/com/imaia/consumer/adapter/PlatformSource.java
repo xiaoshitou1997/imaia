@@ -15,6 +15,9 @@ public interface PlatformSource {
     /** The platform identifier; equals the matching {@link ImAdapter#platform()}. */
     String platform();
 
+    /** Whether this platform has an enabled connection config; false skips the stream without failing. */
+    boolean enabled();
+
     /** Validates this adapter's configuration; throwing aborts the application start. */
     void validate();
 

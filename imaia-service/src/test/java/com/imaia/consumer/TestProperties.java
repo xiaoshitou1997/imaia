@@ -1,10 +1,11 @@
 package com.imaia.consumer;
 
+import com.imaia.consumer.adapter.wechat.WechatAccountConfig;
+import com.imaia.consumer.adapter.wechat.WechatConnection;
 import com.imaia.consumer.ai.AssistantProfileService;
 import com.imaia.consumer.ai.RiskPolicyService;
 import com.imaia.consumer.config.DispatchProperties;
 import com.imaia.consumer.config.ModelRegistry;
-import com.imaia.consumer.config.WechatAdapterProperties;
 import com.imaia.consumer.domain.AssistantProfile;
 import com.imaia.consumer.domain.Model;
 import com.imaia.consumer.domain.Provider;
@@ -33,10 +34,13 @@ public final class TestProperties {
     private TestProperties() {
     }
 
-    public static WechatAdapterProperties wechat(String baseUrl, String account) {
-        return new WechatAdapterProperties(true,
-                new WechatAdapterProperties.Daemon(baseUrl, "test-token", account, 1000, 5),
-                new WechatAdapterProperties.Stream("imaia", true, 10, 50, 200, false));
+    public static WechatConnection wechat(String baseUrl, String account) {
+        return WechatConnection.forTesting(wechatConfig(baseUrl, account));
+    }
+
+    public static WechatAccountConfig wechatConfig(String baseUrl, String account) {
+        return new WechatAccountConfig(baseUrl, "test-token", account, 1000, 5,
+                "imaia", true, 10, 50, 200, false);
     }
 
     public static DispatchProperties dispatch() {

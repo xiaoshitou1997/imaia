@@ -7,5 +7,5 @@ import com.imaia.consumer.domain.GroupMember;
 
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
 
-    Optional<GroupMember> findByGroupContactIdAndMemberWxid(Long groupContactId, String memberWxid);
+    Optional<GroupMember> findByGroupContactIdAndMemberExternalId(Long groupContactId, String memberExternalId);
 }

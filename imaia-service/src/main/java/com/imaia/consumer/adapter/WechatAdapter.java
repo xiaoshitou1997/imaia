@@ -56,8 +56,20 @@ public class WechatAdapter implements ImAdapter {
         }
         return new ImMessage(accountId, PLATFORM, message.threadId(), message.id(),
                 message.senderId(), null, message.direction(), message.type(),
-                message.mentions().isReplyWorthyMention(), message.body(),
+                categoryOf(message.type()), message.mentions().isReplyWorthyMention(), message.body(),
                 parseTime(message.createdAt()));
+    }
+
+    /** The wechat-native type code → normalized category the core logic switches on. */
+    private static String categoryOf(Integer providerType) {
+        return switch (providerType == null ? 0 : providerType) {
+            case 1 -> "text";
+            case 3 -> "image";
+            case 34 -> "voice";
+            case 43 -> "video";
+            case 47 -> "sticker";
+            default -> "other";
+        };
     }
 
     @Override

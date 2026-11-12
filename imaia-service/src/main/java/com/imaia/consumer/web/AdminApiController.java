@@ -1,7 +1,7 @@
 package com.imaia.consumer.web;
 
 import com.imaia.consumer.ai.AssistantProfileService;
-import com.imaia.consumer.config.WechatAdapterProperties;
+import com.imaia.consumer.adapter.wechat.WechatConnection;
 import com.imaia.consumer.ai.PersonAnalyzer;
 import com.imaia.consumer.ai.RiskPolicyService;
 import com.imaia.consumer.config.ModelRegistry;
@@ -63,7 +63,7 @@ public class AdminApiController {
 
     private final ImAdapter adapter;
     private final ContactRepository contacts;
-    private final ImMessageRepository wechatMessages;
+    private final ImMessageRepository imMessages;
     private final ProcessedMessageRepository processedMessages;
     private final AiMessageRepository aiMessages;
     private final AiArtifactRepository artifacts;
@@ -77,19 +77,19 @@ public class AdminApiController {
     private final ModelRegistry modelRegistry;
     private final AssistantProfileService profileService;
     private final RiskPolicyService riskService;
-    private final WechatAdapterProperties properties;
+    private final WechatConnection connection;
 
     public AdminApiController(ImAdapter adapter, ContactRepository contacts,
-            ImMessageRepository wechatMessages, ProcessedMessageRepository processedMessages,
+            ImMessageRepository imMessages, ProcessedMessageRepository processedMessages,
             AiMessageRepository aiMessages, AiArtifactRepository artifacts,
             ScheduledActionRepository actions, MemoryFactRepository memoryFacts,
             ModelCallLogRepository callLogs, PersonAnalysisRepository analyses,
             PersonAnalyzer personAnalyzer, ProviderRepository providers, ModelRepository models,
             ModelRegistry modelRegistry, AssistantProfileService profileService,
-            RiskPolicyService riskService, WechatAdapterProperties properties) {
+            RiskPolicyService riskService, WechatConnection connection) {
         this.adapter = adapter;
         this.contacts = contacts;
-        this.wechatMessages = wechatMessages;
+        this.imMessages = imMessages;
         this.processedMessages = processedMessages;
         this.aiMessages = aiMessages;
         this.artifacts = artifacts;
@@ -103,7 +103,7 @@ public class AdminApiController {
         this.modelRegistry = modelRegistry;
         this.profileService = profileService;
         this.riskService = riskService;
-        this.properties = properties;
+        this.connection = connection;
     }
 
     // ---------- overview ----------
@@ -112,7 +112,7 @@ public class AdminApiController {
     public Map<String, Object> overview() {
         String accountId = adapter.accountId();
         Instant dayStart = LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC);
-        long messagesToday = wechatMessages.countByAccountIdAndArchivedAtAfter(accountId, dayStart);
+        long messagesToday = imMessages.countByAccountIdAndArchivedAtAfter(accountId, dayStart);
         long aiRepliesToday = processedMessages.countByProcessedAtAfter(dayStart);
         long tokensToday = 0;
         long callsToday = 0;
@@ -124,7 +124,7 @@ public class AdminApiController {
         long pendingActions = actions.findTop100ByAccountIdOrderByCreatedAtDesc(accountId).stream()
                 .filter(a -> ScheduledAction.STATUS_PENDING.equals(a.getStatus())).count();
         List<Map<String, Object>> recent = new ArrayList<>();
-        for (var message : wechatMessages.findTop200ByAccountIdOrderByArchivedAtDesc(accountId)) {
+        for (var message : imMessages.findTop200ByAccountIdOrderByArchivedAtDesc(accountId)) {
             if (recent.size() >= 12) break;
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("threadId", message.getThreadId());
@@ -186,21 +186,21 @@ public class AdminApiController {
 
     // ---------- messages ----------
 
-    @GetMapping("/threads/{wxid}/messages")
-    public List<Map<String, Object>> threadMessages(@PathVariable String wxid,
+    @GetMapping("/threads/{threadId}/messages")
+    public List<Map<String, Object>> threadMessages(@PathVariable String threadId,
             @RequestParam(defaultValue = "100") int limit) {
         String accountId = adapter.accountId();
-        List<WechatRow> rows = new ArrayList<>();
-        for (var m : wechatMessages.findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, wxid)) {
-            rows.add(new WechatRow(m.getArchivedAt(), m.getDirection(), m.getSenderId(),
+        List<MessageRow> rows = new ArrayList<>();
+        for (var m : imMessages.findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, threadId)) {
+            rows.add(new MessageRow(m.getArchivedAt(), m.getDirection(), m.getSenderId(),
                     m.getSenderName(), m.getProviderType(), m.getBody()));
         }
-        for (var m : aiMessages.findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(accountId, wxid)) {
+        for (var m : aiMessages.findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(accountId, threadId)) {
             String body = AiMessage.ROLE_TOOL.equals(m.getRole())
                     ? "[工具 " + m.getToolName() + "] " + m.getContent()
                     : m.getContent();
-            rows.add(new WechatRow(m.getCreatedAt(), AiMessage.ROLE_ASSISTANT.equals(m.getRole())
-                    ? "ai-" + m.getRole() : m.getRole(), "imaia", null, -1, body));
+            rows.add(new MessageRow(m.getCreatedAt(), AiMessage.ROLE_ASSISTANT.equals(m.getRole())
+                    ? "ai-" + m.getRole() : m.getRole(), "imaia", null, null, body));
         }
         int cap = Math.max(10, Math.min(limit, 300));
         return rows.stream()
@@ -219,8 +219,8 @@ public class AdminApiController {
                 .toList();
     }
 
-    private record WechatRow(Instant at, String direction, String senderId, String senderName,
-            int type, String body) {
+    private record MessageRow(Instant at, String direction, String senderId, String senderName,
+            Integer type, String body) {
     }
 
     // ---------- artifacts ----------
@@ -606,12 +606,12 @@ public class AdminApiController {
 
     @GetMapping("/settings/runtime")
     public Map<String, Object> runtime() {
-        var daemon = properties.daemon();
+        var daemon = connection.config();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("daemonBaseUrl", daemon.baseUrl());
         out.put("daemonAccount", daemon.account());
         out.put("daemonTokenMasked", mask(daemon.token()));
-        out.put("note", "daemon 与 stream 配置为环境变量注入，修改后需重启生效");
+        out.put("note", "接入配置存于 platform_account 表（config JSONB，含密钥），修改后需重启生效");
         return out;
     }
 

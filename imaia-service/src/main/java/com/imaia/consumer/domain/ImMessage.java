@@ -42,7 +42,7 @@ public class ImMessage {
     @Column(nullable = false)
     private String direction;
 
-    @Column(nullable = false)
+    @Column
     private Integer providerType;
 
     @Column(nullable = false)
@@ -64,10 +64,10 @@ public class ImMessage {
     }
 
     public ImMessage(String accountId, String platform, String threadId, String messageId, String senderId,
-            String senderName, String direction, Integer providerType, boolean mentioned,
+            String senderName, String direction, Integer providerType, String category, boolean mentioned,
             String body, Instant createdAt) {
         this.platform = platform;
-        this.category = categoryOf(providerType);
+        this.category = category;
         this.mentioned = mentioned;
         this.accountId = accountId;
         this.threadId = threadId;
@@ -125,18 +125,5 @@ public class ImMessage {
     public Instant getArchivedAt() { return archivedAt; }
     public Instant getCreatedAt() {
         return createdAt;
-    }
-
-    /** Platform-native message type → normalized category (business logic only sees these). */
-    public static String categoryOf(Integer providerType) {
-        if (providerType == null) return "other";
-        return switch (providerType) {
-            case 1 -> "text";
-            case 3 -> "image";
-            case 34 -> "voice";
-            case 43 -> "video";
-            case 47 -> "sticker";
-            default -> "other";
-        };
     }
 }

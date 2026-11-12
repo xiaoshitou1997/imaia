@@ -34,12 +34,13 @@ public class InMemoryRateLimiter implements ReplyRateLimiter {
     }
 
     @Override
-    public boolean tryAcquire(String threadId) {
+    public boolean tryAcquire(String platform, String threadId) {
         long now = System.currentTimeMillis();
+        String threadKey = platform + ":" + threadId;
         synchronized (this) {
             prune(hourlyReplies, now - HOUR_MILLIS);
             prune(dailyReplies, now - DAY_MILLIS);
-            Deque<Long> threadReplies = repliesByThread.computeIfAbsent(threadId, key -> new ArrayDeque<>());
+            Deque<Long> threadReplies = repliesByThread.computeIfAbsent(threadKey, key -> new ArrayDeque<>());
             prune(threadReplies, now - MINUTE_MILLIS);
             if (hourlyReplies.size() >= maxRepliesPerHour
                     || dailyReplies.size() >= maxRepliesPerDay

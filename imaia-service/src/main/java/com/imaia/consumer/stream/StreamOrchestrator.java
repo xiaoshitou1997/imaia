@@ -42,6 +42,10 @@ public class StreamOrchestrator implements SmartLifecycle {
     @Override
     public void start() {
         for (PlatformSource source : sources) {
+            if (!source.enabled()) {
+                log.info("The {} platform has no enabled connection config; stream skipped.", source.platform());
+                continue;
+            }
             source.validate();
             EventDispatcher dispatcher = new EventDispatcher(source, handlers, properties);
             source.onReset(dispatcher::onStreamReset);

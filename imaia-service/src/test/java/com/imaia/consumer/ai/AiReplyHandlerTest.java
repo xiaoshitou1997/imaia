@@ -1,7 +1,6 @@
 package com.imaia.consumer.ai;
 
 import com.imaia.consumer.TestProperties;
-import com.imaia.consumer.config.WechatAdapterProperties;
 import com.imaia.consumer.domain.AssistantProfile;
 import com.imaia.consumer.domain.RiskPolicy;
 import com.imaia.consumer.config.ChatModelFactory;
@@ -9,6 +8,7 @@ import com.imaia.consumer.config.ModelRegistry;
 import com.imaia.consumer.adapter.ImAdapter;
 import com.imaia.consumer.adapter.ImAdapters;
 import com.imaia.consumer.adapter.ImEvent;
+import com.imaia.consumer.adapter.wechat.WechatConnection;
 import com.imaia.consumer.adapter.wechat.daemon.DaemonClient;
 import com.imaia.consumer.adapter.WechatAdapter;
 import com.imaia.consumer.repository.MemoryFactRepository;
@@ -151,13 +151,13 @@ class AiReplyHandlerTest {
     }
 
     private AiReplyHandler handlerWith(AssistantProfile profile, RiskPolicy risk, boolean imageEnabled) {
-        WechatAdapterProperties properties = TestProperties.wechat(server.url("/").toString(), "acc1");
+        WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
         ModelRegistry registry = imageEnabled
                 ? TestProperties.modelRegistry(server.url("/").toString())
                 : TestProperties.modelRegistryWithout(server.url("/").toString(),
                         ModelRegistry.PROTOCOL_IMAGES);
         WebClient webClient = WebClient.builder().baseUrl(server.url("/").toString()).build();
-        DaemonClient daemonClient = new DaemonClient(webClient, properties);
+        DaemonClient daemonClient = new DaemonClient(webClient, connection);
         ImAdapter adapter = new WechatAdapter(daemonClient, processedMessages);
         MemoryFactRepository memoryFacts = Mockito.mock(MemoryFactRepository.class);
         Mockito.when(memoryFacts.findTop50ByAccountIdAndScopeTypeOrderByCreatedAtDesc(
