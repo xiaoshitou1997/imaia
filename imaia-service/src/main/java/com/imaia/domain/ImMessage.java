@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -47,8 +48,9 @@ public class ImMessage {
     @Column
     private Integer providerType;
 
+    @Convert(converter = MessageCategory.Converter.class)
     @Column(nullable = false)
-    private String category;
+    private MessageCategory category;
 
     @Column(nullable = false)
     private boolean mentioned;
@@ -71,7 +73,7 @@ public class ImMessage {
     }
 
     public ImMessage(String accountId, String platform, String threadId, String messageId, String senderId,
-            String senderName, String direction, Integer providerType, String category, boolean mentioned,
+            String senderName, String direction, Integer providerType, MessageCategory category, boolean mentioned,
             String body, Instant createdAt) {
         this.platform = platform;
         this.category = category;
@@ -94,7 +96,7 @@ public class ImMessage {
 
     public String getPlatform() { return platform; }
 
-    public String getCategory() { return category; }
+    public MessageCategory getCategory() { return category; }
     public boolean isMentioned() { return mentioned; }
 
     public String getAccountId() {

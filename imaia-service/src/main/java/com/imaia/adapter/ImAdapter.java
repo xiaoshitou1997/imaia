@@ -1,6 +1,8 @@
 package com.imaia.adapter;
 
 import com.imaia.domain.ImMessage;
+import com.imaia.domain.MediaKind;
+import com.imaia.domain.MessageCategory;
 
 /**
  * The IM platform contract: everything the core pipeline (archive → AI → risk →
@@ -33,7 +35,7 @@ public interface ImAdapter {
 
     /** Transfers (if needed) and downloads the message asset of one category.
      * Returns null when the message carries no such asset. */
-    MediaBytes downloadAsset(String messageId, String category);
+    MediaBytes downloadAsset(String messageId, MessageCategory category);
 
     /** Downloads the auto-generated preview of a video/sticker message.
      * Returns null when no preview is available. */
@@ -44,7 +46,7 @@ public interface ImAdapter {
     void sendText(String threadId, String text, String idempotencyKey);
 
     /** Uploads and sends generated media; see sendText for the key semantics. */
-    void sendMedia(String threadId, String kind, String storageRef, String idempotencyKey);
+    void sendMedia(String threadId, MediaKind kind, String storageRef, String idempotencyKey);
 
     /** Uploads bytes and returns the platform storage reference. */
     String uploadMedia(byte[] data, String filename, String mimeType);

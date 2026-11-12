@@ -1,7 +1,6 @@
 package com.imaia.config;
 
 import com.imaia.TestProperties;
-import com.imaia.domain.Model;
 import com.imaia.domain.Provider;
 import org.junit.jupiter.api.Test;
 

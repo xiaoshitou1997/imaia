@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import com.imaia.domain.MediaKind;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import tools.jackson.databind.JsonNode;
@@ -49,7 +50,7 @@ class VideoGenerationTool implements ToolCallback {
         try {
             byte[] video = videoClient.generate(prompt);
             int index = counter.incrementAndGet();
-            collector.add(new GeneratedMedia("video", video,
+            collector.add(new GeneratedMedia(MediaKind.VIDEO, video,
                     "imaia-video-" + index + ".mp4", "video/mp4", prompt));
             return "视频已生成，将随回复一起发送给用户。";
         } catch (RuntimeException failure) {

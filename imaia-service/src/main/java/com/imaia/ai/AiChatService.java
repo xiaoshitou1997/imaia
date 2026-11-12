@@ -4,7 +4,6 @@ import com.imaia.adapter.ImAdapter;
 import com.imaia.domain.Contact;
 import com.imaia.repository.ContactRepository;
 import com.imaia.domain.AiMessage;
-import com.imaia.domain.MemoryFact;
 import com.imaia.repository.MemoryFactRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;

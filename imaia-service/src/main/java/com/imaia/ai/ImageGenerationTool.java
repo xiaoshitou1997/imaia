@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import com.imaia.domain.MediaKind;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import tools.jackson.databind.JsonNode;
@@ -49,7 +50,7 @@ class ImageGenerationTool implements ToolCallback {
         try {
             byte[] image = imageClient.generate(prompt);
             int index = counter.incrementAndGet();
-            collector.add(new GeneratedMedia("image", image,
+            collector.add(new GeneratedMedia(MediaKind.IMAGE, image,
                     "imaia-image-" + index + ".png", "image/png", prompt));
             return "图片已生成，将随回复一起发送给用户。";
         } catch (RuntimeException failure) {

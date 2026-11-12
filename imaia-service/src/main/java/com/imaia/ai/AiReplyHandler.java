@@ -7,6 +7,8 @@ import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;
 import com.imaia.domain.AssistantProfile;
+import com.imaia.domain.MediaKind;
+import com.imaia.domain.MessageCategory;
 import com.imaia.domain.RiskPolicy;
 import com.imaia.domain.ImMessage;
 import com.imaia.domain.AiArtifact;
@@ -48,11 +50,6 @@ import java.util.concurrent.ThreadLocalRandom;
 public class AiReplyHandler implements ImEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AiReplyHandler.class);
-    private static final String CATEGORY_TEXT = "text";
-    private static final String CATEGORY_IMAGE = "image";
-    private static final String CATEGORY_VOICE = "voice";
-    private static final String CATEGORY_VIDEO = "video";
-    private static final String CATEGORY_STICKER = "sticker";
     private static final String INCOMING_DIRECTION = "incoming";
     private static final int GROUP_CONTEXT_MESSAGES = 12;
     private static final int GROUP_CONTEXT_MAX_CHARS = 4_000;
@@ -173,8 +170,8 @@ public class AiReplyHandler implements ImEventHandler {
                         () -> adapter.sendText(threadId, text, keyPrefix));
             }
         }
-        sendGenerated(adapter, threadId, reply.imagePrompts(), "image", "png", keyPrefix + "-img");
-        sendGenerated(adapter, threadId, reply.videoPrompts(), "video", "mp4", keyPrefix + "-vid");
+        sendGenerated(adapter, threadId, reply.imagePrompts(), MediaKind.IMAGE, "png", keyPrefix + "-img");
+        sendGenerated(adapter, threadId, reply.videoPrompts(), MediaKind.VIDEO, "mp4", keyPrefix + "-vid");
         sendCollected(adapter, threadId, generated, keyPrefix);
     }
 
@@ -184,7 +181,7 @@ public class AiReplyHandler implements ImEventHandler {
             byte[] mp3 = ttsClient.synthesize(text);
             String sourceId = adapter.uploadMedia(mp3, "imaia-voice-reply.mp3", "audio/mpeg");
             sendWithConflictGuard(keyPrefix,
-                    () -> adapter.sendMedia(threadId, "voice", sourceId, keyPrefix));
+                    () -> adapter.sendMedia(threadId, MediaKind.VOICE, sourceId, keyPrefix));
         } catch (RuntimeException failure) {
             log.warn("Voice synthesis failed; replying with text instead: {}", failure.getMessage());
             sendWithConflictGuard(keyPrefix,
@@ -223,22 +220,22 @@ public class AiReplyHandler implements ImEventHandler {
     }
 
     private void sendGenerated(ImAdapter adapter, String threadId, List<String> prompts,
-            String mediaKind, String extension, String keyPrefix) {
+            MediaKind kind, String extension, String keyPrefix) {
         int index = 0;
         for (String prompt : prompts) {
             index++;
             String key = keyPrefix + index;
             try {
-                byte[] media = "image".equals(mediaKind)
+                byte[] media = kind == MediaKind.IMAGE
                         ? imageClient.generate(prompt)
                         : videoClient.generate(prompt);
-                String sourceId = adapter.uploadMedia(media, "imaia-" + mediaKind + "-" + index + "." + extension,
-                        "image".equals(mediaKind) ? "image/png" : "video/mp4");
+                String sourceId = adapter.uploadMedia(media, "imaia-" + kind.value() + "-" + index + "." + extension,
+                        kind == MediaKind.IMAGE ? "image/png" : "video/mp4");
                 sendWithConflictGuard(key,
-                        () -> adapter.sendMedia(threadId, mediaKind, sourceId, key));
+                        () -> adapter.sendMedia(threadId, kind, sourceId, key));
             } catch (RuntimeException failure) {
                 log.warn("Generation or send failed for {} prompt '{}': {}",
-                        mediaKind, prompt, failure.getMessage());
+                        kind, prompt, failure.getMessage());
             }
         }
     }
@@ -254,7 +251,7 @@ public class AiReplyHandler implements ImEventHandler {
                 String sourceId = adapter.uploadMedia(media.data(), media.filename(), media.mimeType());
                 sendWithConflictGuard(key,
                         () -> adapter.sendMedia(threadId, media.kind(), sourceId, key));
-                AiArtifact artifact = new AiArtifact(adapter.accountId(), threadId, media.kind(),
+                AiArtifact artifact = new AiArtifact(adapter.accountId(), threadId, media.kind().value(),
                         media.prompt(), media.filename(), AiArtifact.STATUS_DELIVERED,
                         java.time.Instant.now());
                 artifact.setSourceRef(sourceId);
@@ -309,15 +306,16 @@ public class AiReplyHandler implements ImEventHandler {
     }
 
     /** Debug-only marker for media the brain cannot perceive; stays silent. */
-    private static PromptContent tooDim(ImMessage message, String kind) {
-        log.debug("No model in the directory can handle {} messages; staying silent: message={}.", kind, message.getMessageId());
+    private static PromptContent tooDim(ImMessage message, MessageCategory category) {
+        log.debug("No model in the directory can handle {} messages; staying silent: message={}.",
+                category, message.getMessageId());
         return null;
     }
 
     /** Turns one supported message category into the prompt content, or null to stay silent. */
     private PromptContent buildContent(ImMessage message, ImAdapter adapter) {
         return switch (message.getCategory()) {
-            case CATEGORY_TEXT -> {
+            case TEXT -> {
                 String body = message.getBody();
                 if (body == null || body.isBlank()) {
                     yield null;
@@ -328,19 +326,19 @@ public class AiReplyHandler implements ImEventHandler {
                 }
                 yield new PromptContent(body, null, false);
             }
-            case CATEGORY_IMAGE -> modelRegistry.chatSupportsImages()
+            case IMAGE -> modelRegistry.chatSupportsImages()
                     ? fetchVisionContent(adapter, message.getMessageId(), "用户发来一张图片，请看图后回复")
-                    : tooDim(message, CATEGORY_IMAGE);
-            case CATEGORY_VOICE -> modelRegistry.hasProtocol(ModelRegistry.PROTOCOL_TRANSCRIPTION)
+                    : tooDim(message, MessageCategory.IMAGE);
+            case VOICE -> modelRegistry.hasProtocol(ModelRegistry.PROTOCOL_TRANSCRIPTION)
                     ? fetchVoiceContent(adapter, message.getMessageId())
-                    : tooDim(message, CATEGORY_VOICE);
-            case CATEGORY_VIDEO -> modelRegistry.chatSupportsImages()
+                    : tooDim(message, MessageCategory.VOICE);
+            case VIDEO -> modelRegistry.chatSupportsImages()
                     ? fetchPreviewContent(adapter, message.getMessageId(), "用户发来一个视频，这是它的封面帧")
-                    : tooDim(message, CATEGORY_VIDEO);
-            case CATEGORY_STICKER -> modelRegistry.chatSupportsImages()
+                    : tooDim(message, MessageCategory.VIDEO);
+            case STICKER -> modelRegistry.chatSupportsImages()
                     ? fetchPreviewContent(adapter, message.getMessageId(), "用户发来一个表情包")
-                    : tooDim(message, CATEGORY_STICKER);
-            default -> {
+                    : tooDim(message, MessageCategory.STICKER);
+            case FILE, RICH, OTHER -> {
                 log.debug("Unsupported message category {} stays unanswered: message={}.",
                         message.getCategory(), message.getMessageId());
                 yield null;
@@ -351,7 +349,7 @@ public class AiReplyHandler implements ImEventHandler {
     /** Downloads the image bytes and builds a vision prompt; media trouble stays silent. */
     private PromptContent fetchVisionContent(ImAdapter adapter, String messageId, String label) {
         try {
-            ImAdapter.MediaBytes bytes = adapter.downloadAsset(messageId, "image");
+            ImAdapter.MediaBytes bytes = adapter.downloadAsset(messageId, MessageCategory.IMAGE);
             return bytes == null ? null : new PromptContent(label, bytes, false);
         } catch (RuntimeException failure) {
             log.warn("Image of message {} could not be fetched; staying silent: {}",
@@ -368,7 +366,7 @@ public class AiReplyHandler implements ImEventHandler {
             return null;
         }
         try {
-            ImAdapter.MediaBytes bytes = adapter.downloadAsset(messageId, "voice");
+            ImAdapter.MediaBytes bytes = adapter.downloadAsset(messageId, MessageCategory.VOICE);
             if (bytes == null) {
                 return null;
             }

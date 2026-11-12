@@ -1,5 +1,6 @@
 package com.imaia.adapter.feishu;
 
+import com.imaia.domain.MessageCategory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -16,16 +17,16 @@ public final class FeishuMessages {
     }
 
     /** The feishu msg_type → normalized category the core logic switches on. */
-    public static String categoryOf(String msgType) {
+    public static MessageCategory categoryOf(String msgType) {
         return switch (msgType == null ? "" : msgType) {
-            case "text" -> "text";
-            case "image" -> "image";
-            case "audio" -> "voice";
-            case "media" -> "video";
-            case "sticker" -> "sticker";
-            case "file" -> "file";
-            case "post", "interactive", "share_chat", "share_user" -> "rich";
-            default -> "other";
+            case "text" -> MessageCategory.TEXT;
+            case "image" -> MessageCategory.IMAGE;
+            case "audio" -> MessageCategory.VOICE;
+            case "media" -> MessageCategory.VIDEO;
+            case "sticker" -> MessageCategory.STICKER;
+            case "file" -> MessageCategory.FILE;
+            case "post", "interactive", "share_chat", "share_user" -> MessageCategory.RICH;
+            default -> MessageCategory.OTHER;
         };
     }
 
@@ -44,15 +45,14 @@ public final class FeishuMessages {
     }
 
     /** The media key of one category inside the content JSON, or null when absent. */
-    public static String mediaKey(String msgType, String contentJson, String category) {
+    public static String mediaKey(String msgType, String contentJson, MessageCategory category) {
         JsonNode content = parse(contentJson);
         if (content == null) {
             return null;
         }
         return switch (category) {
-            case "image" -> textField(content, "image_key");
-            case "voice", "file" -> textField(content, "file_key");
-            case "video" -> textField(content, "file_key");
+            case IMAGE -> textField(content, "image_key");
+            case VOICE, FILE, VIDEO -> textField(content, "file_key");
             default -> null;
         };
     }

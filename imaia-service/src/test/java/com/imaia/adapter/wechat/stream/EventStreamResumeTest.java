@@ -1,7 +1,6 @@
 package com.imaia.adapter.wechat.stream;
 
 import com.imaia.TestProperties;
-import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;

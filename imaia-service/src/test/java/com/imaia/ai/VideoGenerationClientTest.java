@@ -1,7 +1,6 @@
 package com.imaia.ai;
 
 import com.imaia.TestProperties;
-import com.imaia.config.ModelRegistry;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;

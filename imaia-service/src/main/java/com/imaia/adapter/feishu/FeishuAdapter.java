@@ -4,6 +4,8 @@ import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImContractException;
 import com.imaia.adapter.ProcessedMessageLedger;
 import com.imaia.domain.ImMessage;
+import com.imaia.domain.MediaKind;
+import com.imaia.domain.MessageCategory;
 import com.lark.oapi.Client;
 import com.lark.oapi.service.im.v1.model.CreateFileReq;
 import com.lark.oapi.service.im.v1.model.CreateFileReqBody;
@@ -18,7 +20,6 @@ import com.lark.oapi.service.im.v1.model.GetMessageResp;
 import com.lark.oapi.service.im.v1.model.Mention;
 import com.lark.oapi.service.im.v1.model.Message;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
@@ -74,7 +75,7 @@ public class FeishuAdapter implements ImAdapter {
         }
         String msgType = message.getMsgType();
         String content = message.getBody() == null ? null : message.getBody().getContent();
-        String category = FeishuMessages.categoryOf(msgType);
+        MessageCategory category = FeishuMessages.categoryOf(msgType);
         boolean mentioned = message.getMentions() != null && message.getMentions().length > 0;
         String senderId = message.getSender() == null ? null : message.getSender().getId();
         ImMessage imMessage = new ImMessage(accountId(), PLATFORM, message.getChatId(), messageId,
@@ -95,14 +96,14 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public MediaBytes downloadAsset(String messageId, String category) {
+    public MediaBytes downloadAsset(String messageId, MessageCategory category) {
         Message message = fetchApiMessage(messageId);
         String content = message.getBody() == null ? null : message.getBody().getContent();
         String fileKey = FeishuMessages.mediaKey(message.getMsgType(), content, category);
         if (fileKey == null) {
             return null;
         }
-        return downloadResource(messageId, fileKey, "image".equals(category) ? "image" : "file",
+        return downloadResource(messageId, fileKey, category == MessageCategory.IMAGE ? "image" : "file",
                 mediaMime(category));
     }
 
@@ -123,8 +124,8 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public void sendMedia(String threadId, String kind, String storageRef, String idempotencyKey) {
-        if ("image".equals(kind)) {
+    public void sendMedia(String threadId, MediaKind kind, String storageRef, String idempotencyKey) {
+        if (kind == MediaKind.IMAGE) {
             createMessage(threadId, "image", json(Map.of("image_key", storageRef)), idempotencyKey);
         } else {
             // voice/video ride as file messages on feishu (audio bubbles need opus
@@ -262,11 +263,11 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     /** A conservative mime per category; the platform does not expose the real one. */
-    private static String mediaMime(String category) {
-        return switch (category == null ? "" : category) {
-            case "image" -> "image/jpeg";
-            case "voice" -> "audio/ogg";
-            case "video" -> "video/mp4";
+    private static String mediaMime(MessageCategory category) {
+        return switch (category) {
+            case IMAGE -> "image/jpeg";
+            case VOICE -> "audio/ogg";
+            case VIDEO -> "video/mp4";
             default -> "application/octet-stream";
         };
     }

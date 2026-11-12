@@ -4,6 +4,8 @@ import com.imaia.adapter.wechat.daemon.DaemonClient;
 import com.imaia.adapter.wechat.daemon.dto.Message;
 import com.imaia.adapter.wechat.daemon.DaemonContractException;
 import com.imaia.domain.ImMessage;
+import com.imaia.domain.MediaKind;
+import com.imaia.domain.MessageCategory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -73,14 +75,14 @@ public class WechatAdapter implements ImAdapter {
     }
 
     /** The wechat-native type code → normalized category the core logic switches on. */
-    private static String categoryOf(Integer providerType) {
+    private static MessageCategory categoryOf(Integer providerType) {
         return switch (providerType == null ? 0 : providerType) {
-            case 1 -> "text";
-            case 3 -> "image";
-            case 34 -> "voice";
-            case 43 -> "video";
-            case 47 -> "sticker";
-            default -> "other";
+            case 1 -> MessageCategory.TEXT;
+            case 3 -> MessageCategory.IMAGE;
+            case 34 -> MessageCategory.VOICE;
+            case 43 -> MessageCategory.VIDEO;
+            case 47 -> MessageCategory.STICKER;
+            default -> MessageCategory.OTHER;
         };
     }
 
@@ -95,9 +97,9 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public MediaBytes downloadAsset(String messageId, String category) {
+    public MediaBytes downloadAsset(String messageId, MessageCategory category) {
         JsonNode assets = daemonClient.getMediaAssets(messageId);
-        JsonNode chosen = pickAsset(assets, category);
+        JsonNode chosen = pickAsset(assets, category.value());
         if (chosen == null) {
             return null;
         }
@@ -111,7 +113,7 @@ public class WechatAdapter implements ImAdapter {
         }
         daemonClient.requestTransferAndWait(messageId, assetId.asString());
         JsonNode refreshed = daemonClient.getMediaAssets(messageId);
-        JsonNode updated = pickAsset(refreshed, category);
+        JsonNode updated = pickAsset(refreshed, category.value());
         JsonNode refreshedUrl = updated == null ? null : updated.get("contentUrl");
         if (refreshedUrl == null || !refreshedUrl.isString() || refreshedUrl.asString().isBlank()) {
             throw new DaemonContractException(
@@ -143,9 +145,9 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public void sendMedia(String threadId, String kind, String storageRef, String idempotencyKey) {
+    public void sendMedia(String threadId, MediaKind kind, String storageRef, String idempotencyKey) {
         try {
-            daemonClient.sendMedia(threadId, kind, storageRef, idempotencyKey);
+            daemonClient.sendMedia(threadId, kind.value(), storageRef, idempotencyKey);
         } catch (WebClientResponseException failure) {
             throw translateConflict(failure, idempotencyKey);
         }
