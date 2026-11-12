@@ -4,12 +4,11 @@ import com.imaia.consumer.adapter.wechat.daemon.DaemonClient;
 import com.imaia.consumer.adapter.wechat.daemon.dto.Message;
 import com.imaia.consumer.adapter.wechat.daemon.DaemonContractException;
 import com.imaia.consumer.domain.ImMessage;
-import com.imaia.consumer.domain.ProcessedMessage;
-import com.imaia.consumer.repository.ProcessedMessageRepository;
-import tools.jackson.databind.JsonNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -26,12 +25,14 @@ public class WechatAdapter implements ImAdapter {
 
     private static final String GROUP_THREAD_SUFFIX = "@chatroom";
 
-    private final DaemonClient daemonClient;
-    private final ProcessedMessageRepository processedMessages;
+    private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    public WechatAdapter(DaemonClient daemonClient, ProcessedMessageRepository processedMessages) {
+    private final DaemonClient daemonClient;
+    private final ProcessedMessageLedger ledger;
+
+    public WechatAdapter(DaemonClient daemonClient, ProcessedMessageLedger ledger) {
         this.daemonClient = daemonClient;
-        this.processedMessages = processedMessages;
+        this.ledger = ledger;
     }
 
     @Override
@@ -54,10 +55,21 @@ public class WechatAdapter implements ImAdapter {
                     + "/" + messageId + " but the saved message is " + message.accountId()
                     + "/" + message.id() + ".");
         }
-        return new ImMessage(accountId, PLATFORM, message.threadId(), message.id(),
+        ImMessage imMessage = new ImMessage(accountId, PLATFORM, message.threadId(), message.id(),
                 message.senderId(), null, message.direction(), message.type(),
                 categoryOf(message.type()), message.mentions().isReplyWorthyMention(), message.body(),
                 parseTime(message.createdAt()));
+        imMessage.setRaw(rawJson(message));
+        return imMessage;
+    }
+
+    /** The original daemon payload snapshot, re-serialized from the typed DTO. */
+    private static String rawJson(Message message) {
+        try {
+            return MAPPER.writeValueAsString(message);
+        } catch (RuntimeException failure) {
+            return null;
+        }
     }
 
     /** The wechat-native type code → normalized category the core logic switches on. */
@@ -74,12 +86,12 @@ public class WechatAdapter implements ImAdapter {
 
     @Override
     public boolean hasProcessed(String messageId) {
-        return processedMessages.existsByPlatformAndMessageId(PLATFORM, messageId);
+        return ledger.hasProcessed(PLATFORM, messageId);
     }
 
     @Override
     public void markProcessed(String messageId, String threadId) {
-        processedMessages.save(new ProcessedMessage(PLATFORM, messageId, threadId, Instant.now()));
+        ledger.markProcessed(PLATFORM, messageId, threadId);
     }
 
     @Override

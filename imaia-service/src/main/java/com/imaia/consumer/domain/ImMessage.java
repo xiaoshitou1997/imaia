@@ -6,6 +6,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -53,6 +55,11 @@ public class ImMessage {
 
     @Column
     private String body;
+
+    /** Original platform payload snapshot; the core never parses it. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column
+    private String raw;
 
     @Column(name = "created_at")
     private Instant createdAt;
@@ -120,6 +127,14 @@ public class ImMessage {
 
     public String getBody() {
         return body;
+    }
+
+    public String getRaw() {
+        return raw;
+    }
+
+    public void setRaw(String raw) {
+        this.raw = raw;
     }
 
     public Instant getArchivedAt() { return archivedAt; }

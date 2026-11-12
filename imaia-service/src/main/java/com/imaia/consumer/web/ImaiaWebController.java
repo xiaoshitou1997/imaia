@@ -3,7 +3,7 @@ package com.imaia.consumer.web;
 import com.imaia.consumer.ai.AiChatService;
 import com.imaia.consumer.ai.AssistantProfileService;
 import com.imaia.consumer.ai.PersonAnalyzer;
-import com.imaia.consumer.adapter.ImAdapter;
+import com.imaia.consumer.adapter.ImAdapters;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,14 +29,14 @@ public class ImaiaWebController {
     private static final String LOCAL_CONSOLE_THREAD = "local-console";
 
     private final AiChatService chatService;
-    private final ImAdapter adapter;
+    private final ImAdapters adapters;
     private final PersonAnalyzer personAnalyzer;
     private final AssistantProfileService profiles;
 
-    public ImaiaWebController(AiChatService chatService, ImAdapter adapter,
+    public ImaiaWebController(AiChatService chatService, ImAdapters adapters,
             PersonAnalyzer personAnalyzer, AssistantProfileService profiles) {
         this.chatService = chatService;
-        this.adapter = adapter;
+        this.adapters = adapters;
         this.personAnalyzer = personAnalyzer;
         this.profiles = profiles;
     }
@@ -53,7 +53,8 @@ public class ImaiaWebController {
         if (request.question() == null || request.question().isBlank()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", "question is empty"));
         }
-        String reply = chatService.complete(LOCAL_CONSOLE_THREAD, request.question().trim()).text();
+        String reply = chatService.complete(adapters.defaultAdapter(), LOCAL_CONSOLE_THREAD,
+                request.question().trim()).text();
         return ResponseEntity.ok(java.util.Map.of("reply", reply));
     }
 
@@ -76,7 +77,7 @@ public class ImaiaWebController {
                     "error", "thread is not in imaia.ai.reply-threads; add it first"));
         }
         String key = "imaia-manual-" + java.util.UUID.randomUUID();
-        adapter.sendText(threadId, text, key);
+        adapters.defaultAdapter().sendText(threadId, text, key);
         return ResponseEntity.ok(java.util.Map.of("idempotencyKey", key));
     }
 

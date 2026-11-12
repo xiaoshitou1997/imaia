@@ -8,6 +8,7 @@ import com.imaia.consumer.config.ModelRegistry;
 import com.imaia.consumer.adapter.ImAdapter;
 import com.imaia.consumer.adapter.ImAdapters;
 import com.imaia.consumer.adapter.ImEvent;
+import com.imaia.consumer.adapter.ProcessedMessageLedger;
 import com.imaia.consumer.adapter.wechat.WechatConnection;
 import com.imaia.consumer.adapter.wechat.daemon.DaemonClient;
 import com.imaia.consumer.adapter.WechatAdapter;
@@ -17,7 +18,6 @@ import com.imaia.consumer.repository.ContactRepository;
 import com.imaia.consumer.repository.ModelCallLogRepository;
 import com.imaia.consumer.repository.ScheduledActionRepository;
 import com.imaia.consumer.repository.ImMessageRepository;
-import com.imaia.consumer.repository.ProcessedMessageRepository;
 import com.imaia.consumer.repository.AiMessageRepository;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
@@ -54,7 +54,7 @@ class AiReplyHandlerTest {
 
     private MockWebServer server;
     private AiMessageRepository aiMessages;
-    private ProcessedMessageRepository processedMessages;
+    private ProcessedMessageLedger ledger;
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final Queue<String> sendKeys = new ConcurrentLinkedQueue<>();
     private final Queue<String> sendBodies = new ConcurrentLinkedQueue<>();
@@ -79,11 +79,10 @@ class AiReplyHandlerTest {
     @BeforeEach
     void startServer() throws IOException {
         aiMessages = Mockito.mock(AiMessageRepository.class);
-        processedMessages = Mockito.mock(ProcessedMessageRepository.class);
+        ledger = Mockito.mock(ProcessedMessageLedger.class);
         java.util.Set<String> handled = java.util.concurrent.ConcurrentHashMap.newKeySet();
-        Mockito.when(processedMessages.existsByPlatformAndMessageId(Mockito.any(), Mockito.any()))
+        Mockito.when(ledger.hasProcessed(Mockito.anyString(), Mockito.anyString()))
                 .thenAnswer(inv -> !handled.add(inv.getArgument(1)));
-        Mockito.when(processedMessages.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
         sendKeys.clear();
         sendBodies.clear();
         gatewayPaths.clear();
@@ -158,7 +157,7 @@ class AiReplyHandlerTest {
                         ModelRegistry.PROTOCOL_IMAGES);
         WebClient webClient = WebClient.builder().baseUrl(server.url("/").toString()).build();
         DaemonClient daemonClient = new DaemonClient(webClient, connection);
-        ImAdapter adapter = new WechatAdapter(daemonClient, processedMessages);
+        ImAdapter adapter = new WechatAdapter(daemonClient, ledger);
         MemoryFactRepository memoryFacts = Mockito.mock(MemoryFactRepository.class);
         Mockito.when(memoryFacts.findTop50ByAccountIdAndScopeTypeOrderByCreatedAtDesc(
                         Mockito.any(), Mockito.any())).thenReturn(List.of());
@@ -170,7 +169,7 @@ class AiReplyHandlerTest {
         AiChatService chatService = new AiChatService(
                 new OpenAiChatCompletion(new ChatModelFactory(), registry,
                         Mockito.mock(ModelCallLogRepository.class)),
-                aiMessages, memoryFacts, adapter, TestProperties.profileService(profile), chatTools,
+                aiMessages, memoryFacts, TestProperties.profileService(profile), chatTools,
                 Mockito.mock(ContactRepository.class));
         InMemoryRateLimiter limiter = InMemoryRateLimiter.ofLimits(
                 risk.getRepliesPerThreadPerMinute(), risk.getMaxRepliesPerHour(), risk.getMaxRepliesPerDay());

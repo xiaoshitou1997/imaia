@@ -6,6 +6,7 @@ import com.imaia.consumer.ai.PersonAnalyzer;
 import com.imaia.consumer.ai.RiskPolicyService;
 import com.imaia.consumer.config.ModelRegistry;
 import com.imaia.consumer.adapter.ImAdapter;
+import com.imaia.consumer.adapter.ImAdapters;
 import com.imaia.consumer.domain.AiArtifact;
 import com.imaia.consumer.domain.AssistantProfile;
 import com.imaia.consumer.domain.AiMessage;
@@ -61,7 +62,7 @@ public class AdminApiController {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    private final ImAdapter adapter;
+    private final ImAdapters adapters;
     private final ContactRepository contacts;
     private final ImMessageRepository imMessages;
     private final ProcessedMessageRepository processedMessages;
@@ -79,7 +80,7 @@ public class AdminApiController {
     private final RiskPolicyService riskService;
     private final WechatConnection connection;
 
-    public AdminApiController(ImAdapter adapter, ContactRepository contacts,
+    public AdminApiController(ImAdapters adapters, ContactRepository contacts,
             ImMessageRepository imMessages, ProcessedMessageRepository processedMessages,
             AiMessageRepository aiMessages, AiArtifactRepository artifacts,
             ScheduledActionRepository actions, MemoryFactRepository memoryFacts,
@@ -87,7 +88,7 @@ public class AdminApiController {
             PersonAnalyzer personAnalyzer, ProviderRepository providers, ModelRepository models,
             ModelRegistry modelRegistry, AssistantProfileService profileService,
             RiskPolicyService riskService, WechatConnection connection) {
-        this.adapter = adapter;
+        this.adapters = adapters;
         this.contacts = contacts;
         this.imMessages = imMessages;
         this.processedMessages = processedMessages;
@@ -110,9 +111,14 @@ public class AdminApiController {
 
     @GetMapping("/overview")
     public Map<String, Object> overview() {
-        String accountId = adapter.accountId();
         Instant dayStart = LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC);
-        long messagesToday = imMessages.countByAccountIdAndArchivedAtAfter(accountId, dayStart);
+        long messagesToday = 0;
+        long pendingActions = 0;
+        for (ImAdapter adapter : adapters.all()) {
+            messagesToday += imMessages.countByAccountIdAndArchivedAtAfter(adapter.accountId(), dayStart);
+            pendingActions += actions.findTop100ByAccountIdOrderByCreatedAtDesc(adapter.accountId()).stream()
+                    .filter(a -> ScheduledAction.STATUS_PENDING.equals(a.getStatus())).count();
+        }
         long aiRepliesToday = processedMessages.countByProcessedAtAfter(dayStart);
         long tokensToday = 0;
         long callsToday = 0;
@@ -121,20 +127,20 @@ public class AdminApiController {
             if (call.getPromptTokens() != null) tokensToday += call.getPromptTokens();
             if (call.getCompletionTokens() != null) tokensToday += call.getCompletionTokens();
         }
-        long pendingActions = actions.findTop100ByAccountIdOrderByCreatedAtDesc(accountId).stream()
-                .filter(a -> ScheduledAction.STATUS_PENDING.equals(a.getStatus())).count();
         List<Map<String, Object>> recent = new ArrayList<>();
-        for (var message : imMessages.findTop200ByAccountIdOrderByArchivedAtDesc(accountId)) {
-            if (recent.size() >= 12) break;
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("threadId", message.getThreadId());
-            row.put("senderName", message.getSenderName());
-            row.put("direction", message.getDirection());
-            row.put("type", message.getProviderType());
-            row.put("body", message.getBody() == null ? "" :
-                    message.getBody().length() > 60 ? message.getBody().substring(0, 60) + "…" : message.getBody());
-            row.put("time", message.getArchivedAt());
-            recent.add(row);
+        for (ImAdapter adapter : adapters.all()) {
+            for (var message : imMessages.findTop200ByAccountIdOrderByArchivedAtDesc(adapter.accountId())) {
+                if (recent.size() >= 12) break;
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("threadId", message.getThreadId());
+                row.put("senderName", message.getSenderName());
+                row.put("direction", message.getDirection());
+                row.put("type", message.getProviderType());
+                row.put("body", message.getBody() == null ? "" :
+                        message.getBody().length() > 60 ? message.getBody().substring(0, 60) + "…" : message.getBody());
+                row.put("time", message.getArchivedAt());
+                recent.add(row);
+            }
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("messagesToday", messagesToday);
@@ -150,8 +156,14 @@ public class AdminApiController {
 
     @GetMapping("/contacts")
     public List<Map<String, Object>> contacts() {
+        List<Contact> all = new ArrayList<>();
+        for (ImAdapter adapter : adapters.all()) {
+            all.addAll(contacts.findTop200ByAccountIdOrderByLastSeenAtDesc(adapter.accountId()));
+        }
+        all.sort(java.util.Comparator.comparing(Contact::getLastSeenAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
         List<Map<String, Object>> out = new ArrayList<>();
-        for (Contact contact : contacts.findTop200ByAccountIdOrderByLastSeenAtDesc(adapter.accountId())) {
+        for (Contact contact : all) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", contact.getId());
             row.put("externalId", contact.getExternalId());
@@ -189,18 +201,20 @@ public class AdminApiController {
     @GetMapping("/threads/{threadId}/messages")
     public List<Map<String, Object>> threadMessages(@PathVariable String threadId,
             @RequestParam(defaultValue = "100") int limit) {
-        String accountId = adapter.accountId();
         List<MessageRow> rows = new ArrayList<>();
-        for (var m : imMessages.findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, threadId)) {
-            rows.add(new MessageRow(m.getArchivedAt(), m.getDirection(), m.getSenderId(),
-                    m.getSenderName(), m.getProviderType(), m.getBody()));
-        }
-        for (var m : aiMessages.findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(accountId, threadId)) {
-            String body = AiMessage.ROLE_TOOL.equals(m.getRole())
-                    ? "[工具 " + m.getToolName() + "] " + m.getContent()
-                    : m.getContent();
-            rows.add(new MessageRow(m.getCreatedAt(), AiMessage.ROLE_ASSISTANT.equals(m.getRole())
-                    ? "ai-" + m.getRole() : m.getRole(), "imaia", null, null, body));
+        for (ImAdapter adapter : adapters.all()) {
+            String accountId = adapter.accountId();
+            for (var m : imMessages.findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(accountId, threadId)) {
+                rows.add(new MessageRow(m.getArchivedAt(), m.getDirection(), m.getSenderId(),
+                        m.getSenderName(), m.getProviderType(), m.getBody()));
+            }
+            for (var m : aiMessages.findTop100ByAccountIdAndThreadIdOrderByCreatedAtDesc(accountId, threadId)) {
+                String body = AiMessage.ROLE_TOOL.equals(m.getRole())
+                        ? "[工具 " + m.getToolName() + "] " + m.getContent()
+                        : m.getContent();
+                rows.add(new MessageRow(m.getCreatedAt(), AiMessage.ROLE_ASSISTANT.equals(m.getRole())
+                        ? "ai-" + m.getRole() : m.getRole(), "imaia", null, null, body));
+            }
         }
         int cap = Math.max(10, Math.min(limit, 300));
         return rows.stream()
@@ -227,8 +241,14 @@ public class AdminApiController {
 
     @GetMapping("/artifacts")
     public List<Map<String, Object>> artifacts() {
+        List<AiArtifact> all = new ArrayList<>();
+        for (ImAdapter adapter : adapters.all()) {
+            all.addAll(artifacts.findTop50ByAccountIdOrderByCreatedAtDesc(adapter.accountId()));
+        }
+        all.sort(java.util.Comparator.comparing(AiArtifact::getCreatedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
         List<Map<String, Object>> out = new ArrayList<>();
-        for (AiArtifact artifact : artifacts.findTop50ByAccountIdOrderByCreatedAtDesc(adapter.accountId())) {
+        for (AiArtifact artifact : all) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", artifact.getId());
             row.put("threadId", artifact.getThreadId());
@@ -247,8 +267,14 @@ public class AdminApiController {
 
     @GetMapping("/actions")
     public List<Map<String, Object>> actions() {
+        List<ScheduledAction> all = new ArrayList<>();
+        for (ImAdapter adapter : adapters.all()) {
+            all.addAll(actions.findTop100ByAccountIdOrderByCreatedAtDesc(adapter.accountId()));
+        }
+        all.sort(java.util.Comparator.comparing(ScheduledAction::getCreatedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
         List<Map<String, Object>> out = new ArrayList<>();
-        for (ScheduledAction action : actions.findTop100ByAccountIdOrderByCreatedAtDesc(adapter.accountId())) {
+        for (ScheduledAction action : all) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", action.getId());
             row.put("threadId", action.getThreadId());
@@ -266,7 +292,7 @@ public class AdminApiController {
         return out;
     }
 
-    public record NewAction(String threadId, String action, String content, String prompt,
+    public record NewAction(String platform, String threadId, String action, String content, String prompt,
             Instant fireAt, String cron) {
     }
 
@@ -275,6 +301,9 @@ public class AdminApiController {
         if (request.threadId() == null || request.threadId().isBlank()) {
             return badRequest("threadId is required");
         }
+        ImAdapter adapter = request.platform() == null || request.platform().isBlank()
+                ? adapters.defaultAdapter()
+                : adapters.forPlatform(request.platform());
         String action = request.action() == null ? ScheduledAction.ACTION_SEND_TEXT : request.action();
         if (!ScheduledAction.ACTION_SEND_TEXT.equals(action)
                 && !ScheduledAction.ACTION_SEND_AI_PROMPT.equals(action)) {
@@ -312,8 +341,14 @@ public class AdminApiController {
 
     @GetMapping("/memories")
     public List<Map<String, Object>> memories() {
+        List<MemoryFact> all = new ArrayList<>();
+        for (ImAdapter adapter : adapters.all()) {
+            all.addAll(memoryFacts.findTop200ByAccountIdOrderByCreatedAtDesc(adapter.accountId()));
+        }
+        all.sort(java.util.Comparator.comparing(MemoryFact::getCreatedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
         List<Map<String, Object>> out = new ArrayList<>();
-        for (MemoryFact fact : memoryFacts.findTop200ByAccountIdOrderByCreatedAtDesc(adapter.accountId())) {
+        for (MemoryFact fact : all) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", fact.getId());
             row.put("scopeType", fact.getScopeType());
@@ -619,7 +654,9 @@ public class AdminApiController {
 
     @GetMapping("/analysis/{contactId}")
     public ResponseEntity<?> analysis(@PathVariable Long contactId) {
-        var cached = analyses.findByAccountIdAndContactId(adapter.accountId(), contactId);
+        var contact = contacts.findById(contactId);
+        if (contact.isEmpty()) return ResponseEntity.notFound().build();
+        var cached = analyses.findByAccountIdAndContactId(contact.get().getAccountId(), contactId);
         return cached.<ResponseEntity<?>>map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -628,6 +665,7 @@ public class AdminApiController {
     public ResponseEntity<?> runAnalysis(@PathVariable Long contactId) {
         var contact = contacts.findById(contactId);
         if (contact.isEmpty()) return ResponseEntity.notFound().build();
+        String accountId = contact.get().getAccountId();
         String target = contact.get().getDisplayName() == null || contact.get().getDisplayName().isBlank()
                 ? contact.get().getExternalId() : contact.get().getDisplayName();
         String profile = personAnalyzer.analyze(target);
@@ -635,8 +673,8 @@ public class AdminApiController {
             return ResponseEntity.ok(Map.of("profile", "归档里没有找到与「" + target + "」相关的消息。"));
         }
         Instant now = Instant.now();
-        PersonAnalysis analysis = analyses.findByAccountIdAndContactId(adapter.accountId(), contactId)
-                .orElseGet(() -> new PersonAnalysis(adapter.accountId(), contactId, profile,
+        PersonAnalysis analysis = analyses.findByAccountIdAndContactId(accountId, contactId)
+                .orElseGet(() -> new PersonAnalysis(accountId, contactId, profile,
                         null, null, now));
         analysis.setProfile(profile);
         analysis.setGeneratedAt(now);

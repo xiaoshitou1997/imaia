@@ -140,9 +140,9 @@ public class AiReplyHandler implements ImEventHandler {
         String groupContext = groupChat ? recentGroupContext(adapter, threadId, messageId) : null;
         List<GeneratedMedia> generated = new ArrayList<>();
         AiChatService.ChatReply reply = content.image() == null
-                ? chatService.complete(threadId, content.userText(), null, null, groupContext,
+                ? chatService.complete(adapter, threadId, content.userText(), null, null, groupContext,
                         generated, messageId)
-                : chatService.complete(threadId, content.userText(),
+                : chatService.complete(adapter, threadId, content.userText(),
                         content.image().data(), content.image().contentType(), groupContext,
                         generated, messageId);
         if (!pauseBeforeSend()) {

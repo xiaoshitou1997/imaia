@@ -33,31 +33,29 @@ public class AiChatService {
     private final OpenAiChatCompletion chatCompletion;
     private final com.imaia.consumer.repository.AiMessageRepository aiMessages;
     private final MemoryFactRepository memoryFacts;
-    private final ImAdapter adapter;
     private final AssistantProfileService profiles;
     private final ChatTools chatTools;
     private final ContactRepository contacts;
 
     public AiChatService(OpenAiChatCompletion chatCompletion, com.imaia.consumer.repository.AiMessageRepository aiMessages,
-            MemoryFactRepository memoryFacts, ImAdapter adapter, AssistantProfileService profiles,
+            MemoryFactRepository memoryFacts, AssistantProfileService profiles,
             ChatTools chatTools, ContactRepository contacts) {
         this.chatCompletion = chatCompletion;
         this.aiMessages = aiMessages;
         this.memoryFacts = memoryFacts;
-        this.adapter = adapter;
         this.profiles = profiles;
         this.chatTools = chatTools;
         this.contacts = contacts;
     }
 
     /** Runs the completion with no attached image; tool-generated media is discarded. */
-    public ChatReply complete(String threadId, String userText) {
-        return complete(threadId, userText, null, null, null, new ArrayList<>(), null);
+    public ChatReply complete(ImAdapter adapter, String threadId, String userText) {
+        return complete(adapter, threadId, userText, null, null, null, new ArrayList<>(), null);
     }
 
     /** Runs the completion, optionally attaching image bytes to the current turn. */
-    public ChatReply complete(String threadId, String userText, byte[] image, String imageMimeType) {
-        return complete(threadId, userText, image, imageMimeType, null, new ArrayList<>(), null);
+    public ChatReply complete(ImAdapter adapter, String threadId, String userText, byte[] image, String imageMimeType) {
+        return complete(adapter, threadId, userText, image, imageMimeType, null, new ArrayList<>(), null);
     }
 
     /**
@@ -65,8 +63,9 @@ public class AiChatService {
      * in the system block, the current user text (optionally with a vision image) and
      * the directory-derived media tools. Appends user, tool and assistant rows to the
      * history store; the remaining intent markers are parsed out of the final reply.
+     * The adapter carries the conversation's platform (identity + history scoping).
      */
-    public ChatReply complete(String threadId, String userText, byte[] image, String imageMimeType,
+    public ChatReply complete(ImAdapter adapter, String threadId, String userText, byte[] image, String imageMimeType,
             String groupContext, List<GeneratedMedia> generated, String sourceMessageId) {
         String accountId = adapter.accountId();
         int limit = Math.max(2, profiles.current().getHistoryLimit());
@@ -76,7 +75,7 @@ public class AiChatService {
                         AiMessage.ROLE_ASSISTANT.equals(message.getRole()), message.getContent()))
                 .toList();
         OpenAiChatCompletion.ChatResult result = chatCompletion.complete(
-                buildSystemContext(threadId, accountId, groupContext), history,
+                buildSystemContext(adapter, threadId, accountId, groupContext), history,
                 userText, image, imageMimeType, chatTools.mediaTools(generated));
         String reply = result.text();
         if (reply == null || reply.isBlank()) {
@@ -102,8 +101,8 @@ public class AiChatService {
      * One-shot completion with no history read or write — used by scheduled proactive
      * messages where the prompt is an instruction, not part of any conversation.
      */
-    public String completeOnce(String threadId, String instruction) {
-        String reply = chatCompletion.complete(buildSystemContext(threadId, null, null),
+    public String completeOnce(ImAdapter adapter, String threadId, String instruction) {
+        String reply = chatCompletion.complete(buildSystemContext(adapter, threadId, null, null),
                 List.of(), instruction, null, null);
         if (reply == null || reply.isBlank()) {
             throw new IllegalStateException("Chat endpoint returned no text on thread " + threadId + ".");
@@ -112,7 +111,7 @@ public class AiChatService {
     }
 
     /** System prompt + current time + transient group context + remembered facts. */
-    private String buildSystemContext(String threadId, String accountId, String groupContext) {
+    private String buildSystemContext(ImAdapter adapter, String threadId, String accountId, String groupContext) {
         StringBuilder system = new StringBuilder(profiles.current().getSystemPrompt());
         system.append("\n\n当前时间：").append(LocalDateTime.now().format(TIME_DISPLAY));
         if (accountId != null) {

@@ -1,6 +1,7 @@
 package com.imaia.consumer.ai;
 
 import com.imaia.consumer.adapter.ImAdapter;
+import com.imaia.consumer.adapter.ImAdapters;
 import com.imaia.consumer.domain.ScheduledAction;
 import com.imaia.consumer.repository.ScheduledActionRepository;
 import jakarta.annotation.PostConstruct;
@@ -31,15 +32,15 @@ public class ScheduledActionRunner implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(ScheduledActionRunner.class);
 
     private final ScheduledActionRepository actions;
-    private final ImAdapter adapter;
+    private final ImAdapters adapters;
     private final AiChatService chatService;
     private final RiskPolicyService risk;
     private volatile boolean running;
 
-    public ScheduledActionRunner(ScheduledActionRepository actions, ImAdapter adapter,
+    public ScheduledActionRunner(ScheduledActionRepository actions, ImAdapters adapters,
             AiChatService chatService, RiskPolicyService risk) {
         this.actions = actions;
-        this.adapter = adapter;
+        this.adapters = adapters;
         this.chatService = chatService;
         this.risk = risk;
     }
@@ -94,10 +95,11 @@ public class ScheduledActionRunner implements Runnable {
             return;
         }
         String key = "imaia-action-" + action.getId();
+        ImAdapter adapter = adapters.forPlatform(action.getPlatform());
         try {
             String text = action.getContent();
             if (ScheduledAction.ACTION_SEND_AI_PROMPT.equals(action.getAction())) {
-                text = chatService.completeOnce(action.getThreadId(), action.getPrompt());
+                text = chatService.completeOnce(adapter, action.getThreadId(), action.getPrompt());
             }
             if (text == null || text.isBlank()) {
                 log.warn("Action {} produced no text; marked failed.", action.getId());

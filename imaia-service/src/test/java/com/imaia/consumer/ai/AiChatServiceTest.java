@@ -38,6 +38,7 @@ class AiChatServiceTest {
 
     private MockWebServer server;
     private AiMessageRepository aiMessages;
+    private ImAdapter adapter;
     private final JsonMapper mapper = JsonMapper.builder().build();
 
     @BeforeEach
@@ -73,7 +74,7 @@ class AiChatServiceTest {
     private AiChatService service(int historyLimit) {
         WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
         DaemonClient daemonClient = new DaemonClient(WebClient.create(), connection);
-        ImAdapter adapter = Mockito.mock(ImAdapter.class);
+        adapter = Mockito.mock(ImAdapter.class);
         Mockito.when(adapter.accountId()).thenReturn("acc1");
         Mockito.when(adapter.platform()).thenReturn("wechat");
         MemoryFactRepository memoryFacts = Mockito.mock(MemoryFactRepository.class);
@@ -84,7 +85,7 @@ class AiChatServiceTest {
                 new VideoGenerationClient(registry));
         return new AiChatService(new OpenAiChatCompletion(new ChatModelFactory(), registry,
                         Mockito.mock(ModelCallLogRepository.class)),
-                aiMessages, memoryFacts, adapter,
+                aiMessages, memoryFacts,
                 TestProperties.profileService(TestProperties.profile("test prompt", historyLimit,
                         "t1", true, false, 0, 0, 0)),
                 chatTools,
@@ -104,8 +105,8 @@ class AiChatServiceTest {
         server.enqueue(gatewayReply("好呀"));
         server.enqueue(gatewayReply("在的"));
 
-        assertThat(service.complete("t1", "你好").text()).isEqualTo("好呀");
-        assertThat(service.complete("t1", "在吗").text()).isEqualTo("在的");
+        assertThat(service.complete(adapter, "t1", "你好").text()).isEqualTo("好呀");
+        assertThat(service.complete(adapter, "t1", "在吗").text()).isEqualTo("在的");
 
         RecordedRequest first = server.takeRequest();
         assertThat(first.getPath()).isEqualTo("/chat/completions");
@@ -141,9 +142,9 @@ class AiChatServiceTest {
         server.enqueue(gatewayReply("二"));
         server.enqueue(gatewayReply("三"));
 
-        service.complete("t1", "一");
-        service.complete("t1", "二");
-        service.complete("t1", "三");
+        service.complete(adapter, "t1", "一");
+        service.complete(adapter, "t1", "二");
+        service.complete(adapter, "t1", "三");
 
         server.takeRequest();
         server.takeRequest();
@@ -158,8 +159,8 @@ class AiChatServiceTest {
         server.enqueue(gatewayReply("A"));
         server.enqueue(gatewayReply("B"));
 
-        service.complete("t1", "对话一");
-        service.complete("t2", "对话二");
+        service.complete(adapter, "t1", "对话一");
+        service.complete(adapter, "t2", "对话二");
 
         server.takeRequest();
         JsonNode body = mapper.readTree(server.takeRequest().getBody().readUtf8());
@@ -176,7 +177,7 @@ class AiChatServiceTest {
     void parsesMediaMarkersOutOfTheReply() {
         server.enqueue(gatewayReply("好的，这就画 [IMAGE: 一只红色的猫] 再给你 [VIDEO: 猫在跑]"));
 
-        AiChatService.ChatReply reply = service(4).complete("t1", "画一只猫");
+        AiChatService.ChatReply reply = service(4).complete(adapter, "t1", "画一只猫");
 
         assertThat(reply.text()).isEqualTo("好的，这就画 再给你");
         assertThat(reply.imagePrompts()).containsExactly("一只红色的猫");
@@ -188,7 +189,7 @@ class AiChatServiceTest {
         AiChatService service = service(4);
         server.enqueue(gatewayReply("看到了"));
 
-        service.complete("t1", "这是什么", new byte[]{1, 2, 3}, "image/jpeg");
+        service.complete(adapter, "t1", "这是什么", new byte[]{1, 2, 3}, "image/jpeg");
 
         JsonNode body = mapper.readTree(server.takeRequest().getBody().readUtf8());
         JsonNode parts = body.get("messages").get(1).get("content");

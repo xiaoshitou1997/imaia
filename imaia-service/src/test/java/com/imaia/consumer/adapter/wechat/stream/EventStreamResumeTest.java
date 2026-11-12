@@ -5,6 +5,7 @@ import com.imaia.consumer.adapter.ImAdapter;
 import com.imaia.consumer.adapter.ImAdapters;
 import com.imaia.consumer.adapter.ImEvent;
 import com.imaia.consumer.adapter.ImEventHandler;
+import com.imaia.consumer.adapter.ProcessedMessageLedger;
 import com.imaia.consumer.adapter.WechatAdapter;
 import com.imaia.consumer.adapter.wechat.cursor.CursorStore;
 import com.imaia.consumer.adapter.wechat.daemon.DaemonClient;
@@ -14,7 +15,6 @@ import com.imaia.consumer.adapter.wechat.WechatConnection;
 import com.imaia.consumer.adapter.wechat.WechatPlatformSource;
 import com.imaia.consumer.dispatch.EventDispatcher;
 import com.imaia.consumer.handler.LoggingMessageHandler;
-import com.imaia.consumer.repository.ProcessedMessageRepository;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -124,7 +124,7 @@ class EventStreamResumeTest {
         WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
         DaemonClient daemonClient = new DaemonClient(webClient, connection);
         DaemonEventDecoder decoder = new DaemonEventDecoder(JsonMapper.builder().build());
-        WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(ProcessedMessageRepository.class));
+        WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(ProcessedMessageLedger.class));
         LoggingMessageHandler loggingHandler = new LoggingMessageHandler(new ImAdapters(List.of(adapter)));
         ImEventHandler recorder = new ImEventHandler() {
             @Override
