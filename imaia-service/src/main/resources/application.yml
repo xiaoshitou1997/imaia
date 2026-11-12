@@ -37,7 +37,7 @@ logging:
   level:
     reactor:
       netty: WARN
-    com.imaia.consumer.ai: DEBUG
+    com.imaia.ai: DEBUG
 
 imaia:
   dispatch:

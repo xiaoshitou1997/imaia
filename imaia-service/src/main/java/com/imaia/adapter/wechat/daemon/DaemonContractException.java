@@ -1,0 +1,18 @@
+package com.imaia.adapter.wechat.daemon;
+
+import com.imaia.adapter.ImContractException;
+
+/**
+ * The daemon sent a payload that does not satisfy its documented contract. Retried as a
+ * stream error; a contract failure is never silently skipped.
+ */
+public class DaemonContractException extends ImContractException {
+
+    public DaemonContractException(String message) {
+        super(message);
+    }
+
+    public DaemonContractException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
