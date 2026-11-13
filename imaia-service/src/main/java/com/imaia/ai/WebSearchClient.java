@@ -7,6 +7,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
+import org.springframework.util.StringUtils;
 import java.time.Duration;
 
 /**
@@ -34,8 +35,7 @@ public class WebSearchClient extends AbstractAiHttpClient {
     /** Whether a tavily provider with a key is configured and enabled. */
     public boolean available() {
         return providers.findByName(PROVIDER_NAME)
-                .map(provider -> provider.isEnabled() && provider.getApiKey() != null
-                        && !provider.getApiKey().isBlank())
+                .map(provider -> provider.isEnabled() && StringUtils.hasText(provider.getApiKey()))
                 .orElse(false);
     }
 

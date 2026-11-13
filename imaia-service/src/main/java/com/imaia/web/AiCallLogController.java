@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 /** 模型调用流水（chat/媒体生成的审计与耗时）。 */
 @RestController
@@ -27,7 +26,7 @@ public class AiCallLogController {
     }
 
     @GetMapping
-    public Map<String, Object> list() {
+    public ApiEnvelope<List<CallRow>> list() {
         List<CallRow> rows = callLogs.findTop100ByOrderByCreatedAtDesc().stream()
                 .map(AiCallLogController::toRow).toList();
         return ApiEnvelope.ok(rows);

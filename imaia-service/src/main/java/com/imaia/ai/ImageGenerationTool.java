@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The generate_image tool the chat model calls instead of emitting an [IMAGE:] text
- * marker. Generation goes through the directory\u0027s openai-images model; the bytes
+ * marker. Generation goes through the catalog's image-generation slot; the bytes
  * land in the turn collector and the handler delivers them after the model loop
  * ends.
  */

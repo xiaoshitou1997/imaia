@@ -1,5 +1,9 @@
 package com.imaia.ai;
 
+import java.time.Instant;
+import com.imaia.domain.ArtifactKind;
+import com.imaia.domain.MessageDirection;
+import com.imaia.domain.ArtifactStatus;
 import com.imaia.adapter.DuplicateSendException;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
@@ -23,6 +27,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import org.springframework.util.StringUtils;
 import java.util.List;
 
 /**
@@ -90,7 +95,7 @@ public class AiReplyHandler implements ImEventHandler {
             log.debug("Archive skipped: message identity drifted (message={}).", messageId);
             return;
         }
-        if (!ImMessage.DIRECTION_INCOMING.equals(message.direction())) {
+        if (!"incoming".equals(message.direction())) {
             return;
         }
         boolean groupChat = adapter.isGroupConversation(externalId);
@@ -138,7 +143,7 @@ public class AiReplyHandler implements ImEventHandler {
     private void sendReply(ImAdapter adapter, String externalId, Long conversationId, AiChatService.ChatReply reply,
             String keyPrefix) {
         String text = reply.text();
-        if (text != null && !text.isBlank()) {
+        if (StringUtils.hasText(text)) {
             sendWithConflictGuard(keyPrefix, () -> adapter.sendText(externalId, text, keyPrefix));
         }
         int index = 0;
@@ -148,8 +153,8 @@ public class AiReplyHandler implements ImEventHandler {
             try {
                 String sourceId = adapter.uploadMedia(media.data(), media.filename(), media.mimeType());
                 sendWithConflictGuard(key, () -> adapter.sendMedia(externalId, media.kind(), sourceId, key));
-                AiArtifact artifact = new AiArtifact(conversationId, media.kind().value(), media.prompt(),
-                        media.filename(), AiArtifact.STATUS_DELIVERED, java.time.Instant.now());
+                AiArtifact artifact = new AiArtifact(conversationId, ArtifactKind.fromValue(media.kind().value()), media.prompt(),
+                        media.filename(), ArtifactStatus.DELIVERED, Instant.now());
                 artifact.setStorageRef(sourceId);
                 artifact.setStoragePlatform(adapter.platform());
                 artifacts.save(artifact);
@@ -174,7 +179,7 @@ public class AiReplyHandler implements ImEventHandler {
         return switch (message.category()) {
             case TEXT -> {
                 String body = message.body();
-                yield body == null || body.isBlank() ? null : new PromptContent(body, null);
+                yield !StringUtils.hasText(body) ? null : new PromptContent(body, null);
             }
             case IMAGE -> catalog.hasVisionChat()
                     ? fetchVisionContent(adapter, message.messageId(), "用户发来一张图片，请看图后回复")
@@ -238,11 +243,11 @@ public class AiReplyHandler implements ImEventHandler {
             int collected = 0;
             for (ImMessage message : recent) {
                 if (message.getMessageId().equals(excludeMessageId)
-                        || message.getBody() == null || message.getBody().isBlank()) {
+                        || !StringUtils.hasText(message.getBody())) {
                     continue;
                 }
-                String who = ImMessage.DIRECTION_OUTGOING.equals(message.getDirection())
-                        ? "我" : (message.getSenderName() != null && !message.getSenderName().isBlank()
+                String who = message.getDirection() == MessageDirection.OUTGOING
+                        ? "我" : (StringUtils.hasText(message.getSenderName())
                         ? message.getSenderName() : String.valueOf(message.getSenderId()));
                 String line = who + "：" + message.getBody();
                 if (context.length() + line.length() > GROUP_CONTEXT_MAX_CHARS) {
@@ -278,7 +283,7 @@ public class AiReplyHandler implements ImEventHandler {
 
     private static LocalTime parseQuiet(String value) {
         try {
-            return value == null || value.isBlank() ? null : LocalTime.parse(value.trim());
+            return !StringUtils.hasText(value) ? null : LocalTime.parse(value.trim());
         } catch (DateTimeParseException failure) {
             return null;
         }

@@ -9,9 +9,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** 长期记忆（AI 自动沉淀、挂会话线）：查看、编辑、删除。 */
@@ -35,7 +36,7 @@ public class MemoryController {
     }
 
     @GetMapping
-    public Map<String, Object> list() {
+    public ApiEnvelope<List<MemoryRow>> list() {
         Map<Long, String> labelMap = labels.labels();
         return ApiEnvelope.ok(memories.findTop200ByOrderByCreatedAtDesc().stream()
                 .map(memory -> new MemoryRow(memory.getId(), memory.getConversationId(),
@@ -46,9 +47,9 @@ public class MemoryController {
     }
 
     @PutMapping("/{id}")
-    public Map<String, Object> update(@PathVariable Long id, @RequestBody MemoryUpdate body) {
+    public ApiEnvelope<String> update(@PathVariable Long id, @RequestBody MemoryUpdate body) {
         AiMemory memory = memories.findById(id).orElseThrow();
-        if (body.fact() == null || body.fact().isBlank()) {
+        if (!StringUtils.hasText(body.fact())) {
             throw new IllegalArgumentException("fact 不能为空。");
         }
         memory.setFact(body.fact().strip());
@@ -57,7 +58,7 @@ public class MemoryController {
     }
 
     @DeleteMapping("/{id}")
-    public Map<String, Object> delete(@PathVariable Long id) {
+    public ApiEnvelope<String> delete(@PathVariable Long id) {
         memories.findById(id).orElseThrow();
         memories.deleteById(id);
         return ApiEnvelope.ok("已删除");

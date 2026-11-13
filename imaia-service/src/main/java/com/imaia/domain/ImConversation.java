@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -31,8 +32,6 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ImConversation {
 
-    public static final String KIND_DIRECT = "direct";
-    public static final String KIND_GROUP = "group";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,7 +48,8 @@ public class ImConversation {
 
     /** direct | group. */
     @Column(nullable = false)
-    private String kind;
+    @Convert(converter = ConversationKind.Converter.class)
+    private ConversationKind kind;
 
     @Column
     private String remark;
@@ -70,7 +70,7 @@ public class ImConversation {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    public ImConversation(Long connectionId, String externalId, String displayName, String kind,
+    public ImConversation(Long connectionId, String externalId, String displayName, ConversationKind kind,
             Instant firstSeenAt, Instant lastSeenAt, Instant createdAt) {
         this.connectionId = connectionId;
         this.externalId = externalId;

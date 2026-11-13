@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -30,9 +31,6 @@ import java.time.LocalDate;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ConversationReport {
 
-    public static final String PERIOD_WEEK = "week";
-    public static final String PERIOD_MONTH = "month";
-    public static final String PERIOD_YEAR = "year";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -43,7 +41,8 @@ public class ConversationReport {
 
     /** week | month | year. */
     @Column(name = "period_type", nullable = false)
-    private String periodType;
+    @Convert(converter = ReportPeriod.Converter.class)
+    private ReportPeriod periodType;
 
     /** Monday of the week / 1st of the month / 1st of the year. */
     @Column(name = "period_start", nullable = false)
@@ -62,7 +61,7 @@ public class ConversationReport {
     @Column(name = "generated_at", nullable = false)
     private Instant generatedAt;
 
-    public ConversationReport(Long conversationId, String periodType, LocalDate periodStart,
+    public ConversationReport(Long conversationId, ReportPeriod periodType, LocalDate periodStart,
             String stats, String aiReport, String modelId, Instant generatedAt) {
         this.conversationId = conversationId;
         this.periodType = periodType;

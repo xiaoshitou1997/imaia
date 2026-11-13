@@ -1,5 +1,9 @@
 package com.imaia.ai;
 
+import java.util.Optional;
+import com.imaia.domain.ConversationKind;
+import com.imaia.domain.MemoryStatus;
+import com.imaia.domain.ChatRole;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.domain.AiMemory;
 import com.imaia.domain.AiMessage;
@@ -68,7 +72,7 @@ class AiChatServiceTest {
         });
         ImConversation conversation = service.resolve(adapter, "wx-1");
         assertEquals(7L, conversation.getId());
-        assertEquals(ImConversation.KIND_DIRECT, conversation.getKind());
+        assertEquals(ConversationKind.DIRECT, conversation.getKind());
         assertEquals("wx-1", conversation.getExternalId());
         verify(conversations, times(2)).save(any());
     }
@@ -77,7 +81,7 @@ class AiChatServiceTest {
     void resolveReusesExistingConversation() {
         ImConversation existing = com.imaia.TestProperties.imConversation(9L, "wx-1");
         when(conversations.findByConnectionIdAndExternalId(1L, "wx-1"))
-                .thenReturn(java.util.Optional.of(existing));
+                .thenReturn(Optional.of(existing));
         when(conversations.save(any())).thenAnswer(inv -> inv.getArgument(0));
         ImConversation conversation = service.resolve(adapter, "wx-1");
         assertEquals(9L, conversation.getId());
@@ -89,7 +93,7 @@ class AiChatServiceTest {
         ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
         when(aiMessages.findRecentContext(eq(9L), any(PageRequest.class))).thenReturn(List.of());
         when(chatTools.tools(anyLong(), anyList())).thenReturn(List.of());
-        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), anyString()))
+        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), eq(MemoryStatus.ACTIVE)))
                 .thenReturn(List.of());
         when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), anyList()))
                 .thenReturn(new OpenAiChatCompletion.ChatResult("最终回复",
@@ -102,21 +106,21 @@ class AiChatServiceTest {
         ArgumentCaptor<List<AiMessage>> rows = ArgumentCaptor.forClass((Class) List.class);
         verify(aiMessages).saveAll(rows.capture());
         assertEquals(3, rows.getValue().size());
-        assertEquals(AiMessage.ROLE_USER, rows.getValue().get(0).getRole());
+        assertEquals(ChatRole.USER, rows.getValue().get(0).getRole());
         assertEquals("你好", rows.getValue().get(0).getContent());
-        assertEquals(AiMessage.ROLE_TOOL, rows.getValue().get(1).getRole());
+        assertEquals(ChatRole.TOOL, rows.getValue().get(1).getRole());
         assertEquals("remember_fact", rows.getValue().get(1).getToolName());
-        assertEquals(AiMessage.ROLE_ASSISTANT, rows.getValue().get(2).getRole());
+        assertEquals(ChatRole.ASSISTANT, rows.getValue().get(2).getRole());
     }
 
     @Test
     void historyIsReversedToChronologicalOrder() {
         ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
         when(aiMessages.findRecentContext(eq(9L), any(PageRequest.class))).thenReturn(List.of(
-                new AiMessage(9L, AiMessage.ROLE_ASSISTANT, "新回复", null, Instant.now()),
-                new AiMessage(9L, AiMessage.ROLE_USER, "旧问题", "m0", Instant.now().minusSeconds(60))));
+                new AiMessage(9L, ChatRole.ASSISTANT, "新回复", null, Instant.now()),
+                new AiMessage(9L, ChatRole.USER, "旧问题", "m0", Instant.now().minusSeconds(60))));
         when(chatTools.tools(anyLong(), anyList())).thenReturn(List.of());
-        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), anyString()))
+        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), eq(MemoryStatus.ACTIVE)))
                 .thenReturn(List.of());
         when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), anyList()))
                 .thenReturn(new OpenAiChatCompletion.ChatResult("ok", List.of()));
@@ -138,7 +142,7 @@ class AiChatServiceTest {
         conversation.setPersona("毒舌群友");
         when(aiMessages.findRecentContext(eq(9L), any(PageRequest.class))).thenReturn(List.of());
         when(chatTools.tools(anyLong(), anyList())).thenReturn(List.of());
-        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), anyString()))
+        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), eq(MemoryStatus.ACTIVE)))
                 .thenReturn(List.of(new AiMemory(9L, "主人养了只猫", Instant.now()),
                         new AiMemory(9L, "主人周四要开会", Instant.now())));
         when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), anyList()))

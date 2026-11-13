@@ -2,6 +2,9 @@ package com.imaia.web;
 
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ScheduledTask;
+import com.imaia.domain.TaskCreator;
+import com.imaia.domain.TaskKind;
+import com.imaia.domain.TaskStatus;
 import com.imaia.repository.ImConversationRepository;
 import com.imaia.repository.ScheduledTaskRepository;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,6 +23,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import org.springframework.util.StringUtils;
 import java.util.Map;
 
 /** 定时任务：三类（reminder/cron/report）的新建、取消、手动触发。 */
@@ -29,8 +33,6 @@ public class TaskController {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final DateTimeFormatter FIRE_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final List<String> KINDS = List.of(ScheduledTask.KIND_REMINDER,
-            ScheduledTask.KIND_CRON, ScheduledTask.KIND_REPORT);
 
     private final ScheduledTaskRepository tasks;
     private final ImConversationRepository conversations;
@@ -43,17 +45,17 @@ public class TaskController {
         this.labels = labels;
     }
 
-    public record TaskRow(Long id, Long conversationId, String conversationLabel, String kind, String content,
-            String prompt, Instant fireAt, String cron, Instant nextFireAt, String status, String createdBy,
+    public record TaskRow(Long id, Long conversationId, String conversationLabel, TaskKind kind, String content,
+            String prompt, Instant fireAt, String cron, Instant nextFireAt, TaskStatus status, TaskCreator createdBy,
             Instant lastFiredAt, String lastError, Instant createdAt) {
     }
 
-    public record TaskCreate(Long conversationId, String kind, String content, String prompt, String fireAt,
+    public record TaskCreate(Long conversationId, TaskKind kind, String content, String prompt, String fireAt,
             String cron, tools.jackson.databind.JsonNode params) {
     }
 
     @GetMapping
-    public Map<String, Object> list() {
+    public ApiEnvelope<List<TaskRow>> list() {
         Map<Long, String> labelMap = labels.labels();
         return ApiEnvelope.ok(tasks.findTop100ByOrderByCreatedAtDesc().stream()
                 .map(task -> new TaskRow(task.getId(), task.getConversationId(),
@@ -66,39 +68,39 @@ public class TaskController {
     }
 
     @PostMapping
-    public Map<String, Object> create(@RequestBody TaskCreate body) {
+    public ApiEnvelope<Long> create(@RequestBody TaskCreate body) {
         if (body.conversationId() == null) {
             throw new IllegalArgumentException("conversationId 不能为空。");
         }
         ImConversation conversation = conversations.findById(body.conversationId()).orElseThrow();
-        if (body.kind() == null || !KINDS.contains(body.kind())) {
-            throw new IllegalArgumentException("kind 必须是 " + KINDS + " 之一。");
+        if (body.kind() == null) {
+            throw new IllegalArgumentException("kind 必须是 reminder/cron/report 之一。");
         }
         Instant fireAt = null;
-        if (ScheduledTask.KIND_REMINDER.equals(body.kind())
-                || (body.fireAt() != null && !body.fireAt().isBlank())) {
-            if (body.fireAt() == null || body.fireAt().isBlank()) {
+        if (body.kind() == TaskKind.REMINDER
+                || (StringUtils.hasText(body.fireAt()))) {
+            if (!StringUtils.hasText(body.fireAt())) {
                 throw new IllegalArgumentException("一次性任务需要 fireAt（yyyy-MM-dd HH:mm）。");
             }
             fireAt = LocalDateTime.parse(body.fireAt().strip(), FIRE_AT_FORMAT)
                     .atZone(ZoneId.systemDefault()).toInstant();
         }
-        if (!ScheduledTask.KIND_REMINDER.equals(body.kind())) {
-            if (body.cron() == null || body.cron().isBlank()) {
+        if (body.kind() != TaskKind.REMINDER) {
+            if (!StringUtils.hasText(body.cron())) {
                 throw new IllegalArgumentException("周期任务需要 cron 表达式。");
             }
             CronExpression.parse(body.cron().strip());
         }
-        if ((body.content() == null || body.content().isBlank())
-                && !ScheduledTask.KIND_REPORT.equals(body.kind())
-                && (body.prompt() == null || body.prompt().isBlank())) {
+        if ((!StringUtils.hasText(body.content()))
+                && body.kind() != TaskKind.REPORT
+                && (!StringUtils.hasText(body.prompt()))) {
             throw new IllegalArgumentException("任务需要 content 或 prompt。");
         }
         ScheduledTask task = new ScheduledTask(conversation.getId(), body.kind(),
                 body.content() == null ? null : body.content().strip(),
                 body.prompt() == null ? null : body.prompt().strip(),
                 fireAt, body.cron() == null ? null : body.cron().strip(),
-                ScheduledTask.CREATED_BY_CONSOLE, Instant.now());
+                TaskCreator.CONSOLE, Instant.now());
         if (body.params() != null && body.params().isObject()) {
             task.setParams(MAPPER.writeValueAsString(body.params()));
         }
@@ -106,25 +108,25 @@ public class TaskController {
     }
 
     @PostMapping("/{id}/cancel")
-    public Map<String, Object> cancel(@PathVariable Long id) {
+    public ApiEnvelope<String> cancel(@PathVariable Long id) {
         ScheduledTask task = tasks.findById(id).orElseThrow();
-        if (!ScheduledTask.STATUS_PENDING.equals(task.getStatus())) {
+        if (task.getStatus() != TaskStatus.PENDING) {
             throw new IllegalArgumentException("只有待执行任务可以取消。");
         }
-        task.setStatus(ScheduledTask.STATUS_CANCELLED);
+        task.setStatus(TaskStatus.CANCELLED);
         tasks.save(task);
         return ApiEnvelope.ok("已取消");
     }
 
     /** 强制置为到期，执行器在一轮轮询内（30s）执行。 */
     @PostMapping("/{id}/fire")
-    public Map<String, Object> fire(@PathVariable Long id) {
+    public ApiEnvelope<String> fire(@PathVariable Long id) {
         ScheduledTask task = tasks.findById(id).orElseThrow();
-        if (!ScheduledTask.STATUS_PENDING.equals(task.getStatus())) {
+        if (task.getStatus() != TaskStatus.PENDING) {
             throw new IllegalArgumentException("只有待执行任务可以手动触发。");
         }
         Instant now = Instant.now();
-        if (ScheduledTask.KIND_REMINDER.equals(task.getKind())) {
+        if (task.getKind() == TaskKind.REMINDER) {
             task.setFireAt(now);
         } else {
             task.setNextFireAt(now);

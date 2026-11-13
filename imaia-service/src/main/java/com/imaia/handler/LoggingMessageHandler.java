@@ -8,6 +8,7 @@ import com.imaia.adapter.ImEventHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Component;
 
 /**
@@ -53,7 +54,7 @@ public class LoggingMessageHandler implements ImEventHandler {
     }
 
     private static String preview(String body) {
-        if (body == null || body.isBlank()) {
+        if (!StringUtils.hasText(body)) {
             return "(no text)";
         }
         return body.length() <= BODY_PREVIEW_LIMIT ? body : body.substring(0, BODY_PREVIEW_LIMIT) + "…";

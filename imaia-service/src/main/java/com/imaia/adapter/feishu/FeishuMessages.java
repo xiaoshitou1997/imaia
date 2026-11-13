@@ -2,6 +2,7 @@ package com.imaia.adapter.feishu;
 
 import com.imaia.domain.MessageCategory;
 import tools.jackson.databind.JsonNode;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -65,7 +66,7 @@ public final class FeishuMessages {
 
     /** Parses one feishu content JSON; malformed payloads yield null (logged upstream). */
     public static JsonNode parse(String contentJson) {
-        if (contentJson == null || contentJson.isBlank()) {
+        if (!StringUtils.hasText(contentJson)) {
             return null;
         }
         try {

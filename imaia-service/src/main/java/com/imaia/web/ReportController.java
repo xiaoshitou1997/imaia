@@ -2,6 +2,7 @@ package com.imaia.web;
 
 import com.imaia.ai.InsightService;
 import com.imaia.domain.ConversationReport;
+import com.imaia.domain.ReportPeriod;
 import com.imaia.domain.ImConversation;
 import com.imaia.repository.ConversationReportRepository;
 import com.imaia.repository.ImConversationRepository;
@@ -23,11 +24,11 @@ import java.util.Map;
 @RequestMapping("/api/reports")
 public class ReportController {
 
-    public record ReportRow(Long id, Long conversationId, String conversationLabel, String periodType,
+    public record ReportRow(Long id, Long conversationId, String conversationLabel, ReportPeriod periodType,
             LocalDate periodStart, String stats, String aiReport, Instant generatedAt) {
     }
 
-    public record ReportCreate(Long conversationId, String periodType) {
+    public record ReportCreate(Long conversationId, ReportPeriod periodType) {
     }
 
     private final ConversationReportRepository reports;
@@ -44,7 +45,7 @@ public class ReportController {
     }
 
     @GetMapping
-    public Map<String, Object> list(@RequestParam(required = false) Long conversationId) {
+    public ApiEnvelope<List<ReportRow>> list(@RequestParam(required = false) Long conversationId) {
         Map<Long, String> labelMap = labels.labels();
         List<ConversationReport> list = conversationId == null
                 ? reports.findTop100ByOrderByGeneratedAtDesc()
@@ -53,14 +54,10 @@ public class ReportController {
     }
 
     @PostMapping
-    public Map<String, Object> create(@RequestBody ReportCreate body) {
+    public ApiEnvelope<ReportRow> create(@RequestBody ReportCreate body) {
         ImConversation conversation = conversations.findById(body.conversationId()).orElseThrow();
-        String periodType = body.periodType() == null ? ConversationReport.PERIOD_WEEK : body.periodType();
-        if (!List.of(ConversationReport.PERIOD_WEEK, ConversationReport.PERIOD_MONTH,
-                ConversationReport.PERIOD_YEAR).contains(periodType)) {
-            throw new IllegalArgumentException("periodType 必须是 week/month/year。");
-        }
-        ConversationReport report = insightService.generateReport(conversation, periodType);
+        ConversationReport report = insightService.generateReport(conversation,
+                body.periodType() == null ? ReportPeriod.WEEK : body.periodType());
         return ApiEnvelope.ok(toRow(report, labels.labels()));
     }
 

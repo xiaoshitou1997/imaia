@@ -2,6 +2,7 @@ package com.imaia.adapter.wechat.cursor;
 
 import com.imaia.adapter.wechat.WechatConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,7 +34,7 @@ public class RedisCursorStore implements CursorStore {
         String key = key();
         try {
             String value = redis.opsForValue().get(key);
-            if (value != null && !value.isBlank()) {
+            if (StringUtils.hasText(value)) {
                 memory = value;
                 return value;
             }

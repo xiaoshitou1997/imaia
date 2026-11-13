@@ -1,8 +1,12 @@
 package com.imaia.web;
 
+import com.imaia.domain.TaskStatus;
+import com.imaia.domain.MemoryStatus;
+import com.imaia.ai.WebSearchClient;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.repository.AiArtifactRepository;
+import com.imaia.repository.AiProviderRepository;
 import com.imaia.repository.AiCallLogRepository;
 import com.imaia.repository.AiMemoryRepository;
 import com.imaia.repository.ConversationReportRepository;
@@ -17,14 +21,13 @@ import com.imaia.domain.ScheduledTask;
 import com.imaia.ai.AssistantSettingsService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 
 /** 总览与运行时能力状态（只读）。 */
 @RestController
@@ -41,7 +44,7 @@ public class OverviewController {
     private final ConversationReportRepository reports;
     private final ImConnectionRepository connections;
     private final AiModelCatalog catalog;
-    private final com.imaia.repository.AiProviderRepository aiProviders;
+    private final AiProviderRepository aiProviders;
     private final ImAdapters adapters;
     private final AssistantSettingsService settings;
 
@@ -49,7 +52,7 @@ public class OverviewController {
             ProcessedMessageRepository processedMessages, ScheduledTaskRepository tasks,
             AiMemoryRepository memories, AiArtifactRepository artifacts, AiCallLogRepository callLogs,
             ConversationReportRepository reports, ImConnectionRepository connections,
-            AiModelCatalog catalog, com.imaia.repository.AiProviderRepository aiProviders,
+            AiModelCatalog catalog, AiProviderRepository aiProviders,
             ImAdapters adapters, AssistantSettingsService settings) {
         this.conversations = conversations;
         this.messages = messages;
@@ -72,7 +75,7 @@ public class OverviewController {
     }
 
     @GetMapping("/overview")
-    public Map<String, Object> overview() {
+    public ApiEnvelope<OverviewRow> overview() {
         Instant todayStart = LocalDate.now(ZoneId.systemDefault())
                 .atStartOfDay(ZoneId.systemDefault()).toInstant();
         AssistantSettings config = settings.current();
@@ -82,29 +85,32 @@ public class OverviewController {
                 messages.count(),
                 messages.countByArchivedAtAfter(todayStart),
                 processedMessages.countByProcessedAtAfter(todayStart),
-                tasks.countByStatus(ScheduledTask.STATUS_PENDING),
-                memories.countByStatus(AiMemory.STATUS_ACTIVE),
+                tasks.countByStatus(TaskStatus.PENDING),
+                memories.countByStatus(MemoryStatus.ACTIVE),
                 artifacts.count(),
                 callLogs.count(),
                 reports.count(),
                 config.isEnabled()));
     }
 
+    /** One platform adapter's runtime state (configured = connection enabled). */
+    public record PlatformState(String platform, boolean configured) {
+    }
+
+    /** Runtime capability flags the console reads before offering actions. */
+    public record RuntimeRow(boolean chat, boolean images, boolean video, boolean search,
+            List<PlatformState> platforms) {
+    }
+
     @GetMapping("/runtime")
-    public Map<String, Object> runtime() {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("chat", catalog.hasChat());
-        data.put("images", catalog.hasImageGeneration());
-        data.put("video", catalog.hasVideoGeneration());
-        data.put("search", aiProviders.findByName(com.imaia.ai.WebSearchClient.PROVIDER_NAME)
-                .map(provider -> provider.isEnabled() && provider.getApiKey() != null
-                        && !provider.getApiKey().isBlank()).orElse(false));
-        data.put("platforms", adapters.all().stream().map(adapter -> {
-            Map<String, Object> platform = new LinkedHashMap<>();
-            platform.put("platform", adapter.platform());
-            platform.put("configured", adapter.connection().isEnabled());
-            return platform;
-        }).toList());
-        return ApiEnvelope.ok(data);
+    public ApiEnvelope<RuntimeRow> runtime() {
+        boolean search = aiProviders.findByName(WebSearchClient.PROVIDER_NAME)
+                .map(provider -> StringUtils.hasText(provider.getApiKey()) && provider.isEnabled())
+                .orElse(false);
+        List<PlatformState> platforms = adapters.all().stream()
+                .map(adapter -> new PlatformState(adapter.platform(), adapter.connection().isEnabled()))
+                .toList();
+        return ApiEnvelope.ok(new RuntimeRow(catalog.hasChat(), catalog.hasImageGeneration(),
+                catalog.hasVideoGeneration(), search, platforms));
     }
 }

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.util.StringUtils;
 import java.util.stream.Collectors;
 
 /**
@@ -192,7 +193,7 @@ public class AiModelCatalog {
     private static List<String> parseList(String json) {
         try {
             List<String> out = new ArrayList<>();
-            for (JsonNode node : MAPPER.readTree(json == null || json.isBlank() ? "[]" : json)) {
+            for (JsonNode node : MAPPER.readTree(!StringUtils.hasText(json) ? "[]" : json)) {
                 if (node.isString()) {
                     out.add(node.asString());
                 }
@@ -206,7 +207,7 @@ public class AiModelCatalog {
     private static Map<String, String> parseMap(String json) {
         try {
             Map<String, String> out = new LinkedHashMap<>();
-            for (var field : MAPPER.readTree(json == null || json.isBlank() ? "{}" : json).properties()) {
+            for (var field : MAPPER.readTree(!StringUtils.hasText(json) ? "{}" : json).properties()) {
                 out.put(field.getKey(), field.getValue().isString()
                         ? field.getValue().asString() : field.getValue().toString());
             }

@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -25,7 +26,6 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiMemory {
 
-    public static final String STATUS_ACTIVE = "active";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -38,7 +38,8 @@ public class AiMemory {
     private String fact;
 
     @Column(nullable = false)
-    private String status;
+    @Convert(converter = MemoryStatus.Converter.class)
+    private MemoryStatus status;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -46,7 +47,7 @@ public class AiMemory {
     public AiMemory(Long conversationId, String fact, Instant createdAt) {
         this.conversationId = conversationId;
         this.fact = fact;
-        this.status = STATUS_ACTIVE;
+        this.status = MemoryStatus.ACTIVE;
         this.createdAt = createdAt;
     }
 }

@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -33,8 +34,6 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiModel {
 
-    public static final String SOURCE_SYNC = "sync";
-    public static final String SOURCE_MANUAL = "manual";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -102,7 +101,8 @@ public class AiModel {
 
     /** sync | manual. */
     @Column(nullable = false)
-    private String source;
+    @Convert(converter = ModelSource.Converter.class)
+    private ModelSource source;
 
     @Column(name = "synced_at")
     private Instant syncedAt;
@@ -122,7 +122,7 @@ public class AiModel {
         this.params = "{}";
         this.available = true;
         this.enabled = false;
-        this.source = SOURCE_SYNC;
+        this.source = ModelSource.SYNC;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }

@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import com.imaia.domain.ModelSource;
 import com.imaia.domain.AiModel;
 import com.imaia.domain.AiProvider;
 import com.imaia.repository.AiModelRepository;
@@ -18,6 +19,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.util.StringUtils;
 import java.util.Set;
 
 /**
@@ -76,10 +78,10 @@ public class ModelSyncService extends AbstractAiHttpClient {
                 updated++;
             }
             JsonNode dev = devModels.get(modelId);
-            if (dev != null && !AiModel.SOURCE_MANUAL.equals(model.getSource())) {
+            if (dev != null && model.getSource() != ModelSource.MANUAL) {
                 applyDevMetadata(model, dev);
             }
-            if ((model.getName() == null || model.getName().isBlank())
+            if ((!StringUtils.hasText(model.getName()))
                     && entry.has("name") && !entry.path("name").asString().isBlank()) {
                 model.setName(entry.path("name").asString());
             }
@@ -114,7 +116,7 @@ public class ModelSyncService extends AbstractAiHttpClient {
     private Map<String, JsonNode> modelsDevIndex(String providerKey) {
         JsonNode root = modelsDev();
         Map<String, JsonNode> index = new HashMap<>();
-        if (providerKey != null && !providerKey.isBlank()) {
+        if (StringUtils.hasText(providerKey)) {
             for (var field : root.path(providerKey).path("models").properties()) {
                 index.put(field.getKey(), field.getValue());
             }
@@ -149,7 +151,7 @@ public class ModelSyncService extends AbstractAiHttpClient {
 
     /** models.dev metadata onto a sync-row; local annotations stay untouched. */
     private void applyDevMetadata(AiModel model, JsonNode dev) {
-        if ((model.getName() == null || model.getName().isBlank())
+        if ((!StringUtils.hasText(model.getName()))
                 && !dev.path("name").asString().isBlank()) {
             model.setName(dev.path("name").asString());
         }

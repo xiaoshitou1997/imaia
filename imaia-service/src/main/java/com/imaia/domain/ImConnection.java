@@ -17,6 +17,7 @@ import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import org.springframework.util.StringUtils;
 import java.time.Instant;
 
 /**
@@ -71,7 +72,7 @@ public class ImConnection {
     /** The structured connection config parsed on demand; malformed JSON fails fast. */
     public JsonNode configJson(JsonMapper mapper) {
         try {
-            return mapper.readTree(config == null || config.isBlank() ? "{}" : config);
+            return mapper.readTree(!StringUtils.hasText(config) ? "{}" : config);
         } catch (DatabindException failure) {
             throw new IllegalStateException("im_connection " + platform + "/" + name
                     + " has malformed config JSON.", failure);

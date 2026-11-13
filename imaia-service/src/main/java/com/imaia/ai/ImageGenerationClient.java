@@ -8,13 +8,14 @@ import tools.jackson.databind.node.ObjectNode;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.time.Duration;
+import org.springframework.util.StringUtils;
 import java.util.Base64;
 
 /**
  * Image generation over the OpenAI images protocol (POST /images/generations),
- * resolved from the model directory by protocol openai-images. Handles both reply
+ * resolved from the catalog's image-generation slot. Handles both reply
  * shapes: b64_json inline bytes and url (downloaded without auth). The size travels
- * in the model\u0027s params.
+ * in the model's params.
  */
 @Component
 public class ImageGenerationClient extends AbstractAiHttpClient {
@@ -34,7 +35,7 @@ public class ImageGenerationClient extends AbstractAiHttpClient {
         body.put("model", image.id());
         body.put("prompt", prompt);
         String size = image.param("size");
-        if (size != null && !size.isBlank()) {
+        if (StringUtils.hasText(size)) {
             body.put("size", size);
         }
         HttpRequest request = baseRequest(

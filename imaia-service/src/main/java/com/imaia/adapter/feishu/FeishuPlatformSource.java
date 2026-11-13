@@ -19,6 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.util.StringUtils;
 import java.util.function.Consumer;
 
 /**
@@ -138,6 +139,6 @@ public class FeishuPlatformSource implements PlatformSource {
     }
 
     private static boolean blank(String value) {
-        return value == null || value.isBlank();
+        return !StringUtils.hasText(value);
     }
 }

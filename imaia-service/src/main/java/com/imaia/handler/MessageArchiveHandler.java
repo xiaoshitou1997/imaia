@@ -1,5 +1,8 @@
 package com.imaia.handler;
 
+import com.imaia.domain.ConversationKind;
+import com.imaia.domain.MessageOrigin;
+import com.imaia.domain.MessageDirection;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImEvent;
@@ -14,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import org.springframework.util.StringUtils;
 import java.time.Instant;
 
 /**
@@ -56,7 +60,7 @@ public class MessageArchiveHandler implements ImEventHandler {
                 .findByConnectionIdAndExternalId(connectionId, externalId)
                 .orElseGet(() -> conversations.save(new ImConversation(connectionId, externalId, null,
                         adapter.isGroupConversation(externalId)
-                                ? ImConversation.KIND_GROUP : ImConversation.KIND_DIRECT,
+                                ? ConversationKind.GROUP : ConversationKind.DIRECT,
                         now, now, now)));
         conversation.setLastSeenAt(now);
         conversations.save(conversation);
@@ -70,8 +74,8 @@ public class MessageArchiveHandler implements ImEventHandler {
             return;
         }
         ImMessage archived = new ImMessage(conversation.getId(), fetched.messageId(), fetched.senderId(),
-                fetched.senderName(), fetched.direction(), fetched.platformType(), fetched.category(),
-                fetched.mentioned(), fetched.origin(), fetched.body(), fetched.createdAt());
+                fetched.senderName(), MessageDirection.fromValue(fetched.direction()), fetched.platformType(), fetched.category(),
+                fetched.mentioned(), MessageOrigin.fromValue(fetched.origin()), fetched.body(), fetched.createdAt());
         archived.setRaw(fetched.raw());
         repository.save(archived);
         touchMember(conversation, fetched, now);
@@ -79,8 +83,8 @@ public class MessageArchiveHandler implements ImEventHandler {
 
     /** Best-effort group member snapshot refresh. Never blocks archiving. */
     private void touchMember(ImConversation conversation, ImAdapter.FetchedMessage fetched, Instant now) {
-        if (!ImConversation.KIND_GROUP.equals(conversation.getKind())
-                || fetched.senderId() == null || fetched.senderId().isBlank()) {
+        if (conversation.getKind() != ConversationKind.GROUP
+                || !StringUtils.hasText(fetched.senderId())) {
             return;
         }
         try {
@@ -88,8 +92,7 @@ public class MessageArchiveHandler implements ImEventHandler {
                     .findByConversationIdAndMemberExternalId(conversation.getId(), fetched.senderId())
                     .orElseGet(() -> members.save(new GroupMember(conversation.getId(), fetched.senderId(),
                             fetched.senderName(), now)));
-            if (member.getDisplayName() == null && fetched.senderName() != null
-                    && !fetched.senderName().isBlank()) {
+            if (member.getDisplayName() == null && StringUtils.hasText(fetched.senderName())) {
                 member.setDisplayName(fetched.senderName());
             }
             member.setLastSeenAt(now);

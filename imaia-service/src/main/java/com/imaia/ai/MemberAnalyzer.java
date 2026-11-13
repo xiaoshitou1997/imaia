@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import com.imaia.domain.MessageDirection;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ImMessage;
@@ -13,6 +14,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import org.springframework.util.StringUtils;
 import java.util.List;
 
 /**
@@ -29,14 +31,14 @@ public class MemberAnalyzer {
             .withZone(ZoneId.systemDefault());
 
     private final ImMessageRepository messages;
-    private final MemberAnalysisRepository analyses;
+    private final MemberAnalysisRepository memberAnalyses;
     private final OpenAiChatCompletion chatCompletion;
     private final AiModelCatalog catalog;
 
-    public MemberAnalyzer(ImMessageRepository messages, MemberAnalysisRepository analyses,
+    public MemberAnalyzer(ImMessageRepository messages, MemberAnalysisRepository memberAnalyses,
             OpenAiChatCompletion chatCompletion, AiModelCatalog catalog) {
         this.messages = messages;
-        this.analyses = analyses;
+        this.memberAnalyses = memberAnalyses;
         this.chatCompletion = chatCompletion;
         this.catalog = catalog;
     }
@@ -51,7 +53,7 @@ public class MemberAnalyzer {
         List<ImMessage> found = new ArrayList<>(messages
                 .findTop100ByConversationIdAndSenderIdOrderByArchivedAtDesc(
                         conversation.getId(), memberExternalId));
-        if (found.isEmpty() && memberName != null && !memberName.isBlank()) {
+        if (found.isEmpty() && StringUtils.hasText(memberName)) {
             found.addAll(messages
                     .findTop100ByConversationIdAndSenderNameContainingIgnoreCaseOrderByArchivedAtDesc(
                             conversation.getId(), memberName.strip()));
@@ -65,8 +67,8 @@ public class MemberAnalyzer {
         for (ImMessage message : found.reversed()) {
             String line = "[" + (message.getCreatedAt() == null ? "?"
                     : TIME.format(message.getCreatedAt()))
-                    + " " + (ImMessage.DIRECTION_OUTGOING.equals(message.getDirection()) ? "我" : "对方")
-                    + "] " + (message.getBody() == null || message.getBody().isBlank()
+                    + " " + (message.getDirection() == MessageDirection.OUTGOING ? "我" : "对方")
+                    + "] " + (!StringUtils.hasText(message.getBody())
                     ? "(" + message.getCategory().value() + " 类消息)"
                     : message.getBody());
             if (context.length() + line.length() > MAX_CONTEXT_CHARS) {
@@ -77,7 +79,7 @@ public class MemberAnalyzer {
         if (context.isEmpty()) {
             return null;
         }
-        String label = memberName == null || memberName.isBlank()
+        String label = !StringUtils.hasText(memberName)
                 ? memberExternalId : memberName + "（ID: " + memberExternalId + "）";
         String prompt = "以下是「" + label + "」在本会话中的历史消息：\n\n" + context
                 + "\n\n请基于这些记录分析这个成员：性格特点、兴趣爱好、近期在关注什么、说话风格，以及与主人的互动方式。"
@@ -94,7 +96,7 @@ public class MemberAnalyzer {
                 List.of(), prompt, null, null).strip();
         int messageCount = found.size();
         Instant now = Instant.now();
-        MemberAnalysis analysis = analyses
+        MemberAnalysis analysis = memberAnalyses
                 .findByConversationIdAndMemberExternalId(conversation.getId(), memberExternalId)
                 .orElseGet(() -> new MemberAnalysis(conversation.getId(), memberExternalId,
                         memberName, profile, messageCount, modelId, now));
@@ -102,6 +104,6 @@ public class MemberAnalyzer {
         analysis.setMessageCount(messageCount);
         analysis.setModelId(modelId);
         analysis.setGeneratedAt(now);
-        return analyses.save(analysis);
+        return memberAnalyses.save(analysis);
     }
 }

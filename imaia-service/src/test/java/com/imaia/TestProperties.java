@@ -1,11 +1,14 @@
 package com.imaia;
 
+import java.util.Optional;
 import com.imaia.adapter.wechat.WechatAccountConfig;
 import com.imaia.adapter.wechat.WechatConnection;
 import com.imaia.ai.AssistantSettingsService;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.config.DispatchProperties;
 import com.imaia.domain.AiModel;
+import com.imaia.domain.ConversationKind;
+import com.imaia.domain.ModelSource;
 import com.imaia.domain.AiProvider;
 import com.imaia.domain.AssistantSettings;
 import com.imaia.domain.ImConnection;
@@ -47,7 +50,7 @@ public final class TestProperties {
 
     public static ImConversation imConversation(long id, String externalId) {
         ImConversation conversation = new ImConversation(1L, externalId, null,
-                ImConversation.KIND_DIRECT, Instant.now(), Instant.now(), Instant.now());
+                ConversationKind.DIRECT, Instant.now(), Instant.now(), Instant.now());
         conversation.setId(id);
         return conversation;
     }
@@ -73,7 +76,7 @@ public final class TestProperties {
         model.setToolCall(toolCall);
         model.setLimitOutput(limitOutput);
         model.setParams(json(params));
-        model.setSource(AiModel.SOURCE_SYNC);
+        model.setSource(ModelSource.SYNC);
         model.setAvailable(true);
         model.setEnabled(true);
         return model;
@@ -133,7 +136,7 @@ public final class TestProperties {
 
     public static AssistantSettingsService settingsService(AssistantSettings settings) {
         AssistantSettingsRepository repository = Mockito.mock(AssistantSettingsRepository.class);
-        Mockito.when(repository.findById(1)).thenReturn(java.util.Optional.of(settings));
+        Mockito.when(repository.findById(1)).thenReturn(Optional.of(settings));
         Mockito.when(repository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
         return new AssistantSettingsService(repository);
     }

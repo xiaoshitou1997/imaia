@@ -1,9 +1,11 @@
 package com.imaia.ai;
 
+import com.imaia.domain.TaskStatus;
+import com.imaia.domain.TaskKind;
+import com.imaia.domain.ReportPeriod;
 import com.imaia.adapter.DuplicateSendException;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
-import com.imaia.domain.ConversationReport;
 import com.imaia.domain.ImConnection;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ScheduledTask;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.util.StringUtils;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -88,9 +91,9 @@ public class ScheduledTaskRunner implements Runnable {
         Instant now = Instant.now();
         List<ScheduledTask> due = new ArrayList<>(
                 tasks.findTop20ByStatusAndFireAtLessThanEqualOrderByFireAtAsc(
-                        ScheduledTask.STATUS_PENDING, now));
+                        TaskStatus.PENDING, now));
         due.addAll(tasks.findTop20ByStatusAndNextFireAtLessThanEqualOrderByNextFireAtAsc(
-                ScheduledTask.STATUS_PENDING, now));
+                TaskStatus.PENDING, now));
         for (ScheduledTask task : due) {
             fire(task);
         }
@@ -117,7 +120,7 @@ public class ScheduledTaskRunner implements Runnable {
             retryOrFail(task, failure.getMessage());
             return;
         }
-        if (text == null || text.isBlank()) {
+        if (!StringUtils.hasText(text)) {
             fail(task, "任务没有产生可发送内容。");
             return;
         }
@@ -131,13 +134,13 @@ public class ScheduledTaskRunner implements Runnable {
             return;
         }
         task.setLastFiredAt(Instant.now());
-        boolean recurring = !ScheduledTask.KIND_REMINDER.equals(task.getKind())
-                && task.getCron() != null && !task.getCron().isBlank();
+        boolean recurring = TaskKind.REMINDER != task.getKind()
+                && StringUtils.hasText(task.getCron());
         if (recurring) {
             task.setNextFireAt(CronExpression.parse(task.getCron()).next(Instant.now()));
             tasks.save(task);
         } else {
-            task.setStatus(ScheduledTask.STATUS_DONE);
+            task.setStatus(TaskStatus.DONE);
             tasks.save(task);
         }
         log.info("Task {} ({}) fired to conversation {}.", task.getId(), task.getKind(),
@@ -147,11 +150,11 @@ public class ScheduledTaskRunner implements Runnable {
     /** Produces the outgoing text for one task kind. */
     private String produce(ScheduledTask task, ImConversation conversation) {
         return switch (task.getKind()) {
-            case ScheduledTask.KIND_REMINDER -> task.getContent();
-            case ScheduledTask.KIND_CRON -> hasText(task.getPrompt())
+            case REMINDER -> task.getContent();
+            case CRON -> hasText(task.getPrompt())
                     ? chatService.completeOnce(conversation, task.getPrompt())
                     : task.getContent();
-            case ScheduledTask.KIND_REPORT -> insightService
+            case REPORT -> insightService
                     .summarize(insightService.generateReport(conversation, reportPeriod(task)));
             default -> throw new IllegalStateException("未知任务类型 " + task.getKind() + "。");
         };
@@ -159,8 +162,8 @@ public class ScheduledTaskRunner implements Runnable {
 
     /** Recurring tasks stay pending with the error recorded; one-shots turn failed. */
     private void retryOrFail(ScheduledTask task, String message) {
-        boolean recurring = !ScheduledTask.KIND_REMINDER.equals(task.getKind())
-                && task.getCron() != null && !task.getCron().isBlank();
+        boolean recurring = TaskKind.REMINDER != task.getKind()
+                && StringUtils.hasText(task.getCron());
         if (recurring) {
             task.setLastError(message);
             tasks.save(task);
@@ -172,25 +175,25 @@ public class ScheduledTaskRunner implements Runnable {
     }
 
     private void fail(ScheduledTask task, String message) {
-        task.setStatus(ScheduledTask.STATUS_FAILED);
+        task.setStatus(TaskStatus.FAILED);
         task.setLastError(message);
         tasks.save(task);
         log.warn("Task {} marked failed: {}", task.getId(), message);
     }
 
     /** Report period from the task params JSON, defaulting to week. */
-    private String reportPeriod(ScheduledTask task) {
+    private ReportPeriod reportPeriod(ScheduledTask task) {
         try {
             var node = tools.jackson.databind.json.JsonMapper.builder().build()
-                    .readTree(task.getParams() == null || task.getParams().isBlank() ? "{}" : task.getParams());
-            String period = node.path("periodType").asString(ConversationReport.PERIOD_WEEK);
+                    .readTree(!StringUtils.hasText(task.getParams()) ? "{}" : task.getParams());
+            ReportPeriod period = ReportPeriod.fromValue(node.path("periodType").asString("week"));
             return switch (period) {
-                case ConversationReport.PERIOD_MONTH -> ConversationReport.PERIOD_MONTH;
-                case ConversationReport.PERIOD_YEAR -> ConversationReport.PERIOD_YEAR;
-                default -> ConversationReport.PERIOD_WEEK;
+                case MONTH -> ReportPeriod.MONTH;
+                case YEAR -> ReportPeriod.YEAR;
+                default -> ReportPeriod.WEEK;
             };
         } catch (RuntimeException failure) {
-            return ConversationReport.PERIOD_WEEK;
+            return ReportPeriod.WEEK;
         }
     }
 
@@ -200,6 +203,6 @@ public class ScheduledTaskRunner implements Runnable {
     }
 
     private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return StringUtils.hasText(value);
     }
 }

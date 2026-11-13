@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
+import org.springframework.util.StringUtils;
 import java.util.Map;
 
 /**
@@ -348,7 +349,7 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     private static Instant parseMillis(String epochMillis) {
-        if (epochMillis == null || epochMillis.isBlank()) {
+        if (!StringUtils.hasText(epochMillis)) {
             return Instant.now();
         }
         try {
@@ -359,6 +360,6 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     private static boolean blank(String value) {
-        return value == null || value.isBlank();
+        return !StringUtils.hasText(value);
     }
 }

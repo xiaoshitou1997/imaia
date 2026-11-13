@@ -1,9 +1,13 @@
 package com.imaia.web;
 
+import com.imaia.domain.ChatRole;
 import com.imaia.ai.MemberAnalyzer;
+import com.imaia.domain.ConversationKind;
 import com.imaia.domain.ImConnection;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ImMessage;
+import com.imaia.domain.MessageDirection;
+import com.imaia.domain.MessageOrigin;
 import com.imaia.domain.MemberAnalysis;
 import com.imaia.repository.AiMessageRepository;
 import com.imaia.repository.GroupMemberRepository;
@@ -22,8 +26,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.NoSuchElementException;
+import org.springframework.util.StringUtils;
 import java.util.Map;
 
 /** 统一收件箱：会话目录、归档消息、上下文流、成员快照与画像、跨线检索。 */
@@ -35,34 +40,34 @@ public class ConversationController {
     private final ImMessageRepository messages;
     private final AiMessageRepository aiMessages;
     private final GroupMemberRepository members;
-    private final MemberAnalysisRepository analyses;
+    private final MemberAnalysisRepository memberAnalyses;
     private final ImConnectionRepository connections;
     private final ConversationLabels labels;
     private final MemberAnalyzer memberAnalyzer;
 
     public ConversationController(ImConversationRepository conversations, ImMessageRepository messages,
-            AiMessageRepository aiMessages, GroupMemberRepository members, MemberAnalysisRepository analyses,
+            AiMessageRepository aiMessages, GroupMemberRepository members, MemberAnalysisRepository memberAnalyses,
             ImConnectionRepository connections, ConversationLabels labels, MemberAnalyzer memberAnalyzer) {
         this.conversations = conversations;
         this.messages = messages;
         this.aiMessages = aiMessages;
         this.members = members;
-        this.analyses = analyses;
+        this.memberAnalyses = memberAnalyses;
         this.connections = connections;
         this.labels = labels;
         this.memberAnalyzer = memberAnalyzer;
     }
 
-    public record ConversationRow(Long id, String externalId, String displayName, String kind, String persona,
+    public record ConversationRow(Long id, String externalId, String displayName, ConversationKind kind, String persona,
             boolean autoreply, Instant lastSeenAt, Long connectionId, String platform, String connectionName,
             long messageCount) {
     }
 
-    public record MessageRow(Long id, String messageId, String senderId, String senderName, String direction,
-            String category, boolean mentioned, String origin, String body, Instant archivedAt) {
+    public record MessageRow(Long id, String messageId, String senderId, String senderName, MessageDirection direction,
+            String category, boolean mentioned, MessageOrigin origin, String body, Instant archivedAt) {
     }
 
-    public record AiMessageRow(Long id, String role, String content, String toolName, Instant createdAt) {
+    public record AiMessageRow(Long id, ChatRole role, String content, String toolName, Instant createdAt) {
     }
 
     public record ConversationUpdate(String displayName, String remark, String persona, Boolean autoreply) {
@@ -79,9 +84,14 @@ public class ConversationController {
             Integer messageCount, Instant generatedAt) {
     }
 
+    /** One cross-conversation search hit with its conversation label. */
+    public record SearchHit(Long id, Long conversationId, String conversationLabel, String senderId,
+            String senderName, String category, String body, Instant archivedAt) {
+    }
+
     @GetMapping
-    public Map<String, Object> list(@RequestParam(required = false) String query) {
-        List<ImConversation> list = query == null || query.isBlank()
+    public ApiEnvelope<List<ConversationRow>> list(@RequestParam(required = false) String query) {
+        List<ImConversation> list = !StringUtils.hasText(query)
                 ? conversations.findTop200ByOrderByLastSeenAtDesc()
                 : conversations.findTop50ByDisplayNameContainingIgnoreCaseOrExternalIdContainingIgnoreCaseOrderByLastSeenAtDesc(
                         query.strip(), query.strip());
@@ -99,7 +109,7 @@ public class ConversationController {
     }
 
     @PutMapping("/{id}")
-    public Map<String, Object> update(@PathVariable Long id, @RequestBody ConversationUpdate body) {
+    public ApiEnvelope<Long> update(@PathVariable Long id, @RequestBody ConversationUpdate body) {
         ImConversation conversation = requireConversation(id);
         if (body.displayName() != null) {
             conversation.setDisplayName(body.displayName().isBlank() ? null : body.displayName().strip());
@@ -118,11 +128,11 @@ public class ConversationController {
     }
 
     @GetMapping("/{id}/messages")
-    public Map<String, Object> messages(@PathVariable Long id,
+    public ApiEnvelope<List<MessageRow>> messages(@PathVariable Long id,
             @RequestParam(required = false) String keyword) {
         requireConversation(id);
         List<ImMessage> recent = messages.findTop200ByConversationIdOrderByArchivedAtDesc(id);
-        if (keyword != null && !keyword.isBlank()) {
+        if (StringUtils.hasText(keyword)) {
             String needle = keyword.strip();
             recent = recent.stream().filter(message -> message.getBody() != null
                     && message.getBody().contains(needle)).toList();
@@ -134,7 +144,7 @@ public class ConversationController {
     }
 
     @GetMapping("/{id}/ai-messages")
-    public Map<String, Object> aiMessages(@PathVariable Long id) {
+    public ApiEnvelope<List<AiMessageRow>> aiMessages(@PathVariable Long id) {
         requireConversation(id);
         return ApiEnvelope.ok(aiMessages.findByConversationIdInOrderByCreatedAtDesc(List.of(id)).stream()
                 .map(message -> new AiMessageRow(message.getId(), message.getRole(), message.getContent(),
@@ -143,9 +153,9 @@ public class ConversationController {
     }
 
     @GetMapping("/{id}/members")
-    public Map<String, Object> members(@PathVariable Long id) {
+    public ApiEnvelope<List<MemberRow>> members(@PathVariable Long id) {
         requireConversation(id);
-        List<String> analyzedIds = analyses.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
+        List<String> analyzedIds = memberAnalyses.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
                 .map(MemberAnalysis::getMemberExternalId).toList();
         return ApiEnvelope.ok(members.findTop200ByConversationIdOrderByLastSeenAtDesc(id).stream()
                 .map(member -> new MemberRow(member.getId(), member.getMemberExternalId(),
@@ -155,47 +165,39 @@ public class ConversationController {
     }
 
     @PostMapping("/{id}/analysis")
-    public Map<String, Object> runAnalysis(@PathVariable Long id, @RequestBody AnalysisRequest body) {
+    public ApiEnvelope<AnalysisRow> runAnalysis(@PathVariable Long id, @RequestBody AnalysisRequest body) {
         ImConversation conversation = requireConversation(id);
-        if (body.memberExternalId() == null || body.memberExternalId().isBlank()) {
+        if (!StringUtils.hasText(body.memberExternalId())) {
             throw new IllegalArgumentException("memberExternalId 不能为空。");
         }
         MemberAnalysis analysis = memberAnalyzer.analyzeMember(conversation,
                 body.memberExternalId().strip(), body.memberName());
         if (analysis == null) {
-            throw new java.util.NoSuchElementException("归档里没有该成员的消息，无法分析。");
+            throw new NoSuchElementException("归档里没有该成员的消息，无法分析。");
         }
         return ApiEnvelope.ok(toAnalysisRow(analysis));
     }
 
     @GetMapping("/{id}/analysis")
-    public Map<String, Object> analysis(@PathVariable Long id) {
+    public ApiEnvelope<List<AnalysisRow>> analysis(@PathVariable Long id) {
         requireConversation(id);
-        return ApiEnvelope.ok(analyses.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
+        return ApiEnvelope.ok(memberAnalyses.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
                 .map(this::toAnalysisRow).toList());
     }
 
     @GetMapping("/search")
-    public Map<String, Object> searchMessages(@RequestParam String keyword) {
-        if (keyword == null || keyword.isBlank()) {
+    public ApiEnvelope<List<SearchHit>> searchMessages(@RequestParam String keyword) {
+        if (!StringUtils.hasText(keyword)) {
             throw new IllegalArgumentException("keyword 不能为空。");
         }
-        Map<Long, ImConnection> connectionById = labels.connectionsById();
         Map<Long, String> conversationLabels = labels.labels();
         return ApiEnvelope.ok(messages.searchByBody(keyword.strip(), PageRequest.of(0, 50)).stream()
-                .map(message -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", message.getId());
-                    row.put("conversationId", message.getConversationId());
-                    row.put("conversationLabel", conversationLabels.getOrDefault(
-                            message.getConversationId(), String.valueOf(message.getConversationId())));
-                    row.put("senderId", message.getSenderId());
-                    row.put("senderName", message.getSenderName());
-                    row.put("category", message.getCategory().value());
-                    row.put("body", message.getBody());
-                    row.put("archivedAt", message.getArchivedAt());
-                    return row;
-                }).toList());
+                .map(message -> new SearchHit(message.getId(), message.getConversationId(),
+                        conversationLabels.getOrDefault(message.getConversationId(),
+                                String.valueOf(message.getConversationId())),
+                        message.getSenderId(), message.getSenderName(), message.getCategory().value(),
+                        message.getBody(), message.getArchivedAt()))
+                .toList());
     }
 
     private ImConversation requireConversation(Long id) {

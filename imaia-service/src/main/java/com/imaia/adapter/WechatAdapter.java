@@ -16,6 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
+import org.springframework.util.StringUtils;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -58,7 +59,7 @@ public class WechatAdapter implements ImAdapter {
     @Override
     public FetchedMessage fetchMessage(String messageId) {
         Message message = daemonClient.getMessage(messageId);
-        if (!message.id().equals(messageId) || message.threadId() == null || message.threadId().isBlank()) {
+        if (!message.id().equals(messageId) || !StringUtils.hasText(message.threadId())) {
             throw new DaemonContractException("Message identity drift: expected " + PLATFORM
                     + "/" + messageId + " but the saved message is " + message.id()
                     + "/" + message.threadId() + ".");
@@ -218,7 +219,7 @@ public class WechatAdapter implements ImAdapter {
     }
 
     private static Instant parseTime(String createdAt) {
-        if (createdAt == null || createdAt.isBlank()) {
+        if (!StringUtils.hasText(createdAt)) {
             return Instant.now();
         }
         try {

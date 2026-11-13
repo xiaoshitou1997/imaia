@@ -3,6 +3,7 @@ package com.imaia.web;
 import com.imaia.domain.ImConnection;
 import com.imaia.repository.ImConnectionRepository;
 import com.imaia.repository.ImConversationRepository;
+import com.imaia.repository.ImMessageRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -15,10 +16,10 @@ public class ConversationLabels {
 
     private final ImConnectionRepository connections;
     private final ImConversationRepository conversations;
-    private final com.imaia.repository.ImMessageRepository messages;
+    private final ImMessageRepository messages;
 
     public ConversationLabels(ImConnectionRepository connections, ImConversationRepository conversations,
-            com.imaia.repository.ImMessageRepository messages) {
+            ImMessageRepository messages) {
         this.connections = connections;
         this.conversations = conversations;
         this.messages = messages;

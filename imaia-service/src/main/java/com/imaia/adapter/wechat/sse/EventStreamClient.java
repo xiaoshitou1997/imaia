@@ -5,6 +5,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 
 /**
@@ -42,7 +43,7 @@ public class EventStreamClient {
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .retrieve()
                 .bodyToFlux(SSE_FRAMES)
-                .filter(frame -> frame.data() != null && !frame.data().isBlank())
+                .filter(frame -> StringUtils.hasText(frame.data()))
                 .map(decoder::decode);
     }
 }

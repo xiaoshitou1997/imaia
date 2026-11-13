@@ -2,6 +2,7 @@ package com.imaia.domain;
 
 import jakarta.persistence.AttributeConverter;
 
+import org.springframework.util.StringUtils;
 import java.util.Locale;
 
 /**
@@ -24,7 +25,7 @@ public enum MessageCategory {
 
     /** Maps a stored/API value; unknown or absent values degrade to OTHER. */
     public static MessageCategory fromValue(String value) {
-        if (value == null || value.isBlank()) {
+        if (!StringUtils.hasText(value)) {
             return OTHER;
         }
         try {

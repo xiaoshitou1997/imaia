@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -13,6 +14,7 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import org.springframework.util.StringUtils;
 import java.time.Instant;
 
 /**
@@ -30,15 +32,6 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ScheduledTask {
 
-    public static final String KIND_REMINDER = "reminder";
-    public static final String KIND_CRON = "cron";
-    public static final String KIND_REPORT = "report";
-    public static final String STATUS_PENDING = "pending";
-    public static final String STATUS_DONE = "done";
-    public static final String STATUS_CANCELLED = "cancelled";
-    public static final String STATUS_FAILED = "failed";
-    public static final String CREATED_BY_AI = "ai";
-    public static final String CREATED_BY_CONSOLE = "console";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,7 +42,8 @@ public class ScheduledTask {
 
     /** reminder | cron | report. */
     @Column(nullable = false)
-    private String kind;
+    @Convert(converter = TaskKind.Converter.class)
+    private TaskKind kind;
 
     @Column(columnDefinition = "text")
     private String content;
@@ -73,11 +67,13 @@ public class ScheduledTask {
     private Instant nextFireAt;
 
     @Column(nullable = false)
-    private String status;
+    @Convert(converter = TaskStatus.Converter.class)
+    private TaskStatus status;
 
     /** ai | console. */
     @Column(name = "created_by", nullable = false)
-    private String createdBy;
+    @Convert(converter = TaskCreator.Converter.class)
+    private TaskCreator createdBy;
 
     @Column(name = "source_ai_message_id")
     private Long sourceAiMessageId;
@@ -91,8 +87,8 @@ public class ScheduledTask {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    public ScheduledTask(Long conversationId, String kind, String content, String prompt,
-            Instant fireAt, String cron, String createdBy, Instant createdAt) {
+    public ScheduledTask(Long conversationId, TaskKind kind, String content, String prompt,
+            Instant fireAt, String cron, TaskCreator createdBy, Instant createdAt) {
         this.conversationId = conversationId;
         this.kind = kind;
         this.content = content;
@@ -100,8 +96,8 @@ public class ScheduledTask {
         this.params = "{}";
         this.fireAt = fireAt;
         this.cron = cron;
-        this.nextFireAt = cron == null || cron.isBlank() ? null : fireAt;
-        this.status = STATUS_PENDING;
+        this.nextFireAt = !StringUtils.hasText(cron) ? null : fireAt;
+        this.status = TaskStatus.PENDING;
         this.createdBy = createdBy;
         this.createdAt = createdAt;
     }

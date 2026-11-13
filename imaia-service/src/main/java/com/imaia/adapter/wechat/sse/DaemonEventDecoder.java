@@ -5,6 +5,7 @@ import com.imaia.adapter.wechat.daemon.DaemonContractException;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -34,7 +35,7 @@ public class DaemonEventDecoder {
      */
     public DaemonEvent decode(ServerSentEvent<String> frame) {
         String raw = frame.data();
-        if (raw == null || raw.isBlank()) {
+        if (!StringUtils.hasText(raw)) {
             return null;
         }
         JsonNode payload = jsonMapper.readTree(raw);
@@ -46,7 +47,7 @@ public class DaemonEventDecoder {
         }
         EventEnvelope envelope = jsonMapper.readValue(raw, EventEnvelope.class);
         String kind = envelope.kind();
-        if (kind == null || kind.isBlank()) {
+        if (!StringUtils.hasText(kind)) {
             throw new DaemonContractException("Event payload carries no kind.");
         }
         String cursor = firstNonBlank(envelope.cursor(), frame.id());
@@ -73,10 +74,10 @@ public class DaemonEventDecoder {
     }
 
     private static String firstNonBlank(String primary, String fallback) {
-        if (primary != null && !primary.isBlank()) {
+        if (StringUtils.hasText(primary)) {
             return primary;
         }
-        if (fallback != null && !fallback.isBlank()) {
+        if (StringUtils.hasText(fallback)) {
             return fallback;
         }
         return null;

@@ -1,6 +1,7 @@
 package com.imaia.repository;
 
 import com.imaia.domain.ConversationReport;
+import com.imaia.domain.ReportPeriod;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -10,7 +11,7 @@ import java.util.Optional;
 public interface ConversationReportRepository extends JpaRepository<ConversationReport, Long> {
 
     Optional<ConversationReport> findByConversationIdAndPeriodTypeAndPeriodStart(
-            Long conversationId, String periodType, LocalDate periodStart);
+            Long conversationId, ReportPeriod periodType, LocalDate periodStart);
 
     /** The reports of one conversation, newest first. */
     List<ConversationReport> findTop50ByConversationIdOrderByPeriodStartDesc(Long conversationId);

@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.function.Function;
 
+import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriBuilder;
 
 /**
@@ -57,7 +58,7 @@ public class DaemonClient {
 
     private String resolveAccountId() {
         String configured = connection.config().account();
-        if (configured != null && !configured.isBlank()) {
+        if (StringUtils.hasText(configured)) {
             return configured.trim();
         }
         JsonNode response = getJson(builder -> builder.path("/v1/accounts").build(), "accounts");

@@ -9,13 +9,14 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
+import org.springframework.util.StringUtils;
 import java.time.Duration;
 
 /**
  * Video generation over the Agnes task API: create a task (POST /videos), poll
  * its status (GET /agnesapi?video_id=…&model_name=…) until completed, then download
- * the finished MP4 from the task\u0027s url field. The model comes from the directory by
- * protocol openai-video; seconds and aspect ratio travel in its params.
+ * the finished MP4 from the task's url field. The model comes from the catalog's
+ * video-generation slot; seconds and aspect ratio travel in its params.
  */
 @Component
 public class VideoGenerationClient extends AbstractAiHttpClient {
@@ -97,6 +98,6 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
     }
 
     private static String orDefault(String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value;
+        return !StringUtils.hasText(value) ? fallback : value;
     }
 }

@@ -23,6 +23,7 @@ import org.springframework.util.MimeType;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import org.springframework.util.StringUtils;
 import java.util.List;
 
 /**
@@ -72,7 +73,7 @@ public class OpenAiChatCompletion {
         OpenAiChatModel chatModel = chatModels.forProvider(
                 brain.providerName(), brain.baseUrl(), brain.apiKey());
         List<Message> messages = new ArrayList<>();
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
+        if (StringUtils.hasText(systemPrompt)) {
             messages.add(new SystemMessage(systemPrompt));
         }
         for (Turn turn : history) {
@@ -117,7 +118,7 @@ public class OpenAiChatCompletion {
             response = chatModel.call(new Prompt(messages, runtimeOptions));
         }
         String reply = response.getResult().getOutput().getText();
-        if (reply == null || reply.isBlank()) {
+        if (!StringUtils.hasText(reply)) {
             throw new IllegalStateException("Chat endpoint returned no text content.");
         }
         logCall(brain, start, response, true, null);

@@ -1,5 +1,7 @@
 package com.imaia.web;
 
+import com.imaia.domain.ModelSource;
+import com.imaia.ai.ModelSyncService;
 import com.imaia.ai.ModelSyncService;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.AiModel;
@@ -14,13 +16,15 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import org.springframework.util.StringUtils;
+import java.util.List;
 
 /**
  * AI 接入商与模型目录：接入商 CRUD（api_key 掩码）、/v1/models 同步、
@@ -30,7 +34,6 @@ import java.util.Map;
 @RequestMapping("/api/ai-providers")
 public class AiProviderController {
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final String MASK = "••••••••";
 
     private final AiProviderRepository providers;
@@ -49,7 +52,7 @@ public class AiProviderController {
     public record ModelRow(Long id, String modelId, String name, String description, String modalitiesIn,
             String modalitiesOut, boolean vision, boolean reasoning, boolean toolCall, Integer limitContext,
             Integer limitOutput, java.math.BigDecimal costInput, java.math.BigDecimal costOutput, String params,
-            boolean available, boolean enabled, String source, String syncedAt) {
+            boolean available, boolean enabled, ModelSource source, String syncedAt) {
     }
 
     public record ProviderRow(Long id, String name, String baseUrl, String apiKey, boolean enabled,
@@ -57,6 +60,10 @@ public class AiProviderController {
     }
 
     public record ProviderCreate(String name, String baseUrl, String apiKey, Boolean enabled, String modelsDevId) {
+    }
+
+    /** Create result: the persisted row plus the human-readable sync note. */
+    public record CreatedProvider(ProviderRow provider, String sync) {
     }
 
     public record ProviderUpdate(String baseUrl, String apiKey, Boolean enabled, String modelsDevId) {
@@ -68,7 +75,7 @@ public class AiProviderController {
     }
 
     @GetMapping
-    public Map<String, Object> list() {
+    public ApiEnvelope<List<ProviderRow>> list() {
         Map<Long, List<ModelRow>> modelsByProvider = new HashMap<>();
         for (AiModel model : aiModels.findAll()) {
             modelsByProvider.computeIfAbsent(model.getProviderId(), key -> new ArrayList<>())
@@ -83,11 +90,11 @@ public class AiProviderController {
     }
 
     @PostMapping
-    public Map<String, Object> create(@RequestBody ProviderCreate body) {
+    public ApiEnvelope<CreatedProvider> create(@RequestBody ProviderCreate body) {
         requireText(body.name(), "name");
         requireText(body.baseUrl(), "baseUrl");
         AiProvider provider = new AiProvider(body.name().strip(), body.baseUrl().strip(),
-                body.apiKey(), com.imaia.web.Clock.now());
+                body.apiKey(), Clock.now());
         provider.setModelsDevId(blankToNull(body.modelsDevId()));
         AiProvider saved = providers.save(provider);
         String syncNote = "未同步";
@@ -98,16 +105,14 @@ public class AiProviderController {
             syncNote = "保存成功，但同步失败：" + failure.getMessage();
         }
         catalog.invalidate();
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("provider", toRow(providers.findById(saved.getId()).orElseThrow()));
-        data.put("sync", syncNote);
-        return ApiEnvelope.ok(data);
+        return ApiEnvelope.ok(new CreatedProvider(
+                toRow(providers.findById(saved.getId()).orElseThrow()), syncNote));
     }
 
     @PutMapping("/{id}")
-    public Map<String, Object> update(@PathVariable Long id, @RequestBody ProviderUpdate body) {
+    public ApiEnvelope<ProviderRow> update(@PathVariable Long id, @RequestBody ProviderUpdate body) {
         AiProvider provider = providers.findById(id).orElseThrow();
-        if (body.baseUrl() != null && !body.baseUrl().isBlank()) {
+        if (StringUtils.hasText(body.baseUrl())) {
             provider.setBaseUrl(body.baseUrl().strip());
         }
         if (body.apiKey() != null && !MASK.equals(body.apiKey())) {
@@ -125,7 +130,7 @@ public class AiProviderController {
     }
 
     @DeleteMapping("/{id}")
-    public Map<String, Object> delete(@PathVariable Long id) {
+    public ApiEnvelope<String> delete(@PathVariable Long id) {
         providers.findById(id).orElseThrow();
         aiModels.deleteAll(aiModels.findByProviderIdOrderByModelIdAsc(id));
         providers.deleteById(id);
@@ -135,7 +140,7 @@ public class AiProviderController {
 
     /** 拉取 /v1/models 并同步目录；可用性以网关为准，本地标注不覆盖。 */
     @PostMapping("/{id}/sync-models")
-    public Map<String, Object> syncModels(@PathVariable Long id) {
+    public ApiEnvelope<ModelSyncService.SyncResult> syncModels(@PathVariable Long id) {
         AiProvider provider = providers.findById(id).orElseThrow();
         ModelSyncService.SyncResult result = syncService.sync(provider);
         catalog.invalidate();
@@ -144,13 +149,13 @@ public class AiProviderController {
 
     /** 手动登记一个同步目录里没有的模型（source=manual）。 */
     @PostMapping("/{id}/ai-models")
-    public Map<String, Object> addModel(@PathVariable Long id, @RequestBody ModelUpdate body) {
+    public ApiEnvelope<ModelRow> addModel(@PathVariable Long id, @RequestBody ModelUpdate body) {
         providers.findById(id).orElseThrow();
-        if (body.modelId() == null || body.modelId().isBlank()) {
+        if (!StringUtils.hasText(body.modelId())) {
             throw new IllegalArgumentException("modelId 不能为空。");
         }
         AiModel model = new AiModel(id, body.modelId().strip());
-        model.setSource(AiModel.SOURCE_MANUAL);
+        model.setSource(ModelSource.MANUAL);
         applyModelUpdate(model, body);
         model.setEnabled(body.enabled() == null || body.enabled());
         model.setAvailable(true);
@@ -160,7 +165,7 @@ public class AiProviderController {
     }
 
     @PutMapping("/ai-models/{id}")
-    public Map<String, Object> updateModel(@PathVariable Long id, @RequestBody ModelUpdate body) {
+    public ApiEnvelope<ModelRow> updateModel(@PathVariable Long id, @RequestBody ModelUpdate body) {
         AiModel model = aiModels.findById(id).orElseThrow();
         applyModelUpdate(model, body);
         if (body.enabled() != null) {
@@ -172,7 +177,7 @@ public class AiProviderController {
     }
 
     @DeleteMapping("/ai-models/{id}")
-    public Map<String, Object> deleteModel(@PathVariable Long id) {
+    public ApiEnvelope<String> deleteModel(@PathVariable Long id) {
         aiModels.findById(id).orElseThrow();
         aiModels.deleteById(id);
         catalog.invalidate();
@@ -204,14 +209,14 @@ public class AiProviderController {
         if (body.limitOutput() != null) {
             model.setLimitOutput(body.limitOutput());
         }
-        if (body.params() != null && !body.params().isBlank()) {
+        if (StringUtils.hasText(body.params())) {
             model.setParams(body.params().strip());
         }
     }
 
     /** "text,image" → ["text","image"] 的 JSON 文本。 */
     private String toJsonArray(String csv) {
-        List<String> items = java.util.Arrays.stream(csv.split(","))
+        List<String> items = Arrays.stream(csv.split(","))
                 .map(String::strip).filter(s -> !s.isEmpty()).toList();
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < items.size(); i++) {
@@ -240,15 +245,15 @@ public class AiProviderController {
     }
 
     private static String maskKey(String apiKey) {
-        return apiKey == null || apiKey.isBlank() ? "" : MASK;
+        return !StringUtils.hasText(apiKey) ? "" : MASK;
     }
 
     private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
+        return !StringUtils.hasText(value) ? null : value.strip();
     }
 
     private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
+        if (!StringUtils.hasText(value)) {
             throw new IllegalArgumentException(field + " 不能为空。");
         }
     }

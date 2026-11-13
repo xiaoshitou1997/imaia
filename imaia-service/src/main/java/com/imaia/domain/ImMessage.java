@@ -2,6 +2,7 @@ package com.imaia.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -32,10 +33,6 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ImMessage {
 
-    public static final String DIRECTION_INCOMING = "incoming";
-    public static final String DIRECTION_OUTGOING = "outgoing";
-    public static final String ORIGIN_HUMAN = "human";
-    public static final String ORIGIN_AI = "ai";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -53,8 +50,9 @@ public class ImMessage {
     @Column(name = "sender_name")
     private String senderName;
 
+    @Convert(converter = MessageDirection.Converter.class)
     @Column(nullable = false)
-    private String direction;
+    private MessageDirection direction;
 
     /** Platform-native type code (wechat only); other platforms leave it null. */
     @Column(name = "platform_type")
@@ -67,8 +65,9 @@ public class ImMessage {
     @Column(nullable = false)
     private boolean mentioned;
 
+    @Convert(converter = MessageOrigin.Converter.class)
     @Column(nullable = false)
-    private String origin;
+    private MessageOrigin origin;
 
     @Column
     private String body;
@@ -86,8 +85,8 @@ public class ImMessage {
     private Instant archivedAt;
 
     public ImMessage(Long conversationId, String messageId, String senderId, String senderName,
-            String direction, Integer platformType, MessageCategory category, boolean mentioned,
-            String origin, String body, Instant createdAt) {
+            MessageDirection direction, Integer platformType, MessageCategory category, boolean mentioned,
+            MessageOrigin origin, String body, Instant createdAt) {
         this.conversationId = conversationId;
         this.messageId = messageId;
         this.senderId = senderId;

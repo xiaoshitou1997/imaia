@@ -1,5 +1,7 @@
 package com.imaia.ai;
 
+import com.imaia.domain.TaskKind;
+import com.imaia.domain.TaskCreator;
 import com.imaia.domain.ScheduledTask;
 import com.imaia.repository.ScheduledTaskRepository;
 import org.springframework.ai.tool.ToolCallback;
@@ -60,8 +62,8 @@ class ScheduleReminderTool implements ToolCallback {
             return "schedule_reminder 失败：时间格式应为 yyyy-MM-dd HH:mm。";
         }
         Instant fireAt = remindAt.atZone(ZoneId.systemDefault()).toInstant();
-        tasks.save(new ScheduledTask(conversationId, ScheduledTask.KIND_REMINDER, content, null,
-                fireAt, null, ScheduledTask.CREATED_BY_AI, Instant.now()));
+        tasks.save(new ScheduledTask(conversationId, TaskKind.REMINDER, content, null,
+                fireAt, null, TaskCreator.AI, Instant.now()));
         return "提醒已设好：" + time + " 「" + content + "」。";
     }
 }

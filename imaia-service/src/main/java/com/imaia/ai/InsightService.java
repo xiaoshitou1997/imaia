@@ -1,5 +1,8 @@
 package com.imaia.ai;
 
+import com.imaia.domain.ReportPeriod;
+import com.imaia.domain.MessageOrigin;
+import com.imaia.domain.MessageDirection;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.ConversationReport;
 import com.imaia.domain.ImConversation;
@@ -25,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import org.springframework.util.StringUtils;
 import java.util.Map;
 
 /**
@@ -60,13 +64,13 @@ public class InsightService {
      * Returns the report digest, or null when the body is not a report command. */
     public String handleCommand(ImConversation conversation, String body) {
         String text = body.strip();
-        String period = null;
+        ReportPeriod period = null;
         if (text.contains("本周统计") || text.contains("周报")) {
-            period = ConversationReport.PERIOD_WEEK;
+            period = ReportPeriod.WEEK;
         } else if (text.contains("本月统计") || text.contains("月报")) {
-            period = ConversationReport.PERIOD_MONTH;
+            period = ReportPeriod.MONTH;
         } else if (text.contains("本年统计") || text.contains("年报")) {
-            period = ConversationReport.PERIOD_YEAR;
+            period = ReportPeriod.YEAR;
         }
         if (period == null) {
             return null;
@@ -81,7 +85,7 @@ public class InsightService {
     }
 
     /** Aggregates the period window, writes the AI评析 and upserts the report row. */
-    public ConversationReport generateReport(ImConversation conversation, String periodType) {
+    public ConversationReport generateReport(ImConversation conversation, ReportPeriod periodType) {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         LocalDate start = periodStart(today, periodType);
         LocalDate endExclusive = periodEndExclusive(start, periodType);
@@ -127,12 +131,12 @@ public class InsightService {
     /** The digest sent back to the group / returned to the console. */
     public String summarize(ConversationReport report) {
         String label = switch (report.getPeriodType()) {
-            case ConversationReport.PERIOD_MONTH -> "本月";
-            case ConversationReport.PERIOD_YEAR -> "本年";
+            case MONTH -> "本月";
+            case YEAR -> "本年";
             default -> "本周";
         };
         String head = "【" + label + "报告 " + report.getPeriodStart() + " 起】\n";
-        if (report.getAiReport() != null && !report.getAiReport().isBlank()) {
+        if (StringUtils.hasText(report.getAiReport())) {
             return head + report.getAiReport();
         }
         return head + "AI 评析暂不可用，统计已生成，请到控制台报表页查看。";
@@ -149,17 +153,17 @@ public class InsightService {
         Map<String, int[]> perMemberChars = new LinkedHashMap<>();
         Map<String, Integer> byDay = new LinkedHashMap<>();
         for (ImMessage message : window) {
-            if (ImMessage.DIRECTION_INCOMING.equals(message.getDirection())) {
+            if (message.getDirection() == MessageDirection.INCOMING) {
                 incoming++;
             }
-            if (ImMessage.ORIGIN_AI.equals(message.getOrigin())) {
+            if (message.getOrigin() == MessageOrigin.AI) {
                 aiOutgoing++;
             }
             if (message.getCategory() == MessageCategory.STICKER) {
                 stickers++;
             }
             String body = message.getBody();
-            if (body != null && !body.isBlank()) {
+            if (StringUtils.hasText(body)) {
                 textChars += body.codePointCount(0, body.length());
             }
             String key = message.getSenderId() == null ? "unknown" : message.getSenderId();
@@ -191,7 +195,7 @@ public class InsightService {
     }
 
     /** The writing prompt: stats JSON plus a recent-message excerpt. */
-    private String buildReportPrompt(String periodType, LocalDate start, LocalDate endExclusive,
+    private String buildReportPrompt(ReportPeriod periodType, LocalDate start, LocalDate endExclusive,
             String statsJson, List<ImMessage> window) {
         StringBuilder excerpt = new StringBuilder();
         int collected = 0;
@@ -199,11 +203,11 @@ public class InsightService {
         chronological.sort(Comparator.comparing(ImMessage::getArchivedAt,
                 Comparator.nullsLast(Comparator.naturalOrder())));
         for (ImMessage message : chronological.reversed()) {
-            if (message.getBody() == null || message.getBody().isBlank()) {
+            if (!StringUtils.hasText(message.getBody())) {
                 continue;
             }
-            String who = ImMessage.DIRECTION_OUTGOING.equals(message.getDirection())
-                    ? "我" : (message.getSenderName() != null && !message.getSenderName().isBlank()
+            String who = message.getDirection() == MessageDirection.OUTGOING
+                    ? "我" : (StringUtils.hasText(message.getSenderName())
                     ? message.getSenderName() : String.valueOf(message.getSenderId()));
             String line = "[" + DAY.format(message.getArchivedAt()) + " " + who + "] " + message.getBody();
             if (excerpt.length() + line.length() > SAMPLE_CHARS) {
@@ -220,32 +224,32 @@ public class InsightService {
                 + "简洁中文分段，不要罗列原始数字。";
     }
 
-    private static String periodLabel(String periodType) {
+    private static String periodLabel(ReportPeriod periodType) {
         return switch (periodType) {
-            case ConversationReport.PERIOD_MONTH -> "一个月";
-            case ConversationReport.PERIOD_YEAR -> "一年";
+            case MONTH -> "一个月";
+            case YEAR -> "一年";
             default -> "一周";
         };
     }
 
     /** The Monday / 1st / Jan-1st that contains the given date. */
-    public static LocalDate periodStart(LocalDate today, String periodType) {
+    public static LocalDate periodStart(LocalDate today, ReportPeriod periodType) {
         return switch (periodType) {
-            case ConversationReport.PERIOD_MONTH -> today.withDayOfMonth(1);
-            case ConversationReport.PERIOD_YEAR -> today.withDayOfYear(1);
+            case MONTH -> today.withDayOfMonth(1);
+            case YEAR -> today.withDayOfYear(1);
             default -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         };
     }
 
-    public static LocalDate periodEndExclusive(LocalDate start, String periodType) {
+    public static LocalDate periodEndExclusive(LocalDate start, ReportPeriod periodType) {
         return switch (periodType) {
-            case ConversationReport.PERIOD_MONTH -> start.plusMonths(1);
-            case ConversationReport.PERIOD_YEAR -> start.plusYears(1);
+            case MONTH -> start.plusMonths(1);
+            case YEAR -> start.plusYears(1);
             default -> start.plusWeeks(1);
         };
     }
 
     private static int chars(String body) {
-        return body == null || body.isBlank() ? 0 : body.codePointCount(0, body.length());
+        return !StringUtils.hasText(body) ? 0 : body.codePointCount(0, body.length());
     }
 }

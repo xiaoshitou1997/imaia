@@ -6,9 +6,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 
 /** 全局助理设置：默认提示词、历史窗口、护栏（总开关/@门控/静默时段）。 */
 @RestController
@@ -30,14 +30,14 @@ public class SettingsController {
     }
 
     @GetMapping
-    public Map<String, Object> get() {
+    public ApiEnvelope<SettingsRow> get() {
         return ApiEnvelope.ok(toRow(settings.current()));
     }
 
     @PutMapping
-    public Map<String, Object> update(@RequestBody SettingsUpdate body) {
+    public ApiEnvelope<SettingsRow> update(@RequestBody SettingsUpdate body) {
         AssistantSettings current = settings.current();
-        if (body.systemPrompt() != null && !body.systemPrompt().isBlank()) {
+        if (StringUtils.hasText(body.systemPrompt())) {
             current.setSystemPrompt(body.systemPrompt());
         }
         if (body.historyLimit() != null) {
@@ -52,10 +52,10 @@ public class SettingsController {
         if (body.quietHoursEnabled() != null) {
             current.setQuietHoursEnabled(body.quietHoursEnabled());
         }
-        if (body.quietHoursStart() != null && !body.quietHoursStart().isBlank()) {
+        if (StringUtils.hasText(body.quietHoursStart())) {
             current.setQuietHoursStart(body.quietHoursStart().strip());
         }
-        if (body.quietHoursEnd() != null && !body.quietHoursEnd().isBlank()) {
+        if (StringUtils.hasText(body.quietHoursEnd())) {
             current.setQuietHoursEnd(body.quietHoursEnd().strip());
         }
         if (body.enabled() != null) {

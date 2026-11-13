@@ -1,9 +1,9 @@
 package com.imaia.web;
 
+import java.time.Instant;
 import com.imaia.domain.ImConnection;
 import com.imaia.repository.ImConnectionRepository;
 import com.imaia.repository.ImConversationRepository;
-import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,8 +16,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import org.springframework.util.StringUtils;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 接入连接生命周期：新建、编辑（凭据掩码读写还原）、启停、删除（已有会话数据拒绝）。
@@ -41,7 +41,7 @@ public class ConnectionController {
     }
 
     public record ConnectionRow(Long id, String platform, String name, boolean enabled, String config,
-            java.time.Instant updatedAt) {
+            Instant updatedAt) {
     }
 
     public record ConnectionCreate(String platform, String name, Boolean enabled, JsonNode config) {
@@ -51,17 +51,17 @@ public class ConnectionController {
     }
 
     @GetMapping
-    public Map<String, Object> list() {
+    public ApiEnvelope<List<ConnectionRow>> list() {
         return ApiEnvelope.ok(connections.findAllByOrderByIdAsc().stream()
                 .map(this::toRow).toList());
     }
 
     @PostMapping
-    public Map<String, Object> create(@RequestBody ConnectionCreate body) {
+    public ApiEnvelope<ConnectionRow> create(@RequestBody ConnectionCreate body) {
         if (body.platform() == null || !PLATFORMS.contains(body.platform())) {
             throw new IllegalArgumentException("platform 必须是 " + PLATFORMS + " 之一。");
         }
-        if (body.name() == null || body.name().isBlank()) {
+        if (!StringUtils.hasText(body.name())) {
             throw new IllegalArgumentException("name 不能为空。");
         }
         ImConnection created = new ImConnection(body.platform(), body.name().strip(),
@@ -71,9 +71,9 @@ public class ConnectionController {
     }
 
     @PutMapping("/{id}")
-    public Map<String, Object> update(@PathVariable Long id, @RequestBody ConnectionUpdate body) {
+    public ApiEnvelope<ConnectionRow> update(@PathVariable Long id, @RequestBody ConnectionUpdate body) {
         ImConnection connection = connections.findById(id).orElseThrow();
-        if (body.name() != null && !body.name().isBlank()) {
+        if (StringUtils.hasText(body.name())) {
             connection.setName(body.name().strip());
         }
         if (body.enabled() != null) {
@@ -86,10 +86,10 @@ public class ConnectionController {
     }
 
     @DeleteMapping("/{id}")
-    public Map<String, Object> delete(@PathVariable Long id) {
+    public ApiEnvelope<String> delete(@PathVariable Long id) {
         connections.findById(id).orElseThrow();
         if (conversations.existsByConnectionId(id)) {
-            return ApiEnvelope.error(409, 409, "该连接已有会话数据，禁止删除；可改为停用。").getBody();
+            return ApiEnvelope.<String>error(409, 409, "该连接已有会话数据，禁止删除；可改为停用。").getBody();
         }
         connections.deleteById(id);
         return ApiEnvelope.ok("已删除");
@@ -103,7 +103,7 @@ public class ConnectionController {
     /** Secret values become the mask; a masked value written back restores the stored one. */
     private String maskConfig(String configJson) {
         try {
-            JsonNode config = MAPPER.readTree(configJson == null || configJson.isBlank() ? "{}" : configJson);
+            JsonNode config = MAPPER.readTree(!StringUtils.hasText(configJson) ? "{}" : configJson);
             if (config.isObject()) {
                 for (String key : SECRET_KEYS) {
                     if (config.has(key) && config.get(key).isString()
@@ -123,7 +123,7 @@ public class ConnectionController {
             throw new IllegalArgumentException("config 必须是 JSON 对象。");
         }
         ObjectNode merged = (ObjectNode) MAPPER.readTree(
-                existingJson == null || existingJson.isBlank() ? "{}" : existingJson);
+                !StringUtils.hasText(existingJson) ? "{}" : existingJson);
         for (var field : submitted.properties()) {
             String key = field.getKey();
             if (SECRET_KEYS.contains(key) && field.getValue().isString()

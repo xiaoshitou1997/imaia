@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -25,9 +26,6 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiMessage {
 
-    public static final String ROLE_USER = "user";
-    public static final String ROLE_ASSISTANT = "assistant";
-    public static final String ROLE_TOOL = "tool";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,7 +35,8 @@ public class AiMessage {
     private Long conversationId;
 
     @Column(nullable = false)
-    private String role;
+    @Convert(converter = ChatRole.Converter.class)
+    private ChatRole role;
 
     @Column(nullable = false, columnDefinition = "text")
     private String content;
@@ -51,11 +50,11 @@ public class AiMessage {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    public AiMessage(Long conversationId, String role, String content, String sourceMessageId, Instant createdAt) {
+    public AiMessage(Long conversationId, ChatRole role, String content, String sourceMessageId, Instant createdAt) {
         this(conversationId, role, content, sourceMessageId, null, createdAt);
     }
 
-    public AiMessage(Long conversationId, String role, String content, String sourceMessageId, String toolName,
+    public AiMessage(Long conversationId, ChatRole role, String content, String sourceMessageId, String toolName,
             Instant createdAt) {
         this.conversationId = conversationId;
         this.role = role;

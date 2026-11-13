@@ -1,5 +1,8 @@
 package com.imaia.ai;
 
+import com.imaia.domain.MemoryStatus;
+import com.imaia.domain.ConversationKind;
+import com.imaia.domain.ChatRole;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.domain.AiMessage;
 import com.imaia.domain.AiMemory;
@@ -16,6 +19,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.springframework.util.StringUtils;
 import java.util.Locale;
 
 /**
@@ -58,7 +62,7 @@ public class AiChatService {
                 .orElseGet(() -> conversations.save(new ImConversation(adapter.connection().getId(),
                         externalId, null,
                         adapter.isGroupConversation(externalId)
-                                ? ImConversation.KIND_GROUP : ImConversation.KIND_DIRECT,
+                                ? ConversationKind.GROUP : ConversationKind.DIRECT,
                         now, now, now)));
         conversation.setLastSeenAt(now);
         return conversations.save(conversation);
@@ -87,26 +91,26 @@ public class AiChatService {
         List<OpenAiChatCompletion.Turn> history = new ArrayList<>(aiMessages
                 .findRecentContext(conversation.getId(), PageRequest.of(0, limit)).stream()
                 .map(message -> new OpenAiChatCompletion.Turn(
-                        AiMessage.ROLE_ASSISTANT.equals(message.getRole()), message.getContent()))
+                        message.getRole() == ChatRole.ASSISTANT, message.getContent()))
                 .toList());
         Collections.reverse(history);
         OpenAiChatCompletion.ChatResult result = chatCompletion.complete(
                 buildSystemContext(conversation, groupContext), history,
                 userText, image, imageMimeType, chatTools.tools(conversation.getId(), generated));
         String reply = result.text();
-        if (reply == null || reply.isBlank()) {
+        if (!StringUtils.hasText(reply)) {
             throw new IllegalStateException("Gateway returned no text content on conversation "
                     + conversation.getId() + ".");
         }
         Instant now = Instant.now();
         List<AiMessage> rows = new ArrayList<>();
-        rows.add(new AiMessage(conversation.getId(), AiMessage.ROLE_USER, userText, sourceMessageId,
+        rows.add(new AiMessage(conversation.getId(), ChatRole.USER, userText, sourceMessageId,
                 now.minusMillis(1)));
         for (OpenAiChatCompletion.ToolExchange exchange : result.toolExchanges()) {
-            rows.add(new AiMessage(conversation.getId(), AiMessage.ROLE_TOOL, exchange.result(),
+            rows.add(new AiMessage(conversation.getId(), ChatRole.TOOL, exchange.result(),
                     null, exchange.toolName(), now));
         }
-        rows.add(new AiMessage(conversation.getId(), AiMessage.ROLE_ASSISTANT, reply, null, null, now));
+        rows.add(new AiMessage(conversation.getId(), ChatRole.ASSISTANT, reply, null, null, now));
         aiMessages.saveAll(rows);
         return new ChatReply(reply, List.copyOf(generated));
     }
@@ -119,7 +123,7 @@ public class AiChatService {
     public String completeOnce(ImConversation conversation, String instruction) {
         String reply = chatCompletion.complete(buildSystemContext(conversation, null),
                 List.of(), instruction, null, null);
-        if (reply == null || reply.isBlank()) {
+        if (!StringUtils.hasText(reply)) {
             throw new IllegalStateException("Chat endpoint returned no text on conversation "
                     + conversation.getId() + ".");
         }
@@ -130,15 +134,15 @@ public class AiChatService {
     private String buildSystemContext(ImConversation conversation, String groupContext) {
         StringBuilder system = new StringBuilder(settings.current().getSystemPrompt());
         system.append("\n\n当前时间：").append(LocalDateTime.now().format(TIME_DISPLAY));
-        if (conversation.getPersona() != null && !conversation.getPersona().isBlank()) {
+        if (StringUtils.hasText(conversation.getPersona())) {
             system.append("\n\n本会话回复风格：").append(conversation.getPersona().strip());
         }
-        if (groupContext != null && !groupContext.isBlank()) {
+        if (StringUtils.hasText(groupContext)) {
             system.append("\n\n").append(groupContext);
         }
         List<String> facts = new ArrayList<>();
         for (AiMemory memory : memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(
-                conversation.getId(), AiMemory.STATUS_ACTIVE)) {
+                conversation.getId(), MemoryStatus.ACTIVE)) {
             facts.add(memory.getFact());
         }
         if (!facts.isEmpty()) {

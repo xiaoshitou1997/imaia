@@ -1,6 +1,7 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,11 +22,6 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiArtifact {
 
-    public static final String KIND_IMAGE = "image";
-    public static final String KIND_VIDEO = "video";
-    public static final String STATUS_GENERATED = "generated";
-    public static final String STATUS_DELIVERED = "delivered";
-    public static final String STATUS_FAILED = "failed";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,8 +31,9 @@ public class AiArtifact {
     private Long conversationId;
 
     /** image | video (MediaKind value). */
+    @Convert(converter = ArtifactKind.Converter.class)
     @Column(nullable = false)
-    private String kind;
+    private ArtifactKind kind;
 
     @Column
     private String prompt;
@@ -59,14 +56,15 @@ public class AiArtifact {
     @Column
     private String filename;
 
+    @Convert(converter = ArtifactStatus.Converter.class)
     @Column(nullable = false)
-    private String status;
+    private ArtifactStatus status;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    public AiArtifact(Long conversationId, String kind, String prompt, String filename,
-            String status, Instant createdAt) {
+    public AiArtifact(Long conversationId, ArtifactKind kind, String prompt, String filename,
+            ArtifactStatus status, Instant createdAt) {
         this.conversationId = conversationId;
         this.kind = kind;
         this.prompt = prompt;

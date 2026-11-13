@@ -2,27 +2,14 @@ package com.imaia.web;
 
 import org.springframework.http.ResponseEntity;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 /** The console API response envelope: {@code {code, message, data}}. */
-public final class ApiEnvelope {
+public record ApiEnvelope<T>(int code, String message, T data) {
 
-    private ApiEnvelope() {
+    public static <T> ApiEnvelope<T> ok(T data) {
+        return new ApiEnvelope<>(0, "ok", data);
     }
 
-    public static Map<String, Object> ok(Object data) {
-        Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("code", 0);
-        envelope.put("message", "ok");
-        envelope.put("data", data);
-        return envelope;
-    }
-
-    public static ResponseEntity<Map<String, Object>> error(int httpStatus, int code, String message) {
-        Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("code", code);
-        envelope.put("message", message);
-        return ResponseEntity.status(httpStatus).body(envelope);
+    public static <T> ResponseEntity<ApiEnvelope<T>> error(int httpStatus, int code, String message) {
+        return ResponseEntity.status(httpStatus).body(new ApiEnvelope<>(code, message, null));
     }
 }
