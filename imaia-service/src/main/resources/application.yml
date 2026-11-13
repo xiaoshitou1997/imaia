@@ -1,6 +1,6 @@
-# imaia — 多平台个人 AI 助理（IM AI Assistant）
+# imaia — 智能聚合中枢 IM（PRD v0.2）
 # 平台接入配置（daemon 地址/token、飞书 app 凭据等）统一存数据库 platform_account
-# 表（config JSONB），不在环境变量/yml 里；本文件只承载启动前置与基础设施。
+# 表 im_connection（config JSONB），不在环境变量/yml 里；本文件只承载启动前置与基础设施。
 server:
   # WebUI and control API bind to loopback only.
   address: ${IMAIA_WEB_ADDRESS:127.0.0.1}
@@ -27,8 +27,7 @@ spring:
     enabled: true
   data:
     redis:
-      # Redis for atomic reply rate-limit counters and the stream cursor;
-      # falls back to in-memory counting on error.
+      # Redis holds the wechat stream cursor (resume position); no rate limiting in v0.2.
       host: ${IMAIA_REDIS_HOST:127.0.0.1}
       port: ${IMAIA_REDIS_PORT:16379}
       password: ${IMAIA_REDIS_PASSWORD:}
@@ -44,8 +43,7 @@ imaia:
     # Consecutive failures on the same event before the stream stops (poison guard).
     handler-failure-threshold: 5
   ai:
-    # Master switch for the AI reply chain (checked by the event handler). The
-    # assistant persona, model directory and risk policy live in the database
-    # (assistant_profile / provider+model / risk_policy) and are edited in the WebUI;
-    # migration V9 seeds them.
+    # Master switch for the AI reply chain (the DB guardrails in assistant_settings
+    # are the second layer). Settings and the model directory live in the database
+    # (assistant_settings / provider+model) and are edited in the WebUI.
     enabled: false

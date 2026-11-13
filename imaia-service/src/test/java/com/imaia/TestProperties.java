@@ -2,18 +2,17 @@ package com.imaia;
 
 import com.imaia.adapter.wechat.WechatAccountConfig;
 import com.imaia.adapter.wechat.WechatConnection;
-import com.imaia.ai.AssistantProfileService;
-import com.imaia.ai.RiskPolicyService;
+import com.imaia.ai.AssistantSettingsService;
 import com.imaia.config.DispatchProperties;
 import com.imaia.config.ModelRegistry;
-import com.imaia.domain.AssistantProfile;
+import com.imaia.domain.AssistantSettings;
+import com.imaia.domain.ImConnection;
+import com.imaia.domain.ImConversation;
 import com.imaia.domain.Model;
 import com.imaia.domain.Provider;
-import com.imaia.domain.RiskPolicy;
-import com.imaia.repository.AssistantProfileRepository;
+import com.imaia.repository.AssistantSettingsRepository;
 import com.imaia.repository.ModelRepository;
 import com.imaia.repository.ProviderRepository;
-import com.imaia.repository.RiskPolicyRepository;
 import org.mockito.Mockito;
 
 import java.time.Instant;
@@ -26,11 +25,8 @@ import java.util.stream.Collectors;
 public final class TestProperties {
 
     private static final AtomicLong IDS = new AtomicLong();
+    private static final char QC = '"';
 
-
-    private static final String QUOTE = "\"";
-    private static final String COLON = ":";
-    private static final char QC = '"'; // double-quote char
     private TestProperties() {
     }
 
@@ -41,6 +37,19 @@ public final class TestProperties {
     public static WechatAccountConfig wechatConfig(String baseUrl, String account) {
         return new WechatAccountConfig(baseUrl, "test-token", account, 1000, 5,
                 "imaia", true, 10, 50, 200, false);
+    }
+
+    public static ImConnection connection(long id, String platform) {
+        ImConnection connection = new ImConnection(platform, "default", true, "{}");
+        connection.setId(id);
+        return connection;
+    }
+
+    public static ImConversation imConversation(long id, String externalId) {
+        ImConversation conversation = new ImConversation(1L, externalId, null,
+                ImConversation.KIND_DIRECT, Instant.now(), Instant.now(), Instant.now());
+        conversation.setId(id);
+        return conversation;
     }
 
     public static DispatchProperties dispatch() {
@@ -72,85 +81,48 @@ public final class TestProperties {
         return new ModelRegistry(providerRepository, modelRepository);
     }
 
-    /** The default test directory: agnes image/video/asr, zhipu chat, minimax speech. */
+    /** The default test directory: agnes image/video, zhipu chat. Voice is cut in v0.2. */
     public static ModelRegistry modelRegistry(String baseUrl) {
         Provider agnes = provider("agnes", baseUrl);
         Provider zhipu = provider("zhipu", baseUrl);
-        Provider minimax = provider("minimax", baseUrl);
-        return registry(List.of(agnes, zhipu, minimax), List.of(
+        return registry(List.of(agnes, zhipu), List.of(
                 model(agnes, "img-m", "Agnes Image 2.5 Flash", "openai-images",
                         List.of("text"), List.of("image"), null, Map.of("size", "1024x768")),
                 model(agnes, "vid-m", "Agnes Video 2.5 Flash", "openai-video",
                         List.of("text"), List.of("video"), null,
                         Map.of("seconds", "5", "aspect-ratio", "16:9")),
-                model(agnes, "asr-m", "Whisper", "openai-audio-transcription",
-                        List.of("audio"), List.of("text"), null, Map.of()),
                 model(zhipu, "chat-m", "GLM-4.5V", "openai-completions",
-                        List.of("text", "image"), List.of("text"), 4096, Map.of()),
-                model(minimax, "speech-m", "MiniMax Speech-02-Turbo", "openai-audio-speech",
-                        List.of("text"), List.of("audio"), null, Map.of("voice-id", "tongtong"))));
+                        List.of("text", "image"), List.of("text"), 4096, Map.of())));
     }
 
     /** The default directory minus every model of one protocol. */
     public static ModelRegistry modelRegistryWithout(String baseUrl, String protocol) {
         Provider agnes = provider("agnes", baseUrl);
         Provider zhipu = provider("zhipu", baseUrl);
-        Provider minimax = provider("minimax", baseUrl);
         List<Model> all = List.of(
                 model(agnes, "img-m", "Agnes Image 2.5 Flash", "openai-images",
                         List.of("text"), List.of("image"), null, Map.of("size", "1024x768")),
                 model(agnes, "vid-m", "Agnes Video 2.5 Flash", "openai-video",
                         List.of("text"), List.of("video"), null,
                         Map.of("seconds", "5", "aspect-ratio", "16:9")),
-                model(agnes, "asr-m", "Whisper", "openai-audio-transcription",
-                        List.of("audio"), List.of("text"), null, Map.of()),
                 model(zhipu, "chat-m", "GLM-4.5V", "openai-completions",
-                        List.of("text", "image"), List.of("text"), 4096, Map.of()),
-                model(minimax, "speech-m", "MiniMax Speech-02-Turbo", "openai-audio-speech",
-                        List.of("text"), List.of("audio"), null, Map.of("voice-id", "tongtong")));
-        return registry(List.of(agnes, zhipu, minimax),
+                        List.of("text", "image"), List.of("text"), 4096, Map.of()));
+        return registry(List.of(agnes, zhipu),
                 all.stream().filter(model -> !protocol.equals(model.getProtocol())).toList());
     }
 
-    public static AssistantProfile profile(String systemPrompt, int historyLimit, String replyConversations,
-            boolean requireGroupMention, boolean ttsReply, int minMessageLength,
-            long replyDelayMinMs, long replyDelayMaxMs) {
-        return new AssistantProfile(systemPrompt, historyLimit, replyConversations, requireGroupMention,
-                ttsReply, minMessageLength, replyDelayMinMs, replyDelayMaxMs, true);
+    public static AssistantSettings settings(String systemPrompt, int historyLimit,
+            boolean requireGroupMention, boolean quietHoursEnabled, String quietHoursStart,
+            String quietHoursEnd) {
+        return new AssistantSettings(systemPrompt, historyLimit, requireGroupMention,
+                quietHoursEnabled, quietHoursStart, quietHoursEnd, true);
     }
 
-    public static RiskPolicy risk(int repliesPerThreadPerMinute, int maxRepliesPerHour,
-            int maxRepliesPerDay, String quietHoursStart, String quietHoursEnd) {
-        return new RiskPolicy(repliesPerThreadPerMinute, maxRepliesPerHour, maxRepliesPerDay,
-                quietHoursStart, quietHoursEnd);
-    }
-
-    public static AssistantProfileService profileService(AssistantProfile profile) {
-        AssistantProfileRepository repository = Mockito.mock(AssistantProfileRepository.class);
-        Mockito.when(repository.findById(1)).thenReturn(java.util.Optional.of(profile));
+    public static AssistantSettingsService settingsService(AssistantSettings settings) {
+        AssistantSettingsRepository repository = Mockito.mock(AssistantSettingsRepository.class);
+        Mockito.when(repository.findById(1)).thenReturn(java.util.Optional.of(settings));
         Mockito.when(repository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
-        return new AssistantProfileService(repository);
-    }
-
-    public static RiskPolicyService riskService(RiskPolicy policy) {
-        RiskPolicyRepository repository = Mockito.mock(RiskPolicyRepository.class);
-        Mockito.when(repository.findById(1)).thenReturn(java.util.Optional.of(policy));
-        Mockito.when(repository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
-        return new RiskPolicyService(repository);
-    }
-
-    public static AssistantProfileRepository profileRepository(AssistantProfile profile) {
-        AssistantProfileRepository repository = Mockito.mock(AssistantProfileRepository.class);
-        Mockito.when(repository.findById(1)).thenReturn(java.util.Optional.of(profile));
-        Mockito.when(repository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
-        return repository;
-    }
-
-    public static RiskPolicyRepository riskRepository(RiskPolicy policy) {
-        RiskPolicyRepository repository = Mockito.mock(RiskPolicyRepository.class);
-        Mockito.when(repository.findById(1)).thenReturn(java.util.Optional.of(policy));
-        Mockito.when(repository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
-        return repository;
+        return new AssistantSettingsService(repository);
     }
 
     public static String json(List<String> list) {

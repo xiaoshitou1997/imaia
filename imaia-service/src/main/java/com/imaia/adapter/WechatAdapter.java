@@ -3,7 +3,8 @@ package com.imaia.adapter;
 import com.imaia.adapter.wechat.daemon.DaemonClient;
 import com.imaia.adapter.wechat.daemon.dto.Message;
 import com.imaia.adapter.wechat.daemon.DaemonContractException;
-import com.imaia.domain.ImMessage;
+import com.imaia.adapter.wechat.WechatConnection;
+import com.imaia.domain.ImConnection;
 import com.imaia.domain.MediaKind;
 import com.imaia.domain.MessageCategory;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The wechat platform adapter over the agent-wechat daemon: SSE event stream,
@@ -31,10 +34,15 @@ public class WechatAdapter implements ImAdapter {
 
     private final DaemonClient daemonClient;
     private final ProcessedMessageLedger ledger;
+    private final WechatConnection connection;
+    /** 微信同号：每条会话线最近一次 AI 发送时间，outgoing 消息据此归因 origin。 */
+    private final Map<String, Instant> lastAiSendByConversation = new ConcurrentHashMap<>();
 
-    public WechatAdapter(DaemonClient daemonClient, ProcessedMessageLedger ledger) {
+    public WechatAdapter(DaemonClient daemonClient, ProcessedMessageLedger ledger,
+            WechatConnection connection) {
         this.daemonClient = daemonClient;
         this.ledger = ledger;
+        this.connection = connection;
     }
 
     @Override
@@ -43,26 +51,37 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public String accountId() {
-        return daemonClient.accountId();
+    public ImConnection connection() {
+        return connection.row();
     }
 
     @Override
-    public ImMessage fetchMessage(String messageId) {
+    public FetchedMessage fetchMessage(String messageId) {
         Message message = daemonClient.getMessage(messageId);
-        String accountId = accountId();
-        if (!message.id().equals(messageId) || !message.accountId().equals(accountId)
-                || message.threadId() == null || message.threadId().isBlank()) {
-            throw new DaemonContractException("Message identity drift: expected " + accountId
-                    + "/" + messageId + " but the saved message is " + message.accountId()
-                    + "/" + message.id() + ".");
+        if (!message.id().equals(messageId) || message.threadId() == null || message.threadId().isBlank()) {
+            throw new DaemonContractException("Message identity drift: expected " + PLATFORM
+                    + "/" + messageId + " but the saved message is " + message.id()
+                    + "/" + message.threadId() + ".");
         }
-        ImMessage imMessage = new ImMessage(accountId, PLATFORM, message.threadId(), message.id(),
+        return new FetchedMessage(message.threadId(), message.id(),
                 message.senderId(), null, message.direction(), message.type(),
-                categoryOf(message.type()), message.mentions().isReplyWorthyMention(), message.body(),
+                categoryOf(message.type()), message.mentions().isReplyWorthyMention(),
+                resolveOrigin(message), message.body(), rawJson(message),
                 parseTime(message.createdAt()));
-        imMessage.setRaw(rawJson(message));
-        return imMessage;
+    }
+
+    /** 微信同号：AI 刚经本实例发送过的会话，其 outgoing 消息标记为 ai（60 秒时间窗近似）。 */
+    private String resolveOrigin(Message message) {
+        if (!"outgoing".equals(message.direction())) {
+            return "human";
+        }
+        Instant lastAiSend = lastAiSendByConversation.get(message.threadId());
+        return lastAiSend != null && Instant.now().minusSeconds(60).isBefore(lastAiSend)
+                ? "ai" : "human";
+    }
+
+    private void markAiSend(String conversationId) {
+        lastAiSendByConversation.put(conversationId, Instant.now());
     }
 
     /** The original daemon payload snapshot, re-serialized from the typed DTO. */
@@ -88,12 +107,12 @@ public class WechatAdapter implements ImAdapter {
 
     @Override
     public boolean hasProcessed(String messageId) {
-        return ledger.hasProcessed(PLATFORM, messageId);
+        return ledger.hasProcessed(connection().getId(), messageId);
     }
 
     @Override
-    public void markProcessed(String messageId, String conversationId) {
-        ledger.markProcessed(PLATFORM, messageId, conversationId);
+    public void markProcessed(String messageId) {
+        ledger.markProcessed(connection().getId(), messageId);
     }
 
     @Override
@@ -139,6 +158,7 @@ public class WechatAdapter implements ImAdapter {
     public void sendText(String conversationId, String text, String idempotencyKey) {
         try {
             daemonClient.sendText(conversationId, text, idempotencyKey);
+            markAiSend(conversationId);
         } catch (WebClientResponseException failure) {
             throw translateConflict(failure, idempotencyKey);
         }
@@ -148,6 +168,7 @@ public class WechatAdapter implements ImAdapter {
     public void sendMedia(String conversationId, MediaKind kind, String storageRef, String idempotencyKey) {
         try {
             daemonClient.sendMedia(conversationId, kind.value(), storageRef, idempotencyKey);
+            markAiSend(conversationId);
         } catch (WebClientResponseException failure) {
             throw translateConflict(failure, idempotencyKey);
         }

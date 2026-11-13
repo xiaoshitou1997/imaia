@@ -1,430 +1,217 @@
 package com.imaia.ai;
 
-import com.imaia.TestProperties;
-import com.imaia.domain.AssistantProfile;
-import com.imaia.domain.RiskPolicy;
-import com.imaia.config.ChatModelFactory;
-import com.imaia.config.ModelRegistry;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImEvent;
-import com.imaia.adapter.ProcessedMessageLedger;
-import com.imaia.adapter.wechat.WechatConnection;
-import com.imaia.adapter.wechat.daemon.DaemonClient;
-import com.imaia.adapter.WechatAdapter;
-import com.imaia.repository.MemoryFactRepository;
+import com.imaia.config.ModelRegistry;
+import com.imaia.domain.ImConversation;
+import com.imaia.domain.MessageCategory;
 import com.imaia.repository.AiArtifactRepository;
-import com.imaia.repository.ContactRepository;
-import com.imaia.repository.ModelCallLogRepository;
-import com.imaia.repository.ScheduledActionRepository;
 import com.imaia.repository.ImMessageRepository;
-import com.imaia.repository.AiMessageRepository;
-import okhttp3.mockwebserver.Dispatcher;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import okhttp3.mockwebserver.RecordedRequest;
-import okio.Buffer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.web.reactive.function.client.WebClient;
-import tools.jackson.databind.json.JsonMapper;
 
-import java.io.IOException;
-import java.util.Base64;
+import java.time.Instant;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * End-to-end reply behaviour against simulated daemon, chat-endpoint and
- * image-endpoint routes: text, vision, generated images ([IMAGE: …]), the mention
- * and dedup gates, and the reply idempotency keys derived from the triggering
- * message id.
- */
+/** 回复管线门控：总开关、线级开关、@门控、静默时段、语音静默、群指令、正常回复。 */
 class AiReplyHandlerTest {
 
-    private static final byte[] FAKE_JPEG = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 1, 2, 3, 4};
+    private static final String EXTERNAL_ID = "wx-1";
+    private static final String MESSAGE_ID = "m1";
 
-    private MockWebServer server;
-    private AiMessageRepository aiMessages;
-    private ProcessedMessageLedger ledger;
-    private final JsonMapper mapper = JsonMapper.builder().build();
-    private final Queue<String> sendKeys = new ConcurrentLinkedQueue<>();
-    private final Queue<String> sendBodies = new ConcurrentLinkedQueue<>();
-    private final Queue<String> gatewayPaths = new ConcurrentLinkedQueue<>();
-    private final Queue<String> imageGenPaths = new ConcurrentLinkedQueue<>();
-    private final Queue<String> gatewayReplies = new ConcurrentLinkedQueue<>();
-    private final AtomicReference<String> messageJson = new AtomicReference<>("""
-            {"id":"m1","accountId":"acc1","threadId":"t1","senderId":"wxid_a",
-             "type":1,"direction":"incoming","body":"在吗"}
-            """);
-    private final AtomicReference<String> mediaListing = new AtomicReference<>("""
-            {"assets":[{"id":"a1","kind":"image","variant":"standard","state":"available",
-                        "contentType":"image/jpeg",
-                        "contentUrl":"/v1/accounts/acc1/media/a1/content",
-                        "preview":{"contentType":"image/jpeg",
-                                   "contentUrl":"/v1/accounts/acc1/media/a1/preview"}}]}
-            """);
-    private final AtomicReference<String> gatewayReplyJson = new AtomicReference<>("""
-            {"id":"chatcmpl-1","object":"chat.completion","created":1794320000,"model":"chat-m","choices":[{"index":0,"message":{"role":"assistant","content":"你好，我是AI助手"},"finish_reason":"stop"}]}
-            """);
+    private ImAdapters adapters;
+    private ImAdapter adapter;
+    private AiChatService chatService;
+    private com.imaia.ai.AssistantSettingsService settings;
+    private ModelRegistry modelRegistry;
+    private InsightService insightService;
+    private ImMessageRepository archivedMessages;
+    private AiArtifactRepository artifacts;
+    private com.imaia.repository.ImConversationRepository conversations;
+    private AiReplyHandler handler;
+    private AssistantSettingsFixture settingsFixture;
+
+    /** 小包装：便于在每个用例里改线级开关/静默配置后重建 handler。 */
+    private static final class AssistantSettingsFixture {
+        com.imaia.domain.AssistantSettings current =
+                com.imaia.TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
+    }
 
     @BeforeEach
-    void startServer() throws IOException {
-        aiMessages = Mockito.mock(AiMessageRepository.class);
-        ledger = Mockito.mock(ProcessedMessageLedger.class);
-        java.util.Set<String> handled = java.util.concurrent.ConcurrentHashMap.newKeySet();
-        Mockito.when(ledger.hasProcessed(Mockito.anyString(), Mockito.anyString()))
-                .thenAnswer(inv -> !handled.add(inv.getArgument(1)));
-        sendKeys.clear();
-        sendBodies.clear();
-        gatewayPaths.clear();
-        imageGenPaths.clear();
-        gatewayReplies.clear();
-        server = new MockWebServer();
-        server.setDispatcher(new Dispatcher() {
-            @Override
-            public MockResponse dispatch(RecordedRequest request) {
-                String path = request.getPath();
-                if (path.startsWith("/images/generations")) {
-                    imageGenPaths.add(path);
-                    String b64 = Base64.getEncoder().encodeToString(FAKE_JPEG);
-                    return json("{\"data\":[{\"b64_json\":\"" + b64 + "\",\"url\":null}]}");
-                }
-                if (path.startsWith("/v1/accounts/acc1/messages/m1/media-transfers")) {
-                    return json("{\"id\":\"j1\",\"state\":\"queued\"}");
-                }
-                if (path.startsWith("/v1/accounts/acc1/jobs/j1")) {
-                    return json("{\"state\":\"available\",\"id\":\"j1\"}");
-                }
-                if (path.startsWith("/v1/accounts/acc1/media/a1/preview")
-                        || path.startsWith("/v1/accounts/acc1/media/a1/content")) {
-                    Buffer buffer = new Buffer().write(FAKE_JPEG);
-                    return new MockResponse().setBody(buffer)
-                            .addHeader("Content-Type", "image/jpeg");
-                }
-                if (path.startsWith("/v1/accounts/acc1/messages/m1/media")) {
-                    return json(mediaListing.get());
-                }
-                if (path.startsWith("/v1/accounts/acc1/messages/m1")) {
-                    return json(messageJson.get());
-                }
-                if (path.startsWith("/v1/accounts/acc1/consumers/imaia/ack")) {
-                    return new MockResponse().setResponseCode(200);
-                }
-                if (path.startsWith("/v1/accounts/acc1/uploads")) {
-                    return json("{\"id\":\"src1\",\"name\":\"imaia-image.png\",\"mediaType\":\"image/png\"}");
-                }
-                if (path.startsWith("/v1/accounts/acc1/sends")) {
-                    sendKeys.add(request.getHeader("Idempotency-Key"));
-                    sendBodies.add(request.getBody().readUtf8());
-                    return json("{\"id\":\"send1\"}");
-                }
-                if (path.startsWith("/chat/completions")) {
-                    gatewayPaths.add(path);
-                    String next = gatewayReplies.poll();
-                    return json(next != null ? next : gatewayReplyJson.get());
-                }
-                imageGenPaths.add("UNMATCHED:" + request.getMethod() + " " + path);
-                return new MockResponse().setResponseCode(404);
-            }
-        });
-        server.start();
+    void setUp() {
+        adapters = mock(ImAdapters.class);
+        adapter = mock(ImAdapter.class);
+        chatService = mock(AiChatService.class);
+        modelRegistry = mock(ModelRegistry.class);
+        insightService = mock(InsightService.class);
+        archivedMessages = mock(ImMessageRepository.class);
+        artifacts = mock(AiArtifactRepository.class);
+        conversations = mock(com.imaia.repository.ImConversationRepository.class);
+        settingsFixture = new AssistantSettingsFixture();
+        rebuild();
+        when(adapters.forPlatform("wechat")).thenReturn(adapter);
+        when(adapter.platform()).thenReturn("wechat");
+        when(adapter.connection()).thenReturn(com.imaia.TestProperties.connection(1L, "wechat"));
+        when(adapter.hasProcessed(anyString())).thenReturn(false);
+        when(adapter.isGroupConversation(EXTERNAL_ID)).thenReturn(false);
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                EXTERNAL_ID, MESSAGE_ID, "peer", "对方", "incoming", null,
+                MessageCategory.TEXT, false, "human", "你好", null, Instant.now()));
+        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, EXTERNAL_ID);
+        conversation.setAutoreply(true);
+        when(conversations.findByConnectionIdAndExternalId(1L, EXTERNAL_ID))
+                .thenReturn(Optional.of(conversation));
+        when(conversations.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(chatService.resolve(adapter, EXTERNAL_ID)).thenReturn(conversation);
+        when(chatService.complete(any(ImConversation.class), anyString(), isNull(), isNull(),
+                isNull(), anyList(), anyString())).thenReturn(new AiChatService.ChatReply("好的", List.of()));
+        when(insightService.handleCommand(any(ImConversation.class), anyString())).thenReturn(null);
+        when(modelRegistry.chatSupportsImages()).thenReturn(true);
+        when(archivedMessages.findTop200ByConversationIdOrderByArchivedAtDesc(9L)).thenReturn(List.of());
     }
 
-    @AfterEach
-    void stopServer() throws IOException {
-        server.shutdown();
+    private void rebuild() {
+        settings = com.imaia.TestProperties.settingsService(settingsFixture.current);
+        handler = new AiReplyHandler(adapters, chatService, settings, modelRegistry, insightService,
+                archivedMessages, artifacts);
     }
 
-    private AiReplyHandler handler(String replyConversations) {
-        return handlerWith(TestProperties.profile("test prompt", 4, replyConversations, true, false, 0, 0, 0),
-                TestProperties.risk(6, 60, 100, "", ""), true);
-    }
-
-    private AiReplyHandler handlerWith(AssistantProfile profile, RiskPolicy risk, boolean imageEnabled) {
-        WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
-        ModelRegistry registry = imageEnabled
-                ? TestProperties.modelRegistry(server.url("/").toString())
-                : TestProperties.modelRegistryWithout(server.url("/").toString(),
-                        ModelRegistry.PROTOCOL_IMAGES);
-        WebClient webClient = WebClient.builder().baseUrl(server.url("/").toString()).build();
-        DaemonClient daemonClient = new DaemonClient(webClient, connection);
-        ImAdapter adapter = new WechatAdapter(daemonClient, ledger);
-        MemoryFactRepository memoryFacts = Mockito.mock(MemoryFactRepository.class);
-        Mockito.when(memoryFacts.findTop50ByAccountIdAndScopeTypeOrderByCreatedAtDesc(
-                        Mockito.any(), Mockito.any())).thenReturn(List.of());
-        ImMessageRepository archivedMessages = Mockito.mock(ImMessageRepository.class);
-        Mockito.when(archivedMessages.findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(
-                        Mockito.any(), Mockito.any())).thenReturn(List.of());
-        ChatTools chatTools = new ChatTools(registry, new ImageGenerationClient(registry),
-                new VideoGenerationClient(registry));
-        AiChatService chatService = new AiChatService(
-                new OpenAiChatCompletion(new ChatModelFactory(), registry,
-                        Mockito.mock(ModelCallLogRepository.class)),
-                aiMessages, memoryFacts, TestProperties.profileService(profile), chatTools,
-                Mockito.mock(ContactRepository.class));
-        InMemoryRateLimiter limiter = InMemoryRateLimiter.ofLimits(
-                risk.getRepliesPerThreadPerMinute(), risk.getMaxRepliesPerHour(), risk.getMaxRepliesPerDay());
-        return new AiReplyHandler(new ImAdapters(List.of(adapter)), chatService, limiter,
-                noneProvider(), new ImageGenerationClient(registry), new VideoGenerationClient(registry),
-                new AudioSpeechClient(registry), registry, Mockito.mock(PersonAnalyzer.class),
-                Mockito.mock(ScheduledActionRepository.class),
-                Mockito.mock(AiArtifactRepository.class), memoryFacts, archivedMessages,
-                TestProperties.profileService(profile), TestProperties.riskService(risk));
-    }
-
-    private static ObjectProvider<AsrTranscriber> noneProvider() {
-        return new ObjectProvider<>() {
-            @Override
-            public AsrTranscriber getObject() {
-                throw new java.util.NoSuchElementException("no ASR transcriber configured");
-            }
-
-            @Override
-            public AsrTranscriber getIfAvailable() {
-                return null;
-            }
-        };
-    }
-
-    private ImEvent event(String conversationId) {
-        // daemon wire 字段是 threadId；ImEvent 归一化为 conversationId
-        return new ImEvent("wechat", "message.committed", "m1", conversationId, "1",
-                mapper.readTree("{\"messageId\":\"m1\",\"threadId\":\"" + conversationId + "\"}"));
+    private static ImEvent event() {
+        return new ImEvent("wechat", "message.committed", MESSAGE_ID, EXTERNAL_ID, "r1", null);
     }
 
     @Test
-    void repliesToAllowedIncomingTextWithMessageDerivedKey() {
-        handler("t1").handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1");
-        String body = sendBodies.poll();
-        assertThat(body).contains("\"threadId\":\"t1\"").contains("你好，我是AI助手");
+    void masterSwitchOffSkipsEverything() {
+        settingsFixture.current = com.imaia.TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
+        settingsFixture.current.setEnabled(false);
+        rebuild();
+        handler.handle(event());
+        verify(adapter, never()).fetchMessage(anyString());
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
     }
 
     @Test
-    void ignoresUnlistedThreads() {
-        handler("t1").handle(event("t9"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(0);
-        assertThat(sendKeys.size()).isEqualTo(0);
+    void lineSwitchOffSkipsReply() {
+        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, EXTERNAL_ID);
+        conversation.setAutoreply(false);
+        when(chatService.resolve(adapter, EXTERNAL_ID)).thenReturn(conversation);
+        handler.handle(event());
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
+        verify(adapter, never()).sendText(anyString(), anyString(), anyString());
     }
 
     @Test
-    void ignoresOutgoingMessages() {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"t1","type":1,
-                 "direction":"outgoing","body":"我自己发的"}
-                """);
-        handler("t1").handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(0);
-        assertThat(sendKeys.size()).isEqualTo(0);
+    void replayedMessageStaysSilent() {
+        when(adapter.hasProcessed(MESSAGE_ID)).thenReturn(true);
+        handler.handle(event());
+        verify(adapter, never()).fetchMessage(anyString());
+        verify(adapter, never()).markProcessed(anyString());
     }
 
     @Test
-    void ignoresUnsupportedLinkMessages() {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"t1","type":49,
-                 "direction":"incoming"}
-                """);
-        handler("t1").handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(0);
-        assertThat(sendKeys.size()).isEqualTo(0);
+    void quietHoursHoldReplies() {
+        settingsFixture.current = com.imaia.TestProperties.settings("提示词", 20, true, true, "00:00", "23:59");
+        rebuild();
+        handler.handle(event());
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
     }
 
     @Test
-    void repliesToImageThroughVision() {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"t1","senderId":"wxid_a",
-                 "type":3,"direction":"incoming"}
-                """);
-        handler("t1").handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1");
-        assertThat(sendBodies.poll()).contains("你好，我是AI助手");
+    void quietHoursDisabledRepliesNormally() {
+        settingsFixture.current = com.imaia.TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
+        rebuild();
+        handler.handle(event());
+        verify(adapter).sendText(eq(EXTERNAL_ID), eq("好的"), eq("imaia-ai-" + MESSAGE_ID));
+        verify(adapter).markProcessed(MESSAGE_ID);
     }
 
     @Test
-    void visionRequestCarriesBase64Image() throws Exception {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"t1","senderId":"wxid_a",
-                 "type":3,"direction":"incoming"}
-                """);
-        handler("t1").handle(event("t1"));
-
-        String body = takeGatewayRequestBody();
-        assertThat(body).contains("\"type\":\"image_url\"").contains("data:image/jpeg;base64,");
+    void groupWithoutMentionStaysAsContext() {
+        when(adapter.isGroupConversation(EXTERNAL_ID)).thenReturn(true);
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                EXTERNAL_ID, MESSAGE_ID, "peer", "对方", "incoming", null,
+                MessageCategory.TEXT, false, "human", "你好", null, Instant.now()));
+        handler.handle(event());
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
     }
 
     @Test
-    void voiceWithoutAsrStaysSilent() {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"t1","senderId":"wxid_a",
-                 "type":34,"direction":"incoming"}
-                """);
-        handler("t1").handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(0);
-        assertThat(sendKeys.size()).isEqualTo(0);
+    void groupMentionTriggersReply() {
+        when(adapter.isGroupConversation(EXTERNAL_ID)).thenReturn(true);
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                EXTERNAL_ID, MESSAGE_ID, "peer", "对方", "incoming", null,
+                MessageCategory.TEXT, true, "human", "你好", null, Instant.now()));
+        handler.handle(event());
+        verify(adapter).sendText(eq(EXTERNAL_ID), eq("好的"), eq("imaia-ai-" + MESSAGE_ID));
     }
 
     @Test
-    void repliesToStickerThroughPreview() {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"t1","senderId":"wxid_a",
-                 "type":47,"direction":"incoming"}
-                """);
-        handler("t1").handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1");
+    void groupReportCommandAnswersWithReport() {
+        when(adapter.isGroupConversation(EXTERNAL_ID)).thenReturn(true);
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                EXTERNAL_ID, MESSAGE_ID, "peer", "对方", "incoming", null,
+                MessageCategory.TEXT, true, "human", "本周统计", null, Instant.now()));
+        when(insightService.handleCommand(any(ImConversation.class), eq("本周统计")))
+                .thenReturn("【本周报告】很活跃。");
+        handler.handle(event());
+        verify(adapter).sendText(eq(EXTERNAL_ID), eq("【本周报告】很活跃。"), eq("imaia-ai-" + MESSAGE_ID));
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
     }
 
     @Test
-    void replayStaysSilentAfterProcessedRecord() {
-        AiReplyHandler handler = handler("t1");
-
-        handler.handle(event("t1"));
-        handler.handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.size()).isEqualTo(1);
+    void voiceMessageStaysSilentInV1() {
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                EXTERNAL_ID, MESSAGE_ID, "peer", "对方", "incoming", null,
+                MessageCategory.VOICE, false, "human", null, null, Instant.now()));
+        handler.handle(event());
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
+        verify(adapter, never()).sendText(anyString(), anyString(), anyString());
     }
 
     @Test
-    void generatesAndSendsImageWhenModelAsksForIt() {
-        gatewayReplyJson.set("""
-                {"id":"chatcmpl-2","object":"chat.completion","created":1794320001,"model":"chat-m","choices":[{"index":0,"message":{"role":"assistant","content":"好的，这就画 [IMAGE: 一只红色的猫]"},"finish_reason":"stop"}]}
-                """);
-        handler("t1").handle(event("t1"));
-
-        assertThat(imageGenPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1");
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1-img1");
-        String textBody = sendBodies.poll();
-        String imageBody = sendBodies.poll();
-        assertThat(textBody).doesNotContain("[IMAGE:");
-        assertThat(imageBody).contains("\"kind\":\"image\"").contains("\"sourceId\":\"src1\"");
+    void imageMessageGoesThroughVision() {
+        when(adapter.downloadAsset(MESSAGE_ID, MessageCategory.IMAGE)).thenReturn(
+                new ImAdapter.MediaBytes(new byte[] {1, 2, 3}, "image/jpeg"));
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                EXTERNAL_ID, MESSAGE_ID, "peer", "对方", "incoming", null,
+                MessageCategory.IMAGE, false, "human", null, null, Instant.now()));
+        when(chatService.complete(any(ImConversation.class), anyString(), any(byte[].class),
+                anyString(), isNull(), anyList(), anyString()))
+                .thenReturn(new AiChatService.ChatReply("图里是猫", List.of()));
+        handler.handle(event());
+        verify(adapter).sendText(eq(EXTERNAL_ID), eq("图里是猫"), eq("imaia-ai-" + MESSAGE_ID));
+        verify(chatService, times(1)).complete(any(ImConversation.class), anyString(),
+                any(byte[].class), eq("image/jpeg"), isNull(), anyList(), eq(MESSAGE_ID));
     }
 
     @Test
-    void nativeToolCallGeneratesAndSendsImage() {
-        gatewayReplies.add("""
-                {"id":"chatcmpl-3","object":"chat.completion","created":1794320003,"model":"chat-m","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"generate_image","arguments":"{\\"prompt\\":\\"一只红色的猫\\"}"}}]},"finish_reason":"tool_calls"}]}
-                """);
-        gatewayReplies.add("""
-                {"id":"chatcmpl-4","object":"chat.completion","created":1794320004,"model":"chat-m","choices":[{"index":0,"message":{"role":"assistant","content":"画好了"},"finish_reason":"stop"}]}
-                """);
-        handler("t1").handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(2);
-        assertThat(imageGenPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1");
-        assertThat(sendBodies.poll()).contains("画好了");
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1-gen1");
-        assertThat(sendBodies.poll()).contains("\"kind\":\"image\"").contains("\"sourceId\":\"src1\"");
+    void outgoingMessagesNeverTriggerReply() {
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                EXTERNAL_ID, MESSAGE_ID, "me", null, "outgoing", null,
+                MessageCategory.TEXT, false, "human", "我发的", null, Instant.now()));
+        handler.handle(event());
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
     }
 
     @Test
-    void missingImageToolKeepsTextAndDropsPrompt() {
-        gatewayReplyJson.set("""
-                {"id":"chatcmpl-3","object":"chat.completion","created":1794320002,"model":"chat-m","choices":[{"index":0,"message":{"role":"assistant","content":"画不了 [IMAGE: 猫]"},"finish_reason":"stop"}]}
-                """);
-        handlerWith(TestProperties.profile("test prompt", 4, "t1", true, false, 0, 0, 0), TestProperties.risk(6, 60, 100, "", ""), false)
-                .handle(event("t1"));
-
-        assertThat(imageGenPaths.size()).isEqualTo(0);
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1");
-        assertThat(sendBodies.poll()).doesNotContain("[IMAGE:");
-    }
-
-    @Test
-    void repliesInGroupWhenMentioned() {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"123@chatroom","senderId":"wxid_a",
-                 "type":1,"direction":"incoming","body":"帮我看看",
-                 "mentions":{"state":"known","userIds":["wxid_me"],"self":true,"all":false,
-                             "source":"msgsource.atuserlist"}}
-                """);
-        handler("123@chatroom").handle(event("123@chatroom"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.poll()).isEqualTo("imaia-ai-m1");
-    }
-
-    @Test
-    void skipsGroupMessageWithoutMention() {
-        messageJson.set("""
-                {"id":"m1","accountId":"acc1","threadId":"123@chatroom","senderId":"wxid_a",
-                 "type":1,"direction":"incoming","body":"闲聊一句",
-                 "mentions":{"state":"known","userIds":[],"self":false,"all":false,
-                             "source":"msgsource.atuserlist"}}
-                """);
-        handler("123@chatroom").handle(event("123@chatroom"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(0);
-        assertThat(sendKeys.size()).isEqualTo(0);
-    }
-
-    @Test
-    void capsRepliesPerThreadPerMinute() {
-        AiReplyHandler limited = handlerWith(TestProperties.profile("test prompt", 4, "t1", true, false, 0, 0, 0), TestProperties.risk(1, 60, 100, "", ""), true);
-
-        limited.handle(event("t1"));
-        limited.handle(event("t1"));
-
-        assertThat(gatewayPaths.size()).isEqualTo(1);
-        assertThat(sendKeys.size()).isEqualTo(1);
-    }
-
-    @Test
-    void delaysBeforeSending() {
-        AiReplyHandler delayed = handlerWith(TestProperties.profile("test prompt", 4, "t1", true, false, 0, 0, 40), TestProperties.risk(6, 60, 100, "", ""), true);
-
-        long start = System.currentTimeMillis();
-        delayed.handle(event("t1"));
-
-        assertThat(System.currentTimeMillis() - start).isGreaterThanOrEqualTo(40);
-        assertThat(sendKeys.size()).isEqualTo(1);
-    }
-
-    @Test
-    void quietWindowCoversNormalAndWrappedRanges() {
-        AiReplyHandler wrapped = handlerWith(TestProperties.profile("test prompt", 4, "t1", true, false, 0, 0, 0), TestProperties.risk(6, 60, 100, "23:00", "07:30"), true);
-        assertThat(wrapped.isQuietHours(java.time.LocalTime.of(23, 30))).isTrue();
-        assertThat(wrapped.isQuietHours(java.time.LocalTime.of(3, 0))).isTrue();
-        assertThat(wrapped.isQuietHours(java.time.LocalTime.of(12, 0))).isFalse();
-
-        AiReplyHandler disabled = handlerWith(TestProperties.profile("test prompt", 4, "t1", true, false, 0, 0, 0), TestProperties.risk(6, 60, 100, "", ""), true);
-        assertThat(disabled.isQuietHours(java.time.LocalTime.of(3, 0))).isFalse();
-    }
-
-    private String takeGatewayRequestBody() throws InterruptedException {
-        java.util.List<String> seen = new java.util.ArrayList<>();
-        for (int i = 0; i < 400; i++) {
-            RecordedRequest request = server.takeRequest(25, java.util.concurrent.TimeUnit.MILLISECONDS);
-            if (request == null) continue;
-            String path = request.getPath();
-            seen.add(path);
-            if (path.startsWith("/chat/completions")) {
-                return request.getBody().readUtf8();
-            }
-        }
-        throw new IllegalStateException("no /chat/completions request; saw: " + seen);
-    }
-
-    private static MockResponse json(String body) {
-        return new MockResponse().setBody(body).addHeader("Content-Type", "application/json");
+    void identityDriftStaysSilent() {
+        when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
+                "wx-other", MESSAGE_ID, "peer", "对方", "incoming", null,
+                MessageCategory.TEXT, false, "human", "你好", null, Instant.now()));
+        handler.handle(event());
+        verify(chatService, never()).complete(any(ImConversation.class), anyString());
     }
 }

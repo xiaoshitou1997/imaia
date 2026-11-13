@@ -3,7 +3,7 @@ package com.imaia.adapter.feishu;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImContractException;
 import com.imaia.adapter.ProcessedMessageLedger;
-import com.imaia.domain.ImMessage;
+import com.imaia.domain.ImConnection;
 import com.imaia.domain.MediaKind;
 import com.imaia.domain.MessageCategory;
 import com.lark.oapi.Client;
@@ -26,7 +26,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +51,8 @@ public class FeishuAdapter implements ImAdapter {
 
     private final FeishuConnection connection;
     private final ProcessedMessageLedger ledger;
+    /** AI 发送产生的平台消息 id（有界队列）：归档时精确回标 origin=ai。 */
+    private final Deque<String> recentAiMessageIds = new ArrayDeque<>();
 
     public FeishuAdapter(FeishuConnection connection, ProcessedMessageLedger ledger) {
         this.connection = connection;
@@ -61,12 +65,12 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public String accountId() {
-        return connection.config().appId();
+    public ImConnection connection() {
+        return connection.row();
     }
 
     @Override
-    public ImMessage fetchMessage(String messageId) {
+    public FetchedMessage fetchMessage(String messageId) {
         Message message = fetchApiMessage(messageId);
         if (!messageId.equals(message.getMessageId()) || blank(message.getChatId())) {
             throw new ImContractException("Message identity drift: expected " + PLATFORM + "/"
@@ -78,21 +82,27 @@ public class FeishuAdapter implements ImAdapter {
         MessageCategory category = FeishuMessages.categoryOf(msgType);
         boolean mentioned = message.getMentions() != null && message.getMentions().length > 0;
         String senderId = message.getSender() == null ? null : message.getSender().getId();
-        ImMessage imMessage = new ImMessage(accountId(), PLATFORM, message.getChatId(), messageId,
-                senderId, null, "incoming", null, category, mentioned,
-                FeishuMessages.extractBody(msgType, content), parseMillis(message.getCreateTime()));
-        imMessage.setRaw(rawJson(msgType, content, message.getMentions()));
-        return imMessage;
+        String origin = rememberAiOrigin(messageId);
+        return new FetchedMessage(message.getChatId(), messageId,
+                senderId, null, "incoming", null, category, mentioned, origin,
+                FeishuMessages.extractBody(msgType, content), rawJson(msgType, content, message.getMentions()),
+                parseMillis(message.getCreateTime()));
+    }
+
+    /** 发送成功时记录平台消息 id；归档命中即标 origin=ai。 */
+    private String rememberAiOrigin(String messageId) {
+        boolean matched = recentAiMessageIds.remove(messageId);
+        return matched ? "ai" : "human";
     }
 
     @Override
     public boolean hasProcessed(String messageId) {
-        return ledger.hasProcessed(PLATFORM, messageId);
+        return ledger.hasProcessed(connection().getId(), messageId);
     }
 
     @Override
-    public void markProcessed(String messageId, String conversationId) {
-        ledger.markProcessed(PLATFORM, messageId, conversationId);
+    public void markProcessed(String messageId) {
+        ledger.markProcessed(connection().getId(), messageId);
     }
 
     @Override
@@ -120,18 +130,32 @@ public class FeishuAdapter implements ImAdapter {
 
     @Override
     public void sendText(String conversationId, String text, String idempotencyKey) {
-        createMessage(conversationId, "text", json(Map.of("text", text)), idempotencyKey);
+        String sentMessageId = createMessage(conversationId, "text", json(Map.of("text", text)), idempotencyKey);
+        recordAiMessageId(sentMessageId);
     }
 
     @Override
     public void sendMedia(String conversationId, MediaKind kind, String storageRef, String idempotencyKey) {
+        String sentMessageId;
         if (kind == MediaKind.IMAGE) {
-            createMessage(conversationId, "image", json(Map.of("image_key", storageRef)), idempotencyKey);
+            sentMessageId = createMessage(conversationId, "image", json(Map.of("image_key", storageRef)), idempotencyKey);
         } else {
             // voice/video ride as file messages on feishu (audio bubbles need opus
             // uploads with duration metadata — a later iteration)
-            createMessage(conversationId, "file", json(Map.of("file_key", storageRef)), idempotencyKey);
+            sentMessageId = createMessage(conversationId, "file", json(Map.of("file_key", storageRef)), idempotencyKey);
         }
+        recordAiMessageId(sentMessageId);
+    }
+
+    /** 有界记录：AI 发送产生的平台消息 id，归档时精确回标 origin=ai。 */
+    private void recordAiMessageId(String messageId) {
+        if (messageId == null) {
+            return;
+        }
+        if (recentAiMessageIds.size() >= 256) {
+            recentAiMessageIds.pollFirst();
+        }
+        recentAiMessageIds.addLast(messageId);
     }
 
     @Override
@@ -184,8 +208,9 @@ public class FeishuAdapter implements ImAdapter {
         return conversationId != null && conversationId.startsWith(GROUP_THREAD_PREFIX);
     }
 
-    /** Sends one message into a chat; the uuid (idempotency key) dedupes replays server-side. */
-    private void createMessage(String conversationId, String msgType, String content, String idempotencyKey) {
+    /** Sends one message into a chat; the uuid (idempotency key) dedupes replays server-side.
+     * Returns the platform message id of the sent message. */
+    private String createMessage(String conversationId, String msgType, String content, String idempotencyKey) {
         CreateMessageReq request = CreateMessageReq.newBuilder()
                 .receiveIdType("chat_id")
                 .createMessageReqBody(CreateMessageReqBody.newBuilder()
@@ -199,6 +224,7 @@ public class FeishuAdapter implements ImAdapter {
             var response = client().im().v1().message().create(request);
             requireSuccess(response.success(), response.getCode(), response.getMsg(),
                     "send " + msgType + " to " + conversationId);
+            return response.getData() == null ? null : response.getData().getMessageId();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new FeishuApiException("Send to " + conversationId + " interrupted.", interrupted);

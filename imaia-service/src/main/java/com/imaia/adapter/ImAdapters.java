@@ -36,11 +36,4 @@ public class ImAdapters {
     public Collection<ImAdapter> all() {
         return byPlatform.values();
     }
-
-    /** An arbitrary registered adapter, for legacy paths that carry no platform hint
-     * (local console, platform-less admin requests); single-platform deployments get
-     * a deterministic result, multi-platform ones should pass a platform instead. */
-    public ImAdapter defaultAdapter() {
-        return byPlatform.values().iterator().next();
-    }
 }

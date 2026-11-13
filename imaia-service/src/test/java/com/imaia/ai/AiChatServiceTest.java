@@ -1,201 +1,168 @@
 package com.imaia.ai;
 
-import com.imaia.TestProperties;
-import com.imaia.adapter.wechat.WechatConnection;
-import com.imaia.config.ChatModelFactory;
-import com.imaia.config.ModelRegistry;
-import com.imaia.repository.ContactRepository;
-import com.imaia.repository.ModelCallLogRepository;
 import com.imaia.adapter.ImAdapter;
-import com.imaia.adapter.wechat.daemon.DaemonClient;
-import com.imaia.repository.AiMessageRepository;
+import com.imaia.domain.AiMemory;
 import com.imaia.domain.AiMessage;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import okhttp3.mockwebserver.RecordedRequest;
-import org.junit.jupiter.api.AfterEach;
+import com.imaia.domain.ImConnection;
+import com.imaia.domain.ImConversation;
+import com.imaia.repository.AiMemoryRepository;
+import com.imaia.repository.AiMessageRepository;
+import com.imaia.repository.ImConversationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.reactive.function.client.WebClient;
-import tools.jackson.databind.JsonNode;
-import com.imaia.repository.MemoryFactRepository;
-import org.mockito.Mockito;
-import tools.jackson.databind.json.JsonMapper;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageRequest;
 
-import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * Chat orchestration against a simulated OpenAI-compatible endpoint: the system
- * prompt and persisted history travel with each call, per-thread history stays
- * separate, the persisted history is bounded, and [IMAGE: …] / [VIDEO: …] markers
- * are parsed out of the reply into generation prompts.
- */
+/** 单层会话聊天编排：resolve 登记、上下文窗口、系统注入、三行落库。 */
 class AiChatServiceTest {
 
-    private MockWebServer server;
+    private OpenAiChatCompletion chatCompletion;
     private AiMessageRepository aiMessages;
+    private ImConversationRepository conversations;
+    private AiMemoryRepository memories;
+    private ChatTools chatTools;
     private ImAdapter adapter;
-    private final JsonMapper mapper = JsonMapper.builder().build();
+    private AiChatService service;
 
     @BeforeEach
-    void startServer() throws IOException {
-        server = new MockWebServer();
-        server.start();
-        aiMessages = Mockito.mock(AiMessageRepository.class);
-        List<AiMessage> saved = new ArrayList<>();
-        Mockito.when(aiMessages.saveAll(Mockito.anyList())).thenAnswer(inv -> {
-            List<AiMessage> rows = inv.getArgument(0);
-            saved.addAll(rows);
-            return rows;
+    void setUp() {
+        chatCompletion = mock(OpenAiChatCompletion.class);
+        aiMessages = mock(AiMessageRepository.class);
+        conversations = mock(ImConversationRepository.class);
+        memories = mock(AiMemoryRepository.class);
+        chatTools = mock(ChatTools.class);
+        adapter = mock(ImAdapter.class);
+        ImConnection connection = com.imaia.TestProperties.connection(1L, "wechat");
+        when(adapter.connection()).thenReturn(connection);
+        when(adapter.isGroupConversation(anyString())).thenReturn(false);
+        var settings = com.imaia.TestProperties.settingsService(
+                com.imaia.TestProperties.settings("默认提示词", 20, true, false, "00:00", "07:00"));
+        service = new AiChatService(chatCompletion, aiMessages, conversations, memories, settings, chatTools);
+    }
+
+    @Test
+    void resolveCreatesConversationWithKind() {
+        when(conversations.findByConnectionIdAndExternalId(1L, "wx-1")).thenReturn(java.util.Optional.empty());
+        when(conversations.save(any())).thenAnswer(inv -> {
+            ImConversation conversation = inv.getArgument(0);
+            conversation.setId(7L);
+            return conversation;
         });
-        Mockito.when(aiMessages.findRecentContext(Mockito.any(), Mockito.any(), Mockito.any()))
-                .thenAnswer(inv -> {
-                    String account = inv.getArgument(0);
-                    String thread = inv.getArgument(1);
-                    int limit = ((org.springframework.data.domain.Pageable) inv.getArgument(2)).getPageSize();
-                    return saved.stream()
-                            .filter(row -> row.getAccountId().equals(account) && row.getConversationId().equals(thread))
-                            .sorted(java.util.Comparator.comparing(AiMessage::getCreatedAt).reversed())
-                            .limit(limit)
-                            .toList()
-                            .reversed();
-                });
-    }
-
-    @AfterEach
-    void stopServer() throws IOException {
-        server.shutdown();
-    }
-
-    private AiChatService service(int historyLimit) {
-        WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
-        DaemonClient daemonClient = new DaemonClient(WebClient.create(), connection);
-        adapter = Mockito.mock(ImAdapter.class);
-        Mockito.when(adapter.accountId()).thenReturn("acc1");
-        Mockito.when(adapter.platform()).thenReturn("wechat");
-        MemoryFactRepository memoryFacts = Mockito.mock(MemoryFactRepository.class);
-        Mockito.when(memoryFacts.findTop50ByAccountIdAndScopeTypeOrderByCreatedAtDesc(Mockito.any(), Mockito.any()))
-                .thenReturn(java.util.List.of());
-        ModelRegistry registry = TestProperties.modelRegistry(server.url("/").toString());
-        ChatTools chatTools = new ChatTools(registry, new ImageGenerationClient(registry),
-                new VideoGenerationClient(registry));
-        return new AiChatService(new OpenAiChatCompletion(new ChatModelFactory(), registry,
-                        Mockito.mock(ModelCallLogRepository.class)),
-                aiMessages, memoryFacts,
-                TestProperties.profileService(TestProperties.profile("test prompt", historyLimit,
-                        "t1", true, false, 0, 0, 0)),
-                chatTools,
-                Mockito.mock(ContactRepository.class));
-    }
-
-    private static MockResponse gatewayReply(String content) {
-        return new MockResponse().setBody("""
-                {"id":"chatcmpl-1","object":"chat.completion","created":1794320000,"model":"chat-m","choices":[{"index":0,"message":{"role":"assistant","content":"%s"},"finish_reason":"stop"}]}
-                """.formatted(content))
-                .addHeader("Content-Type", "application/json");
+        ImConversation conversation = service.resolve(adapter, "wx-1");
+        assertEquals(7L, conversation.getId());
+        assertEquals(ImConversation.KIND_DIRECT, conversation.getKind());
+        assertEquals("wx-1", conversation.getExternalId());
+        verify(conversations, times(2)).save(any());
     }
 
     @Test
-    void sendsSystemPromptAndGrowsPerThreadHistory() throws Exception {
-        AiChatService service = service(4);
-        server.enqueue(gatewayReply("好呀"));
-        server.enqueue(gatewayReply("在的"));
-
-        assertThat(service.complete(adapter, "t1", "你好").text()).isEqualTo("好呀");
-        assertThat(service.complete(adapter, "t1", "在吗").text()).isEqualTo("在的");
-
-        RecordedRequest first = server.takeRequest();
-        assertThat(first.getPath()).isEqualTo("/chat/completions");
-        JsonNode firstBody = mapper.readTree(first.getBody().readUtf8());
-        assertThat(firstBody.get("model").asString()).isEqualTo("chat-m");
-        assertThat(firstBody.get("messages").size()).isEqualTo(2);
-        assertThat(firstBody.get("messages").get(0).get("role").asString()).isEqualTo("system");
-        assertThat(firstBody.get("messages").get(0).get("content").asString()).startsWith("test prompt");
-        assertThat(firstBody.get("messages").get(1).get("role").asString()).isEqualTo("user");
-        assertThat(firstBody.get("messages").get(1).get("content").asString()).isEqualTo("你好");
-
-        RecordedRequest second = server.takeRequest();
-        JsonNode secondBody = mapper.readTree(second.getBody().readUtf8());
-        assertThat(secondBody.get("messages").size()).isEqualTo(4);
-        assertThat(secondBody.get("messages").get(1).get("role").asString()).isEqualTo("user");
-        assertThat(secondBody.get("messages").get(1).get("content").asString()).isEqualTo("你好");
-        assertThat(secondBody.get("messages").get(2).get("role").asString()).isEqualTo("assistant");
-        assertThat(secondBody.get("messages").get(2).get("content").asString()).isEqualTo("好呀");
-        assertThat(secondBody.get("messages").get(3).get("role").asString()).isEqualTo("user");
-        assertThat(secondBody.get("messages").get(3).get("content").asString()).isEqualTo("在吗");
-
-        org.mockito.ArgumentCaptor<List<AiMessage>> savedRows =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        Mockito.verify(aiMessages, Mockito.times(2)).saveAll(savedRows.capture());
-        assertThat(savedRows.getAllValues().get(0)).hasSize(2);
-        assertThat(savedRows.getAllValues().get(1)).hasSize(2);
+    void resolveReusesExistingConversation() {
+        ImConversation existing = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        when(conversations.findByConnectionIdAndExternalId(1L, "wx-1"))
+                .thenReturn(java.util.Optional.of(existing));
+        when(conversations.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        ImConversation conversation = service.resolve(adapter, "wx-1");
+        assertEquals(9L, conversation.getId());
+        verify(conversations, times(1)).save(any());
     }
 
     @Test
-    void evictsOldestTurnsBeyondTheLimit() throws Exception {
-        AiChatService service = service(2);
-        server.enqueue(gatewayReply("一"));
-        server.enqueue(gatewayReply("二"));
-        server.enqueue(gatewayReply("三"));
-
-        service.complete(adapter, "t1", "一");
-        service.complete(adapter, "t1", "二");
-        service.complete(adapter, "t1", "三");
-
-        server.takeRequest();
-        server.takeRequest();
-        JsonNode third = mapper.readTree(server.takeRequest().getBody().readUtf8());
-        String body = third.toString();
-        assertThat(body).contains("二").contains("三").doesNotContain("一");
+    void completeWritesUserToolAssistantRowsInOrder() {
+        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        when(aiMessages.findRecentContext(eq(9L), any(PageRequest.class))).thenReturn(List.of());
+        when(chatTools.tools(anyLong(), anyList())).thenReturn(List.of());
+        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), anyString()))
+                .thenReturn(List.of());
+        when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), anyList()))
+                .thenReturn(new OpenAiChatCompletion.ChatResult("最终回复",
+                        List.of(new OpenAiChatCompletion.ToolExchange("remember_fact", "已记住"))));
+        List<GeneratedMedia> generated = new ArrayList<>();
+        AiChatService.ChatReply reply = service.complete(conversation, "你好", null, null, null,
+                generated, "m1");
+        assertEquals("最终回复", reply.text());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AiMessage>> rows = ArgumentCaptor.forClass((Class) List.class);
+        verify(aiMessages).saveAll(rows.capture());
+        assertEquals(3, rows.getValue().size());
+        assertEquals(AiMessage.ROLE_USER, rows.getValue().get(0).getRole());
+        assertEquals("你好", rows.getValue().get(0).getContent());
+        assertEquals(AiMessage.ROLE_TOOL, rows.getValue().get(1).getRole());
+        assertEquals("remember_fact", rows.getValue().get(1).getToolName());
+        assertEquals(AiMessage.ROLE_ASSISTANT, rows.getValue().get(2).getRole());
     }
 
     @Test
-    void keepsThreadsSeparate() throws Exception {
-        AiChatService service = service(4);
-        server.enqueue(gatewayReply("A"));
-        server.enqueue(gatewayReply("B"));
-
-        service.complete(adapter, "t1", "对话一");
-        service.complete(adapter, "t2", "对话二");
-
-        server.takeRequest();
-        JsonNode body = mapper.readTree(server.takeRequest().getBody().readUtf8());
-        assertThat(body.get("messages").size()).isEqualTo(2);
-        assertThat(body.get("messages").get(1).get("content").asString()).isEqualTo("对话二");
-        org.mockito.ArgumentCaptor<List<AiMessage>> savedRows =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        Mockito.verify(aiMessages, Mockito.times(2)).saveAll(savedRows.capture());
-        assertThat(savedRows.getAllValues().stream().flatMap(List::stream).map(AiMessage::getConversationId))
-                .containsExactly("t1", "t1", "t2", "t2");
+    void historyIsReversedToChronologicalOrder() {
+        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        when(aiMessages.findRecentContext(eq(9L), any(PageRequest.class))).thenReturn(List.of(
+                new AiMessage(9L, AiMessage.ROLE_ASSISTANT, "新回复", null, Instant.now()),
+                new AiMessage(9L, AiMessage.ROLE_USER, "旧问题", "m0", Instant.now().minusSeconds(60))));
+        when(chatTools.tools(anyLong(), anyList())).thenReturn(List.of());
+        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), anyString()))
+                .thenReturn(List.of());
+        when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), anyList()))
+                .thenReturn(new OpenAiChatCompletion.ChatResult("ok", List.of()));
+        service.complete(conversation, "你好");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<OpenAiChatCompletion.Turn>> history = ArgumentCaptor.forClass((Class) List.class);
+        verify(chatCompletion).complete(anyString(), history.capture(), eq("你好"),
+                isNull(), isNull(), anyList());
+        assertEquals(2, history.getValue().size());
+        assertEquals("旧问题", history.getValue().get(0).text());
+        assertFalse(history.getValue().get(0).assistant());
+        assertEquals("新回复", history.getValue().get(1).text());
+        assertTrue(history.getValue().get(1).assistant());
     }
 
     @Test
-    void parsesMediaMarkersOutOfTheReply() {
-        server.enqueue(gatewayReply("好的，这就画 [IMAGE: 一只红色的猫] 再给你 [VIDEO: 猫在跑]"));
-
-        AiChatService.ChatReply reply = service(4).complete(adapter, "t1", "画一只猫");
-
-        assertThat(reply.text()).isEqualTo("好的，这就画 再给你");
-        assertThat(reply.imagePrompts()).containsExactly("一只红色的猫");
-        assertThat(reply.videoPrompts()).containsExactly("猫在跑");
+    void personaAndMemoriesAreInjectedIntoSystemContext() {
+        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        conversation.setPersona("毒舌群友");
+        when(aiMessages.findRecentContext(eq(9L), any(PageRequest.class))).thenReturn(List.of());
+        when(chatTools.tools(anyLong(), anyList())).thenReturn(List.of());
+        when(memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(eq(9L), anyString()))
+                .thenReturn(List.of(new AiMemory(9L, "主人养了只猫", Instant.now()),
+                        new AiMemory(9L, "主人周四要开会", Instant.now())));
+        when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), anyList()))
+                .thenReturn(new OpenAiChatCompletion.ChatResult("ok", List.of()));
+        service.complete(conversation, "你好");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<String> system = ArgumentCaptor.forClass(String.class);
+        verify(chatCompletion).complete(system.capture(), anyList(), eq("你好"),
+                isNull(), isNull(), anyList());
+        assertTrue(system.getValue().startsWith("默认提示词"));
+        assertTrue(system.getValue().contains("本会话回复风格：毒舌群友"));
+        assertTrue(system.getValue().contains("主人养了只猫"));
+        assertTrue(system.getValue().contains("主人周四要开会"));
+        assertTrue(system.getValue().contains("当前时间"));
     }
 
     @Test
-    void carriesVisionImageAsDataUri() throws Exception {
-        AiChatService service = service(4);
-        server.enqueue(gatewayReply("看到了"));
-
-        service.complete(adapter, "t1", "这是什么", new byte[]{1, 2, 3}, "image/jpeg");
-
-        JsonNode body = mapper.readTree(server.takeRequest().getBody().readUtf8());
-        JsonNode parts = body.get("messages").get(1).get("content");
-        assertThat(parts.isArray()).isTrue();
-        assertThat(parts.get(0).get("type").asString()).isEqualTo("text");
-        assertThat(parts.get(1).get("type").asString()).isEqualTo("image_url");
-        assertThat(parts.get(1).get("image_url").get("url").asString()).contains("data:image/jpeg;base64,");
+    void completeOnceReturnsPlainTextWithoutTouchingHistory() {
+        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any()))
+                .thenReturn("  措辞好的消息  ");
+        String text = service.completeOnce(conversation, "写一句问候");
+        assertEquals("措辞好的消息", text);
+        verify(aiMessages, times(0)).saveAll(any());
+        verify(aiMessages, times(0)).save(any());
     }
 }

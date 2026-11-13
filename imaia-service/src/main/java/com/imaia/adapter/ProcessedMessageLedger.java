@@ -8,8 +8,8 @@ import java.time.Instant;
 
 /**
  * The shared processed-message ledger behind every adapter's idempotency gate:
- * (platform, message id) is unique, so replays of an already-handled message stay
- * silent even across restarts.
+ * (connection, message id) is unique, so replays of an already-handled message
+ * stay silent even across restarts.
  */
 @Component
 public class ProcessedMessageLedger {
@@ -20,13 +20,13 @@ public class ProcessedMessageLedger {
         this.processedMessages = processedMessages;
     }
 
-    /** Whether this platform already handled the message. */
-    public boolean hasProcessed(String platform, String messageId) {
-        return processedMessages.existsByPlatformAndMessageId(platform, messageId);
+    /** Whether this connection already handled the message. */
+    public boolean hasProcessed(Long connectionId, String messageId) {
+        return processedMessages.existsByConnectionIdAndMessageId(connectionId, messageId);
     }
 
-    /** Marks the message processed for this platform. */
-    public void markProcessed(String platform, String messageId, String conversationId) {
-        processedMessages.save(new ProcessedMessage(platform, messageId, conversationId, Instant.now()));
+    /** Marks the message processed for this connection. */
+    public void markProcessed(Long connectionId, String messageId) {
+        processedMessages.save(new ProcessedMessage(connectionId, messageId, Instant.now()));
     }
 }

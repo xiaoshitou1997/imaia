@@ -1,10 +1,12 @@
 package com.imaia.ai;
 
 import com.imaia.adapter.ImAdapter;
-import com.imaia.domain.Contact;
-import com.imaia.repository.ContactRepository;
 import com.imaia.domain.AiMessage;
-import com.imaia.repository.MemoryFactRepository;
+import com.imaia.domain.AiMemory;
+import com.imaia.domain.ImConversation;
+import com.imaia.repository.AiMessageRepository;
+import com.imaia.repository.AiMemoryRepository;
+import com.imaia.repository.ImConversationRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
@@ -12,126 +14,132 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Chat orchestration: persists the per-thread model conversation as ai_message rows
- * — user turns keep the raw user text (group context travels in the system block and
- * is never stored, tool rows record what the model generated) — delegates completions
- * to the directory-driven chat client with the media tools attached, injects current
- * time and long-term memory into the system context, and parses the remaining intent
- * markers ([REMINDER:] [MEMORY:] [ANALYZE:]) out of the reply.
+ * Chat orchestration over the single-layer model: every external thread resolves
+ * to its {@link ImConversation} (find-or-create on first sight). A full turn reads
+ * the conversation's persisted context window, injects current time, line persona
+ * and remembered facts into the system block, delegates to the directory-driven
+ * chat client with the toolset (media generation, search, reminder, memory), then
+ * appends user/tool/assistant rows. The archive stays a separate, immutable record.
  */
 @Component
 public class AiChatService {
 
     private static final DateTimeFormatter TIME_DISPLAY =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm\uFF08EEEE\uFF09", Locale.CHINESE);
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm（EEEE）", Locale.CHINESE);
 
     private final OpenAiChatCompletion chatCompletion;
-    private final com.imaia.repository.AiMessageRepository aiMessages;
-    private final MemoryFactRepository memoryFacts;
-    private final AssistantProfileService profiles;
+    private final AiMessageRepository aiMessages;
+    private final ImConversationRepository conversations;
+    private final AiMemoryRepository memories;
+    private final AssistantSettingsService settings;
     private final ChatTools chatTools;
-    private final ContactRepository contacts;
 
-    public AiChatService(OpenAiChatCompletion chatCompletion, com.imaia.repository.AiMessageRepository aiMessages,
-            MemoryFactRepository memoryFacts, AssistantProfileService profiles,
-            ChatTools chatTools, ContactRepository contacts) {
+    public AiChatService(OpenAiChatCompletion chatCompletion, AiMessageRepository aiMessages,
+            ImConversationRepository conversations, AiMemoryRepository memories,
+            AssistantSettingsService settings, ChatTools chatTools) {
         this.chatCompletion = chatCompletion;
         this.aiMessages = aiMessages;
-        this.memoryFacts = memoryFacts;
-        this.profiles = profiles;
+        this.conversations = conversations;
+        this.memories = memories;
+        this.settings = settings;
         this.chatTools = chatTools;
-        this.contacts = contacts;
+    }
+
+    /** The conversation of one external thread: find-or-create, refresh last-seen. */
+    public ImConversation resolve(ImAdapter adapter, String externalId) {
+        Instant now = Instant.now();
+        ImConversation conversation = conversations
+                .findByConnectionIdAndExternalId(adapter.connection().getId(), externalId)
+                .orElseGet(() -> conversations.save(new ImConversation(adapter.connection().getId(),
+                        externalId, null,
+                        adapter.isGroupConversation(externalId)
+                                ? ImConversation.KIND_GROUP : ImConversation.KIND_DIRECT,
+                        now, now, now)));
+        conversation.setLastSeenAt(now);
+        return conversations.save(conversation);
     }
 
     /** Runs the completion with no attached image; tool-generated media is discarded. */
-    public ChatReply complete(ImAdapter adapter, String conversationId, String userText) {
-        return complete(adapter, conversationId, userText, null, null, null, new ArrayList<>(), null);
+    public ChatReply complete(ImConversation conversation, String userText) {
+        return complete(conversation, userText, null, null, null, new ArrayList<>(), null);
     }
 
     /** Runs the completion, optionally attaching image bytes to the current turn. */
-    public ChatReply complete(ImAdapter adapter, String conversationId, String userText, byte[] image, String imageMimeType) {
-        return complete(adapter, conversationId, userText, image, imageMimeType, null, new ArrayList<>(), null);
+    public ChatReply complete(ImConversation conversation, String userText, byte[] image, String imageMimeType) {
+        return complete(conversation, userText, image, imageMimeType, null, new ArrayList<>(), null);
     }
 
     /**
-     * Runs one full turn: persisted history (user/assistant), transient group context
-     * in the system block, the current user text (optionally with a vision image) and
-     * the directory-derived media tools. Appends user, tool and assistant rows to the
-     * history store; the remaining intent markers are parsed out of the final reply.
-     * The adapter carries the conversation's platform (identity + history scoping).
+     * Runs one full turn: persisted history in chronological order, the system block
+     * (default prompt + time + line persona + group context + memories), the current
+     * user text (optionally with a vision image) and the toolset. Appends user, tool
+     * and assistant rows to the conversation's context stream; tool side effects
+     * (media bytes, reminders, memories) are applied by the tools themselves.
      */
-    public ChatReply complete(ImAdapter adapter, String conversationId, String userText, byte[] image, String imageMimeType,
+    public ChatReply complete(ImConversation conversation, String userText, byte[] image, String imageMimeType,
             String groupContext, List<GeneratedMedia> generated, String sourceMessageId) {
-        String accountId = adapter.accountId();
-        int limit = Math.max(2, profiles.current().getHistoryLimit());
-        List<OpenAiChatCompletion.Turn> history = aiMessages
-                .findRecentContext(accountId, conversationId, PageRequest.of(0, limit)).stream()
+        int limit = Math.max(2, settings.current().getHistoryLimit());
+        List<OpenAiChatCompletion.Turn> history = new ArrayList<>(aiMessages
+                .findRecentContext(conversation.getId(), PageRequest.of(0, limit)).stream()
                 .map(message -> new OpenAiChatCompletion.Turn(
                         AiMessage.ROLE_ASSISTANT.equals(message.getRole()), message.getContent()))
-                .toList();
+                .toList());
+        Collections.reverse(history);
         OpenAiChatCompletion.ChatResult result = chatCompletion.complete(
-                buildSystemContext(adapter, conversationId, accountId, groupContext), history,
-                userText, image, imageMimeType, chatTools.mediaTools(generated));
+                buildSystemContext(conversation, groupContext), history,
+                userText, image, imageMimeType, chatTools.tools(conversation.getId(), generated));
         String reply = result.text();
         if (reply == null || reply.isBlank()) {
-            throw new IllegalStateException("Gateway returned no text content on thread " + conversationId + ".");
+            throw new IllegalStateException("Gateway returned no text content on conversation "
+                    + conversation.getId() + ".");
         }
-        IntentParser.Intents intents = IntentParser.parse(reply);
-        String text = intents.textWithoutMarkers();
         Instant now = Instant.now();
         List<AiMessage> rows = new ArrayList<>();
-        rows.add(new AiMessage(accountId, adapter.platform(), conversationId, AiMessage.ROLE_USER, userText, sourceMessageId,
+        rows.add(new AiMessage(conversation.getId(), AiMessage.ROLE_USER, userText, sourceMessageId,
                 now.minusMillis(1)));
         for (OpenAiChatCompletion.ToolExchange exchange : result.toolExchanges()) {
-            rows.add(new AiMessage(accountId, adapter.platform(), conversationId, AiMessage.ROLE_TOOL, exchange.result(),
+            rows.add(new AiMessage(conversation.getId(), AiMessage.ROLE_TOOL, exchange.result(),
                     null, exchange.toolName(), now));
         }
-        rows.add(new AiMessage(accountId, adapter.platform(), conversationId, AiMessage.ROLE_ASSISTANT, text, null, null, now));
+        rows.add(new AiMessage(conversation.getId(), AiMessage.ROLE_ASSISTANT, reply, null, null, now));
         aiMessages.saveAll(rows);
-        return new ChatReply(text, intents.images(), intents.videos(),
-                intents.reminders(), intents.memories(), intents.analyses());
+        return new ChatReply(reply, List.copyOf(generated));
     }
 
     /**
-     * One-shot completion with no history read or write — used by scheduled proactive
-     * messages where the prompt is an instruction, not part of any conversation.
+     * One-shot completion with no history read or write — used by scheduled cron
+     * phrasing and report writing, where the prompt is an instruction, not part of
+     * any conversation.
      */
-    public String completeOnce(ImAdapter adapter, String conversationId, String instruction) {
-        String reply = chatCompletion.complete(buildSystemContext(adapter, conversationId, null, null),
+    public String completeOnce(ImConversation conversation, String instruction) {
+        String reply = chatCompletion.complete(buildSystemContext(conversation, null),
                 List.of(), instruction, null, null);
         if (reply == null || reply.isBlank()) {
-            throw new IllegalStateException("Chat endpoint returned no text on thread " + conversationId + ".");
+            throw new IllegalStateException("Chat endpoint returned no text on conversation "
+                    + conversation.getId() + ".");
         }
         return reply.strip();
     }
 
-    /** System prompt + current time + transient group context + remembered facts. */
-    private String buildSystemContext(ImAdapter adapter, String conversationId, String accountId, String groupContext) {
-        StringBuilder system = new StringBuilder(profiles.current().getSystemPrompt());
+    /** Default prompt + current time + line persona + group context + remembered facts. */
+    private String buildSystemContext(ImConversation conversation, String groupContext) {
+        StringBuilder system = new StringBuilder(settings.current().getSystemPrompt());
         system.append("\n\n当前时间：").append(LocalDateTime.now().format(TIME_DISPLAY));
-        if (accountId != null) {
-            contacts.findByAccountIdAndPlatformAndExternalId(accountId, adapter.platform(), conversationId)
-                    .map(Contact::getPersona)
-                    .filter(persona -> persona != null && !persona.isBlank())
-                    .ifPresent(persona -> system.append("\n\n本会话回复风格：").append(persona.strip()));
+        if (conversation.getPersona() != null && !conversation.getPersona().isBlank()) {
+            system.append("\n\n本会话回复风格：").append(conversation.getPersona().strip());
         }
         if (groupContext != null && !groupContext.isBlank()) {
             system.append("\n\n").append(groupContext);
         }
         List<String> facts = new ArrayList<>();
-        if (accountId != null) {
-            for (var fact : memoryFacts.findTop50ByAccountIdAndScopeTypeOrderByCreatedAtDesc(accountId, "global")) {
-                facts.add(fact.getFact());
-            }
-            if (conversationId != null) {
-                for (var fact : memoryFacts.findTop50ByAccountIdAndScopeTypeAndScopeIdOrderByCreatedAtDesc(accountId, "thread", conversationId)) {
-                    facts.add(fact.getFact());
-                }
-            }
+        for (AiMemory memory : memories.findTop50ByConversationIdAndStatusOrderByCreatedAtDesc(
+                conversation.getId(), AiMemory.STATUS_ACTIVE)) {
+            facts.add(memory.getFact());
         }
         if (!facts.isEmpty()) {
             system.append("\n\n你已记住的长期事实（回答时自然使用，不要罗列）：");
@@ -142,12 +150,7 @@ public class AiChatService {
         return system.toString();
     }
 
-    /** The model-visible reply after marker parsing, plus extracted intent payloads. */
-    public record ChatReply(String text, List<String> imagePrompts, List<String> videoPrompts,
-            List<IntentParser.ReminderIntent> reminders, List<String> memories, List<String> analyses) {
-
-        public ChatReply(String text, List<String> imagePrompts, List<String> videoPrompts) {
-            this(text, imagePrompts, videoPrompts, List.of(), List.of(), List.of());
-        }
+    /** The model reply text plus the media its tools generated during the turn. */
+    public record ChatReply(String text, List<GeneratedMedia> generated) {
     }
 }

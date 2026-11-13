@@ -1,8 +1,8 @@
 package com.imaia.adapter.wechat;
 
 import com.imaia.adapter.WechatAdapter;
-import com.imaia.domain.PlatformAccount;
-import com.imaia.repository.PlatformAccountRepository;
+import com.imaia.domain.ImConnection;
+import com.imaia.repository.ImConnectionRepository;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.stereotype.Component;
@@ -13,26 +13,27 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 
 /**
- * The wechat adapter's wiring: resolves the enabled platform_account row, parses its
- * structured config and builds the authenticated daemon WebClient from it. Config is
- * loaded once and cached — editing the row takes effect on restart. No enabled row
- * means the platform is not set up: the stream skips it instead of failing, and the
- * send-side calls fail with clear instructions.
+ * The wechat adapter's wiring: resolves the enabled im_connection row, parses its structured
+ * config and builds the authenticated daemon WebClient from it. Config is loaded once
+ * and cached — editing the row takes effect on restart. No enabled row means the
+ * platform is not set up: the stream skips it instead of failing, and the send-side
+ * calls fail with clear instructions.
  */
 @Component
 public class WechatConnection {
 
-    private final PlatformAccountRepository accounts;
+    private final ImConnectionRepository accounts;
     private final JsonMapper jsonMapper;
     private final WechatAccountConfig fixed;
     private volatile WechatAccountConfig config;
+    private volatile ImConnection appRow;
     private volatile WebClient client;
 
-    public WechatConnection(PlatformAccountRepository accounts, JsonMapper jsonMapper) {
+    public WechatConnection(ImConnectionRepository accounts, JsonMapper jsonMapper) {
         this(accounts, jsonMapper, null);
     }
 
-    private WechatConnection(PlatformAccountRepository accounts, JsonMapper jsonMapper,
+    private WechatConnection(ImConnectionRepository accounts, JsonMapper jsonMapper,
             WechatAccountConfig fixed) {
         this.accounts = accounts;
         this.jsonMapper = jsonMapper;
@@ -45,6 +46,14 @@ public class WechatConnection {
             return true;
         }
         return accounts.findTopByPlatformAndEnabledTrueOrderByIdAsc(WechatAdapter.PLATFORM).isPresent();
+    }
+
+    /** The connection row this adapter serves; its id anchors connection-scoped rows. */
+    public ImConnection row() {
+        if (appRow == null) {
+            config();
+        }
+        return appRow;
     }
 
     /** The cached connection config; failing fast with repair instructions when unconfigured. */
@@ -80,17 +89,22 @@ public class WechatConnection {
     }
 
     private WechatAccountConfig load() {
-        PlatformAccount row = accounts.findTopByPlatformAndEnabledTrueOrderByIdAsc(WechatAdapter.PLATFORM)
+        ImConnection row = accounts.findTopByPlatformAndEnabledTrueOrderByIdAsc(WechatAdapter.PLATFORM)
                 .orElseThrow(() -> new IllegalStateException("""
-                        no enabled platform_account row for 'wechat'. Insert one with the daemon wiring, for example:
-                        INSERT INTO platform_account (platform, name, enabled, config)
+                        no enabled im_connection row for 'wechat'. Insert one with the daemon wiring, for example:
+                        INSERT INTO im_connection (platform, name, enabled, config)
                         VALUES ('wechat', 'default', true,
                                 '{"baseUrl": "http://127.0.0.1:6174", "token": "<daemon token>"}'::jsonb);"""));
+        appRow = row;
         return WechatAccountConfig.fromJson(row.configJson(jsonMapper));
     }
 
     /** Test seam: a connection over an explicit config, no database involved. */
     public static WechatConnection forTesting(WechatAccountConfig fixedConfig) {
-        return new WechatConnection(null, JsonMapper.builder().build(), fixedConfig);
+        WechatConnection connection = new WechatConnection(null, JsonMapper.builder().build(), fixedConfig);
+        ImConnection app = new ImConnection("wechat", "default", true, "{}");
+        app.setId(1L);
+        connection.appRow = app;
+        return connection;
     }
 }

@@ -1,32 +1,33 @@
 package com.imaia.adapter.feishu;
 
 import com.lark.oapi.Client;
-import com.imaia.domain.PlatformAccount;
-import com.imaia.repository.PlatformAccountRepository;
+import com.imaia.domain.ImConnection;
+import com.imaia.repository.ImConnectionRepository;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The feishu adapter's wiring: resolves the enabled platform_account row, parses its
- * structured config and builds the official SDK {@link Client} from it (the SDK
- * manages the tenant token lifecycle). Config is loaded once and cached — editing
- * the row takes effect on restart. No enabled row means the platform is not set up:
- * the stream skips it instead of failing.
+ * The feishu adapter's wiring: resolves the enabled im_connection row, parses its structured
+ * config and builds the official SDK {@link Client} from it (the SDK manages the
+ * tenant token lifecycle). Config is loaded once and cached — editing the row takes
+ * effect on restart. No enabled row means the platform is not set up: the stream
+ * skips it instead of failing.
  */
 @Component
 public class FeishuConnection {
 
-    private final PlatformAccountRepository accounts;
+    private final ImConnectionRepository accounts;
     private final JsonMapper jsonMapper;
     private final FeishuAccountConfig fixed;
     private volatile FeishuAccountConfig config;
+    private volatile ImConnection appRow;
     private volatile Client client;
 
-    public FeishuConnection(PlatformAccountRepository accounts, JsonMapper jsonMapper) {
+    public FeishuConnection(ImConnectionRepository accounts, JsonMapper jsonMapper) {
         this(accounts, jsonMapper, null);
     }
 
-    private FeishuConnection(PlatformAccountRepository accounts, JsonMapper jsonMapper,
+    private FeishuConnection(ImConnectionRepository accounts, JsonMapper jsonMapper,
             FeishuAccountConfig fixed) {
         this.accounts = accounts;
         this.jsonMapper = jsonMapper;
@@ -39,6 +40,14 @@ public class FeishuConnection {
             return true;
         }
         return accounts.findTopByPlatformAndEnabledTrueOrderByIdAsc(FeishuAdapter.PLATFORM).isPresent();
+    }
+
+    /** The connection row this adapter serves; its id anchors connection-scoped rows. */
+    public ImConnection row() {
+        if (appRow == null) {
+            config();
+        }
+        return appRow;
     }
 
     /** The cached connection config; failing fast with repair instructions when unconfigured. */
@@ -70,17 +79,22 @@ public class FeishuConnection {
     }
 
     private FeishuAccountConfig load() {
-        PlatformAccount row = accounts.findTopByPlatformAndEnabledTrueOrderByIdAsc(FeishuAdapter.PLATFORM)
+        ImConnection row = accounts.findTopByPlatformAndEnabledTrueOrderByIdAsc(FeishuAdapter.PLATFORM)
                 .orElseThrow(() -> new IllegalStateException("""
-                        no enabled platform_account row for 'feishu'. Insert one after creating the self-built app, for example:
-                        INSERT INTO platform_account (platform, name, enabled, config)
+                        no enabled im_connection row for 'feishu'. Insert one after creating the self-built app, for example:
+                        INSERT INTO im_connection (platform, name, enabled, config)
                         VALUES ('feishu', 'default', true,
                                 '{"appId": "cli_xxx", "appSecret": "<secret>"}'::jsonb);"""));
+        appRow = row;
         return FeishuAccountConfig.fromJson(row.configJson(jsonMapper));
     }
 
     /** Test seam: a connection over an explicit config, no database involved. */
     public static FeishuConnection forTesting(FeishuAccountConfig fixedConfig) {
-        return new FeishuConnection(null, JsonMapper.builder().build(), fixedConfig);
+        FeishuConnection connection = new FeishuConnection(null, JsonMapper.builder().build(), fixedConfig);
+        ImConnection app = new ImConnection("feishu", "default", true, "{}");
+        app.setId(2L);
+        connection.appRow = app;
+        return connection;
     }
 }
