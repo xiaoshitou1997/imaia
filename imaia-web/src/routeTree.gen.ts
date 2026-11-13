@@ -21,15 +21,15 @@ import { Route as errors404RouteImport } from './routes/(errors)/404'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedBotActionsRouteImport } from './routes/_authenticated/bot/actions'
 import { Route as AuthenticatedBotArtifactsRouteImport } from './routes/_authenticated/bot/artifacts'
 import { Route as AuthenticatedBotCallsRouteImport } from './routes/_authenticated/bot/calls'
-import { Route as AuthenticatedBotConsoleRouteImport } from './routes/_authenticated/bot/console'
-import { Route as AuthenticatedBotContactsRouteImport } from './routes/_authenticated/bot/contacts'
-import { Route as AuthenticatedBotDirectoryRouteImport } from './routes/_authenticated/bot/directory'
+import { Route as AuthenticatedBotConnectionsRouteImport } from './routes/_authenticated/bot/connections'
+import { Route as AuthenticatedBotInboxRouteImport } from './routes/_authenticated/bot/inbox'
 import { Route as AuthenticatedBotMemoriesRouteImport } from './routes/_authenticated/bot/memories'
-import { Route as AuthenticatedBotMessagesRouteImport } from './routes/_authenticated/bot/messages'
+import { Route as AuthenticatedBotModelsRouteImport } from './routes/_authenticated/bot/models'
+import { Route as AuthenticatedBotReportsRouteImport } from './routes/_authenticated/bot/reports'
 import { Route as AuthenticatedBotSettingsRouteImport } from './routes/_authenticated/bot/settings'
+import { Route as AuthenticatedBotTasksRouteImport } from './routes/_authenticated/bot/tasks'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -91,11 +91,6 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedBotActionsRoute = AuthenticatedBotActionsRouteImport.update({
-  id: '/bot/actions',
-  path: '/bot/actions',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedBotArtifactsRoute =
   AuthenticatedBotArtifactsRouteImport.update({
     id: '/bot/artifacts',
@@ -107,41 +102,44 @@ const AuthenticatedBotCallsRoute = AuthenticatedBotCallsRouteImport.update({
   path: '/bot/calls',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedBotConsoleRoute = AuthenticatedBotConsoleRouteImport.update({
-  id: '/bot/console',
-  path: '/bot/console',
+const AuthenticatedBotConnectionsRoute =
+  AuthenticatedBotConnectionsRouteImport.update({
+    id: '/bot/connections',
+    path: '/bot/connections',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedBotInboxRoute = AuthenticatedBotInboxRouteImport.update({
+  id: '/bot/inbox',
+  path: '/bot/inbox',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedBotContactsRoute =
-  AuthenticatedBotContactsRouteImport.update({
-    id: '/bot/contacts',
-    path: '/bot/contacts',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedBotDirectoryRoute =
-  AuthenticatedBotDirectoryRouteImport.update({
-    id: '/bot/directory',
-    path: '/bot/directory',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedBotMemoriesRoute =
   AuthenticatedBotMemoriesRouteImport.update({
     id: '/bot/memories',
     path: '/bot/memories',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedBotMessagesRoute =
-  AuthenticatedBotMessagesRouteImport.update({
-    id: '/bot/messages',
-    path: '/bot/messages',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
+const AuthenticatedBotModelsRoute = AuthenticatedBotModelsRouteImport.update({
+  id: '/bot/models',
+  path: '/bot/models',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBotReportsRoute = AuthenticatedBotReportsRouteImport.update({
+  id: '/bot/reports',
+  path: '/bot/reports',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedBotSettingsRoute =
   AuthenticatedBotSettingsRouteImport.update({
     id: '/bot/settings',
     path: '/bot/settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedBotTasksRoute = AuthenticatedBotTasksRouteImport.update({
+  id: '/bot/tasks',
+  path: '/bot/tasks',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedErrorsErrorRoute =
   AuthenticatedErrorsErrorRouteImport.update({
     id: '/errors/$error',
@@ -161,15 +159,15 @@ export interface FileRoutesByFullPath {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
-  '/bot/actions': typeof AuthenticatedBotActionsRoute
   '/bot/artifacts': typeof AuthenticatedBotArtifactsRoute
   '/bot/calls': typeof AuthenticatedBotCallsRoute
-  '/bot/console': typeof AuthenticatedBotConsoleRoute
-  '/bot/contacts': typeof AuthenticatedBotContactsRoute
-  '/bot/directory': typeof AuthenticatedBotDirectoryRoute
+  '/bot/connections': typeof AuthenticatedBotConnectionsRoute
+  '/bot/inbox': typeof AuthenticatedBotInboxRoute
   '/bot/memories': typeof AuthenticatedBotMemoriesRoute
-  '/bot/messages': typeof AuthenticatedBotMessagesRoute
+  '/bot/models': typeof AuthenticatedBotModelsRoute
+  '/bot/reports': typeof AuthenticatedBotReportsRoute
   '/bot/settings': typeof AuthenticatedBotSettingsRoute
+  '/bot/tasks': typeof AuthenticatedBotTasksRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
 }
 export interface FileRoutesByTo {
@@ -184,15 +182,15 @@ export interface FileRoutesByTo {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/': typeof AuthenticatedIndexRoute
-  '/bot/actions': typeof AuthenticatedBotActionsRoute
   '/bot/artifacts': typeof AuthenticatedBotArtifactsRoute
   '/bot/calls': typeof AuthenticatedBotCallsRoute
-  '/bot/console': typeof AuthenticatedBotConsoleRoute
-  '/bot/contacts': typeof AuthenticatedBotContactsRoute
-  '/bot/directory': typeof AuthenticatedBotDirectoryRoute
+  '/bot/connections': typeof AuthenticatedBotConnectionsRoute
+  '/bot/inbox': typeof AuthenticatedBotInboxRoute
   '/bot/memories': typeof AuthenticatedBotMemoriesRoute
-  '/bot/messages': typeof AuthenticatedBotMessagesRoute
+  '/bot/models': typeof AuthenticatedBotModelsRoute
+  '/bot/reports': typeof AuthenticatedBotReportsRoute
   '/bot/settings': typeof AuthenticatedBotSettingsRoute
+  '/bot/tasks': typeof AuthenticatedBotTasksRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
 }
 export interface FileRoutesById {
@@ -209,15 +207,15 @@ export interface FileRoutesById {
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/bot/actions': typeof AuthenticatedBotActionsRoute
   '/_authenticated/bot/artifacts': typeof AuthenticatedBotArtifactsRoute
   '/_authenticated/bot/calls': typeof AuthenticatedBotCallsRoute
-  '/_authenticated/bot/console': typeof AuthenticatedBotConsoleRoute
-  '/_authenticated/bot/contacts': typeof AuthenticatedBotContactsRoute
-  '/_authenticated/bot/directory': typeof AuthenticatedBotDirectoryRoute
+  '/_authenticated/bot/connections': typeof AuthenticatedBotConnectionsRoute
+  '/_authenticated/bot/inbox': typeof AuthenticatedBotInboxRoute
   '/_authenticated/bot/memories': typeof AuthenticatedBotMemoriesRoute
-  '/_authenticated/bot/messages': typeof AuthenticatedBotMessagesRoute
+  '/_authenticated/bot/models': typeof AuthenticatedBotModelsRoute
+  '/_authenticated/bot/reports': typeof AuthenticatedBotReportsRoute
   '/_authenticated/bot/settings': typeof AuthenticatedBotSettingsRoute
+  '/_authenticated/bot/tasks': typeof AuthenticatedBotTasksRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
 }
 export interface FileRouteTypes {
@@ -234,15 +232,15 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
-    | '/bot/actions'
     | '/bot/artifacts'
     | '/bot/calls'
-    | '/bot/console'
-    | '/bot/contacts'
-    | '/bot/directory'
+    | '/bot/connections'
+    | '/bot/inbox'
     | '/bot/memories'
-    | '/bot/messages'
+    | '/bot/models'
+    | '/bot/reports'
     | '/bot/settings'
+    | '/bot/tasks'
     | '/errors/$error'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -257,15 +255,15 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/'
-    | '/bot/actions'
     | '/bot/artifacts'
     | '/bot/calls'
-    | '/bot/console'
-    | '/bot/contacts'
-    | '/bot/directory'
+    | '/bot/connections'
+    | '/bot/inbox'
     | '/bot/memories'
-    | '/bot/messages'
+    | '/bot/models'
+    | '/bot/reports'
     | '/bot/settings'
+    | '/bot/tasks'
     | '/errors/$error'
   id:
     | '__root__'
@@ -281,15 +279,15 @@ export interface FileRouteTypes {
     | '/(errors)/500'
     | '/(errors)/503'
     | '/_authenticated/'
-    | '/_authenticated/bot/actions'
     | '/_authenticated/bot/artifacts'
     | '/_authenticated/bot/calls'
-    | '/_authenticated/bot/console'
-    | '/_authenticated/bot/contacts'
-    | '/_authenticated/bot/directory'
+    | '/_authenticated/bot/connections'
+    | '/_authenticated/bot/inbox'
     | '/_authenticated/bot/memories'
-    | '/_authenticated/bot/messages'
+    | '/_authenticated/bot/models'
+    | '/_authenticated/bot/reports'
     | '/_authenticated/bot/settings'
+    | '/_authenticated/bot/tasks'
     | '/_authenticated/errors/$error'
   fileRoutesById: FileRoutesById
 }
@@ -393,13 +391,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bot/actions': {
-      id: '/_authenticated/bot/actions'
-      path: '/bot/actions'
-      fullPath: '/bot/actions'
-      preLoaderRoute: typeof AuthenticatedBotActionsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/bot/artifacts': {
       id: '/_authenticated/bot/artifacts'
       path: '/bot/artifacts'
@@ -414,25 +405,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBotCallsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bot/console': {
-      id: '/_authenticated/bot/console'
-      path: '/bot/console'
-      fullPath: '/bot/console'
-      preLoaderRoute: typeof AuthenticatedBotConsoleRouteImport
+    '/_authenticated/bot/connections': {
+      id: '/_authenticated/bot/connections'
+      path: '/bot/connections'
+      fullPath: '/bot/connections'
+      preLoaderRoute: typeof AuthenticatedBotConnectionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bot/contacts': {
-      id: '/_authenticated/bot/contacts'
-      path: '/bot/contacts'
-      fullPath: '/bot/contacts'
-      preLoaderRoute: typeof AuthenticatedBotContactsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot/directory': {
-      id: '/_authenticated/bot/directory'
-      path: '/bot/directory'
-      fullPath: '/bot/directory'
-      preLoaderRoute: typeof AuthenticatedBotDirectoryRouteImport
+    '/_authenticated/bot/inbox': {
+      id: '/_authenticated/bot/inbox'
+      path: '/bot/inbox'
+      fullPath: '/bot/inbox'
+      preLoaderRoute: typeof AuthenticatedBotInboxRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/bot/memories': {
@@ -442,11 +426,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBotMemoriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bot/messages': {
-      id: '/_authenticated/bot/messages'
-      path: '/bot/messages'
-      fullPath: '/bot/messages'
-      preLoaderRoute: typeof AuthenticatedBotMessagesRouteImport
+    '/_authenticated/bot/models': {
+      id: '/_authenticated/bot/models'
+      path: '/bot/models'
+      fullPath: '/bot/models'
+      preLoaderRoute: typeof AuthenticatedBotModelsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bot/reports': {
+      id: '/_authenticated/bot/reports'
+      path: '/bot/reports'
+      fullPath: '/bot/reports'
+      preLoaderRoute: typeof AuthenticatedBotReportsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/bot/settings': {
@@ -454,6 +445,13 @@ declare module '@tanstack/react-router' {
       path: '/bot/settings'
       fullPath: '/bot/settings'
       preLoaderRoute: typeof AuthenticatedBotSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bot/tasks': {
+      id: '/_authenticated/bot/tasks'
+      path: '/bot/tasks'
+      fullPath: '/bot/tasks'
+      preLoaderRoute: typeof AuthenticatedBotTasksRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/errors/$error': {
@@ -468,29 +466,29 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
-  AuthenticatedBotActionsRoute: typeof AuthenticatedBotActionsRoute
   AuthenticatedBotArtifactsRoute: typeof AuthenticatedBotArtifactsRoute
   AuthenticatedBotCallsRoute: typeof AuthenticatedBotCallsRoute
-  AuthenticatedBotConsoleRoute: typeof AuthenticatedBotConsoleRoute
-  AuthenticatedBotContactsRoute: typeof AuthenticatedBotContactsRoute
-  AuthenticatedBotDirectoryRoute: typeof AuthenticatedBotDirectoryRoute
+  AuthenticatedBotConnectionsRoute: typeof AuthenticatedBotConnectionsRoute
+  AuthenticatedBotInboxRoute: typeof AuthenticatedBotInboxRoute
   AuthenticatedBotMemoriesRoute: typeof AuthenticatedBotMemoriesRoute
-  AuthenticatedBotMessagesRoute: typeof AuthenticatedBotMessagesRoute
+  AuthenticatedBotModelsRoute: typeof AuthenticatedBotModelsRoute
+  AuthenticatedBotReportsRoute: typeof AuthenticatedBotReportsRoute
   AuthenticatedBotSettingsRoute: typeof AuthenticatedBotSettingsRoute
+  AuthenticatedBotTasksRoute: typeof AuthenticatedBotTasksRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedBotActionsRoute: AuthenticatedBotActionsRoute,
   AuthenticatedBotArtifactsRoute: AuthenticatedBotArtifactsRoute,
   AuthenticatedBotCallsRoute: AuthenticatedBotCallsRoute,
-  AuthenticatedBotConsoleRoute: AuthenticatedBotConsoleRoute,
-  AuthenticatedBotContactsRoute: AuthenticatedBotContactsRoute,
-  AuthenticatedBotDirectoryRoute: AuthenticatedBotDirectoryRoute,
+  AuthenticatedBotConnectionsRoute: AuthenticatedBotConnectionsRoute,
+  AuthenticatedBotInboxRoute: AuthenticatedBotInboxRoute,
   AuthenticatedBotMemoriesRoute: AuthenticatedBotMemoriesRoute,
-  AuthenticatedBotMessagesRoute: AuthenticatedBotMessagesRoute,
+  AuthenticatedBotModelsRoute: AuthenticatedBotModelsRoute,
+  AuthenticatedBotReportsRoute: AuthenticatedBotReportsRoute,
   AuthenticatedBotSettingsRoute: AuthenticatedBotSettingsRoute,
+  AuthenticatedBotTasksRoute: AuthenticatedBotTasksRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
 }
 

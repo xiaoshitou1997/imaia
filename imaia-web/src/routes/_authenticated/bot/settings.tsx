@@ -2,149 +2,127 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { api } from '@/features/imaia/api'
-import type { AssistantProfile, RiskPolicy } from '@/features/imaia/api'
-import { Card, CardContent } from '@/components/ui/card'
+import { api, type Settings } from '@/features/imaia/api'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export const Route = createFileRoute('/_authenticated/bot/settings')({
   component: SettingsPage,
 })
 
 function SettingsPage() {
-  const { data: profileData } = useQuery({ queryKey: ['profile'], queryFn: api.profile })
-  const { data: riskData } = useQuery({ queryKey: ['risk'], queryFn: api.risk })
-  const { data: runtime } = useQuery({ queryKey: ['runtime'], queryFn: api.runtime })
-  const [profile, setProfile] = useState<AssistantProfile | null>(null)
-  const [risk, setRisk] = useState<RiskPolicy | null>(null)
-  useEffect(() => { if (profileData) setProfile(profileData) }, [profileData])
-  useEffect(() => { if (riskData) setRisk(riskData) }, [riskData])
+  const query = useQuery({ queryKey: ['settings'], queryFn: api.getSettings })
+  const [form, setForm] = useState<Settings | null>(null)
 
-  const saveProfile = () => {
-    if (!profile) return
-    api.updateProfile(profile).then(() => toast.success('已保存，下一轮对话生效')).catch((e: Error) => toast.error(e.message))
-  }
-  const saveRisk = () => {
-    if (!risk) return
-    api.updateRisk(risk).then(() => toast.success('已保存，立即生效')).catch((e: Error) => toast.error(e.message))
+  useEffect(() => {
+    if (query.data) setForm(query.data)
+  }, [query.data])
+
+  if (query.isLoading || !form) {
+    return <div className='text-muted-foreground'>加载中…</div>
   }
 
-  const pField = (k: keyof AssistantProfile, v: string | number | boolean) =>
-    setProfile((p) => (p ? { ...p, [k]: v } : p))
-  const rField = (k: keyof RiskPolicy, v: string | number) =>
-    setRisk((r) => (r ? { ...r, [k]: v } : r))
+  const set = (patch: Partial<Settings>) => setForm({ ...form, ...patch })
 
-  if (!profile || !risk) return <div className='text-muted-foreground'>加载中…</div>
+  const save = () => {
+    api.updateSettings({
+      systemPrompt: form.systemPrompt,
+      historyLimit: form.historyLimit,
+      requireGroupMention: form.requireGroupMention,
+      quietHoursEnabled: form.quietHoursEnabled,
+      quietHoursStart: form.quietHoursStart,
+      quietHoursEnd: form.quietHoursEnd,
+      enabled: form.enabled,
+    })
+      .then(() => toast.success('已保存，下一轮对话即生效'))
+      .catch((e: Error) => toast.error(e.message))
+  }
 
   return (
-    <Tabs defaultValue='profile' className='space-y-4'>
-      <TabsList>
-        <TabsTrigger value='profile'>AI 行为</TabsTrigger>
-        <TabsTrigger value='risk'>风控</TabsTrigger>
-        <TabsTrigger value='runtime'>daemon / stream</TabsTrigger>
-      </TabsList>
+    <div className='max-w-3xl space-y-4'>
+      <Card>
+        <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+          <CardTitle className='text-sm'>AI 总开关</CardTitle>
+          <Switch checked={form.enabled} onCheckedChange={(on) => set({ enabled: on })} />
+        </CardHeader>
+        <CardContent className='text-muted-foreground text-xs'>
+          全局总开关（第一道保险）；每条会话线上还有独立的自动回复开关（第二道保险）。
+          关闭时所有消息只归档、永不回复。
+        </CardContent>
+      </Card>
 
-      <TabsContent value='profile'>
-        <Card>
-          <CardContent className='space-y-3'>
-            <label className='text-muted-foreground text-xs'>System Prompt</label>
-            <Textarea className='min-h-32' value={profile.systemPrompt}
-              onChange={(e) => pField('systemPrompt', e.target.value)} />
-            <div className='grid grid-cols-2 gap-4'>
-              <div>
-                <label className='text-muted-foreground text-xs'>历史轮数上限</label>
-                <Input type='number' value={profile.historyLimit}
-                  onChange={(e) => pField('historyLimit', Number(e.target.value))} />
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>回复白名单（逗号分隔 threadId）</label>
-                <Input value={profile.replyThreads}
-                  onChange={(e) => pField('replyThreads', e.target.value)} />
-              </div>
-              <div className='flex items-center gap-2'>
-                <Switch checked={profile.requireGroupMention}
-                  onCheckedChange={(v) => pField('requireGroupMention', v)} />
-                <label className='text-muted-foreground text-xs'>群聊需 @ 才回复</label>
-              </div>
-              <div className='flex items-center gap-2'>
-                <Switch checked={profile.ttsReply} onCheckedChange={(v) => pField('ttsReply', v)} />
-                <label className='text-muted-foreground text-xs'>语音消息用语音回复</label>
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>最短消息长度</label>
-                <Input type='number' value={profile.minMessageLength}
-                  onChange={(e) => pField('minMessageLength', Number(e.target.value))} />
-              </div>
-              <div className='flex items-center gap-2'>
-                <Switch checked={profile.enabled} onCheckedChange={(v) => pField('enabled', v)} />
-                <label className='text-muted-foreground text-xs'>AI 回复启用</label>
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>回复延迟最小 ms</label>
-                <Input type='number' value={profile.replyDelayMinMs}
-                  onChange={(e) => pField('replyDelayMinMs', Number(e.target.value))} />
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>回复延迟最大 ms</label>
-                <Input type='number' value={profile.replyDelayMaxMs}
-                  onChange={(e) => pField('replyDelayMaxMs', Number(e.target.value))} />
+      <Card>
+        <CardHeader className='pb-2'>
+          <CardTitle className='text-sm'>默认提示词（会话未配置人设时使用；机制说明由系统注入，不受此影响）</CardTitle>
+        </CardHeader>
+        <CardContent className='space-y-3'>
+          <Textarea rows={5} value={form.systemPrompt} onChange={(e) => set({ systemPrompt: e.target.value })} />
+          <div className='space-y-1'>
+            <Label className='text-xs'>历史窗口（轮）</Label>
+            <Input
+              className='w-32'
+              type='number'
+              min={2}
+              max={100}
+              value={form.historyLimit}
+              onChange={(e) => set({ historyLimit: Number(e.target.value) })}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className='pb-2'>
+          <CardTitle className='text-sm'>护栏</CardTitle>
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <div className='text-sm'>群聊 @ 门控</div>
+              <div className='text-muted-foreground text-xs'>群消息必须真 @ 机器人才回复；未 @ 只归档留作上下文</div>
+            </div>
+            <Switch
+              checked={form.requireGroupMention}
+              onCheckedChange={(on) => set({ requireGroupMention: on })}
+            />
+          </div>
+          <div className='flex items-center justify-between'>
+            <div>
+              <div className='text-sm'>静默时段</div>
+              <div className='text-muted-foreground text-xs'>
+                窗口内不自动回复（只约束被动回复；你自己设定的定时任务不受影响）
               </div>
             </div>
-            <Button onClick={saveProfile}>保存</Button>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value='risk'>
-        <Card>
-          <CardContent className='space-y-3'>
-            <div className='grid grid-cols-3 gap-4'>
-              <div>
-                <label className='text-muted-foreground text-xs'>单会话每分钟上限</label>
-                <Input type='number' value={risk.repliesPerThreadPerMinute}
-                  onChange={(e) => rField('repliesPerThreadPerMinute', Number(e.target.value))} />
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>每小时上限</label>
-                <Input type='number' value={risk.maxRepliesPerHour}
-                  onChange={(e) => rField('maxRepliesPerHour', Number(e.target.value))} />
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>每日上限</label>
-                <Input type='number' value={risk.maxRepliesPerDay}
-                  onChange={(e) => rField('maxRepliesPerDay', Number(e.target.value))} />
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>静默开始（HH:mm）</label>
-                <Input value={risk.quietHoursStart}
-                  onChange={(e) => rField('quietHoursStart', e.target.value)} />
-              </div>
-              <div>
-                <label className='text-muted-foreground text-xs'>静默结束（HH:mm）</label>
-                <Input value={risk.quietHoursEnd}
-                  onChange={(e) => rField('quietHoursEnd', e.target.value)} />
-              </div>
+            <Switch
+              checked={form.quietHoursEnabled}
+              onCheckedChange={(on) => set({ quietHoursEnabled: on })}
+            />
+          </div>
+          {form.quietHoursEnabled && (
+            <div className='flex items-center gap-3'>
+              <Input
+                className='w-32'
+                type='time'
+                value={form.quietHoursStart}
+                onChange={(e) => set({ quietHoursStart: e.target.value })}
+              />
+              <span className='text-muted-foreground text-sm'>至</span>
+              <Input
+                className='w-32'
+                type='time'
+                value={form.quietHoursEnd}
+                onChange={(e) => set({ quietHoursEnd: e.target.value })}
+              />
             </div>
-            <Button onClick={saveRisk}>保存</Button>
-          </CardContent>
-        </Card>
-      </TabsContent>
+          )}
+        </CardContent>
+      </Card>
 
-      <TabsContent value='runtime'>
-        <Card>
-          <CardContent>
-            <div className='text-muted-foreground whitespace-pre-wrap text-sm'>
-              {runtime
-                ? runtime.daemonBaseUrl + '\n账号: ' + runtime.daemonAccount + '\nToken: ' + runtime.daemonTokenMasked + '\n' + runtime.note
-                : '加载中…'}
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+      <Button onClick={save}>保存全部</Button>
+    </div>
   )
 }

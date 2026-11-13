@@ -1,55 +1,81 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
-
-const fmt = (t: string | null) => (t ? new Date(t).toLocaleString('zh-CN', { hour12: false }) : '')
-const cut = (s: string | null, n = 80) => (s ? (s.length > n ? s.slice(0, n) + '…' : s) : '—')
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { api } from '@/features/imaia/api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-// memories
+
 export const Route = createFileRoute('/_authenticated/bot/memories')({
   component: MemoriesPage,
 })
 
+const fmt = (t: string | null | undefined) => (t ? new Date(t).toLocaleString('zh-CN', { hour12: false }) : '—')
+
 function MemoriesPage() {
-  const qc = useQueryClient();
-  const { data: list, isLoading } = useQuery({ queryKey: ['memories'], queryFn: api.memories });
-  const save = (m) => api.updateMemory(m.id, m.fact).then(() => toast.success('已保存')).catch((e: Error) => toast.error(e.message));
-  const remove = (id: number) => { if (confirm('删除这条记忆？')) api.deleteMemory(id).then(() => qc.invalidateQueries({ queryKey: ['memories'] })).catch((e: Error) => toast.error(e.message)); };
-  const promote = (id: number) => api.promoteMemory(id).then(() => { toast.success('已提升为全局'); qc.invalidateQueries({ queryKey: ['memories'] }); }).catch((e: Error) => toast.error(e.message));
-  if (isLoading) return <div className='text-muted-foreground'>加载中…</div>;
+  const qc = useQueryClient()
+  const memories = useQuery({ queryKey: ['memories'], queryFn: api.memories })
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['memories'] })
+
+  const save = (id: number, fact: string) =>
+    api.updateMemory(id, fact)
+      .then(() => toast.success('已保存，下一轮对话即生效'))
+      .catch((e: Error) => toast.error(e.message))
+
+  const remove = (id: number) => {
+    if (!confirm('删除这条记忆？')) return
+    api.deleteMemory(id).then(() => { toast.success('已删除'); invalidate() }).catch((e: Error) => toast.error(e.message))
+  }
+
   return (
     <Card>
       <CardContent>
         <Table>
-          <TableHeader><TableRow><TableHead>scope</TableHead><TableHead>kind</TableHead><TableHead>事实（可直接编辑）</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+          <TableHeader>
+            <TableRow>
+              <TableHead>会话</TableHead>
+              <TableHead>事实（可直接编辑，失焦保存）</TableHead>
+              <TableHead>记录时间</TableHead>
+              <TableHead>操作</TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
-            {(list || []).map((m) => (
+            {(memories.data || []).map((m) => (
               <TableRow key={m.id}>
-                <TableCell><Badge variant={m.scope === 'global' ? 'default' : 'secondary'}>{m.scope}</Badge></TableCell>
-                <TableCell><Badge variant='outline'>{m.kind}</Badge></TableCell>
                 <TableCell>
-                  <Input value={m.fact} onChange={(e) => { m.fact = e.target.value; }} onBlur={() => save(m)} />
-                  <div className='text-muted-foreground text-xs'>{fmt(m.createdAt)}{m.supersedesId ? ' · 取代 #' + m.supersedesId : ''}</div>
+                  <Badge variant='secondary'>{m.conversationLabel}</Badge>
                 </TableCell>
-                <TableCell><Badge variant={m.status === 'active' ? 'default' : 'secondary'}>{m.status}</Badge></TableCell>
-                <TableCell className='space-x-1'>
-                  {m.scope !== 'global' && <Button size='sm' variant='ghost' onClick={() => promote(m.id)}>提升为全局</Button>}
+                <TableCell>
+                  <Input
+                    defaultValue={m.fact}
+                    onBlur={(e) => {
+                      const next = e.target.value.trim()
+                      if (next && next !== m.fact) save(m.id, next)
+                    }}
+                  />
+                  <div className='text-muted-foreground mt-1 text-xs'>{fmt(m.createdAt)}</div>
+                </TableCell>
+                <TableCell className='text-muted-foreground text-xs'>{fmt(m.createdAt)}</TableCell>
+                <TableCell>
                   <Button size='sm' variant='destructive' onClick={() => remove(m.id)}>删除</Button>
                 </TableCell>
               </TableRow>
             ))}
+            {(memories.data || []).length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className='text-muted-foreground text-center text-xs'>
+                  暂无记忆；对话里让 AI「记住……」即可沉淀（v1 仅 AI 自动沉淀、挂会话线）
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </CardContent>
     </Card>
-  );
+  )
 }

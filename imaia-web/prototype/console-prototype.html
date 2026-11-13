@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>imaia 管理控制台 · 原型</title>
+<style>
+  :root{
+    --bg:#fafafa; --surface:#fff; --sidebar:#18181b; --sidebar-fg:#e4e4e7; --sidebar-muted:#8b8b93;
+    --border:#e4e4e7; --fg:#09090b; --muted:#71717a; --primary:#18181b; --primary-fg:#fafafa;
+    --accent:#f4f4f5; --green:#16a34a; --green-bg:#dcfce7; --blue:#2563eb; --blue-bg:#dbeafe;
+    --violet:#7c3aed; --violet-bg:#ede9fe; --amber:#d97706; --amber-bg:#fef3c7; --red:#dc2626; --red-bg:#fee2e2;
+    --radius:10px; --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--fg);font-size:13px;line-height:1.55}
+  .layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  /* ---- sidebar ---- */
+  .sidebar{background:var(--sidebar);color:var(--sidebar-fg);padding:16px 10px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:8px;padding:6px 10px 16px;font-weight:700;font-size:15px}
+  .brand .logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#2563eb);display:grid;place-items:center;color:#fff;font-size:13px}
+  .brand small{display:block;font-weight:400;font-size:10px;color:var(--sidebar-muted)}
+  .nav-group{margin-top:10px;padding:0 10px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--sidebar-muted)}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;cursor:pointer;color:var(--sidebar-fg)}
+  .nav-item:hover{background:#27272a}
+  .nav-item.active{background:#27272a;font-weight:600}
+  .nav-item .ico{width:16px;text-align:center;opacity:.85}
+  .nav-item .count{margin-left:auto;background:#3f3f46;border-radius:99px;padding:0 7px;font-size:10px;color:#d4d4d8}
+  .sidebar .foot{margin-top:auto;padding:10px;font-size:10px;color:var(--sidebar-muted)}
+  .dot{width:7px;height:7px;border-radius:99px;display:inline-block}
+  .dot.on{background:#22c55e}.dot.off{background:#71717a}
+  /* ---- main ---- */
+  .main{padding:22px 28px;max-width:1200px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+  h1{font-size:19px;font-weight:700}
+  .sub{color:var(--muted);margin-top:2px}
+  .top-actions{display:flex;gap:8px}
+  /* ---- primitives ---- */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+  .card .hd{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .card .hd b{font-size:13px}
+  .card .hd .hint{color:var(--muted);font-size:11px}
+  .card .bd{padding:14px 16px}
+  .btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);background:var(--surface);border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;color:var(--fg)}
+  .btn:hover{background:var(--accent)}
+  .btn.primary{background:var(--primary);color:var(--primary-fg);border-color:var(--primary)}
+  .btn.sm{padding:2px 8px;font-size:11px}
+  .badge{display:inline-flex;align-items:center;gap:4px;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:500}
+  .badge.wx{background:var(--green-bg);color:var(--green)}
+  .badge.fs{background:var(--blue-bg);color:var(--blue)}
+  .badge.v{background:var(--violet-bg);color:var(--violet)}
+  .badge.a{background:var(--amber-bg);color:var(--amber)}
+  .badge.g{background:var(--accent);color:var(--muted)}
+  .badge.r{background:var(--red-bg);color:var(--red)}
+  table{width:100%;border-collapse:collapse}
+  th{font-size:11px;text-align:left;color:var(--muted);font-weight:500;padding:8px 12px;border-bottom:1px solid var(--border)}
+  td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#fafafa}
+  .num{font-variant-numeric:tabular-nums}
+  .bar{height:6px;border-radius:4px;background:var(--accent);overflow:hidden;min-width:80px}
+  .bar>i{display:block;height:100%;background:#7c3aed}
+  .switch{width:32px;height:18px;border-radius:99px;background:#d4d4d8;position:relative;cursor:pointer;flex:none}
+  .switch.on{background:#16a34a}
+  .switch::after{content:'';position:absolute;width:14px;height:14px;border-radius:99px;background:#fff;top:2px;left:2px;transition:.15s}
+  .switch.on::after{left:16px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+  .field input,.field textarea,.field select{width:100%;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--fg)}
+  .field textarea{min-height:90px;resize:vertical}
+  .field .hint{font-size:10px;color:var(--muted);margin-top:3px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start}
+  .stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+  .stat{padding:14px 16px}
+  .stat .k{color:var(--muted);font-size:11px}
+  .stat .v{font-size:22px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+  .stat .d{font-size:11px;margin-top:2px;color:var(--muted)}
+  .stat .d.up{color:var(--green)}
+  /* chat view */
+  .chat-wrap{display:grid;grid-template-columns:280px 1fr;gap:0;min-height:520px}
+  .chat-list{border-right:1px solid var(--border);max-height:640px;overflow:auto}
+  .session{display:flex;gap:9px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border)}
+  .session:hover,.session.active{background:var(--accent)}
+  .avatar{width:36px;height:36px;border-radius:9px;flex:none;display:grid;place-items:center;font-weight:600;color:#fff;font-size:14px}
+  .session .meta{min-width:0;flex:1}
+  .session .meta b{font-size:12.5px;display:flex;justify-content:space-between;gap:6px}
+  .session .meta b time{font-weight:400;color:var(--muted);font-size:10.5px}
+  .session .meta p{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .session .flags{display:flex;gap:4px;margin-top:2px}
+  .chat-body{display:flex;flex-direction:column;max-height:640px}
+  .chat-hd{padding:11px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .chat-hd .sp{flex:1}
+  .msgs{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#fcfcfc}
+  .msg{max-width:72%;padding:8px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface)}
+  .msg .who{font-size:10.5px;color:var(--muted);margin-bottom:2px;display:flex;gap:6px;align-items:center}
+  .msg.ai{align-self:flex-end;background:var(--violet-bg);border-color:#ddd6fe}
+  .msg.out{align-self:flex-end;background:var(--accent)}
+  .msg .t{font-size:10px;color:var(--muted);margin-top:3px}
+  .msg img-emoji{font-size:22px}
+  .chip{font-size:10px;border:1px dashed var(--border);border-radius:6px;padding:1px 6px;color:var(--muted)}
+  /* toggle pages */
+  .page{display:none}
+  .page.active{display:block}
+  .tag-legend{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .json{font-family:var(--mono);font-size:11.5px;background:#18181b;color:#e4e4e7;border-radius:8px;padding:12px 14px;white-space:pre;overflow:auto;line-height:1.6}
+  .json .mask{color:#fbbf24}
+  .json .key{color:#93c5fd}
+  .alert{border:1px solid #fde68a;background:var(--amber-bg);color:#92400e;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand"><span class="logo">i</span><span>imaia<small>智能聚合中枢 IM</small></span></div>
+    <div class="nav-group">总览</div>
+    <div class="nav-item active" data-page="overview"><span class="ico">▤</span>概览</div>
+    <div class="nav-group">会话</div>
+    <div class="nav-item" data-page="sessions"><span class="ico">💬</span>会话与消息</div>
+    <div class="nav-item" data-page="memories"><span class="ico">🧠</span>长期记忆<span class="count">128</span></div>
+    <div class="nav-item" data-page="actions"><span class="ico">⏰</span>定时动作<span class="count">3</span></div>
+    <div class="nav-group">智能</div>
+    <div class="nav-item" data-page="models"><span class="ico">🗿</span>模型目录</div>
+    <div class="nav-item" data-page="persona"><span class="ico">🎭</span>人设与策略</div>
+    <div class="nav-group">系统</div>
+    <div class="nav-item" data-page="apps"><span class="ico">🔌</span>接入实例<span class="count">2</span></div>
+    <div class="foot">
+      <div><span class="dot on"></span> wechat · default</div>
+      <div style="margin-top:4px"><span class="dot off"></span> feishu · default（未启用）</div>
+      <div style="margin-top:8px">v0.1.0 · 127.0.0.1:8091</div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+  <!-- ======== PAGE: 概览 ======== -->
+  <section class="page active" id="page-overview">
+    <div class="topbar">
+      <div><h1>概览</h1><div class="sub">2026-11-12（周四）· 数据每 30 秒刷新</div></div>
+      <div class="top-actions"><button class="btn">↻ 刷新</button></div>
+    </div>
+    <div class="stat-grid">
+      <div class="card stat"><div class="k">今日归档消息</div><div class="v">1,847</div><div class="d up">▲ 12% vs 昨日</div></div>
+      <div class="card stat"><div class="k">AI 回复</div><div class="v">86</div><div class="d">微信 71 · 飞书 15</div></div>
+      <div class="card stat"><div class="k">Token 消耗</div><div class="v">412.6k</div><div class="d">¥ 8.31</div></div>
+      <div class="card stat"><div class="k">模型调用</div><div class="v">203</div><div class="d">失败 2（已降级）</div></div>
+      <div class="card stat"><div class="k">待触发动作</div><div class="v">3</div><div class="d">下一个 18:30</div></div>
+    </div>
+    <div class="grid3">
+      <div class="card">
+        <div class="hd"><b>最新消息</b><span class="hint">最近 12 条 · 全部接入实例</span></div>
+        <table>
+          <tr><th>时间</th><th>会话</th><th>方向</th><th>内容</th></tr>
+          <tr><td class="num">16:42</td><td><span class="badge wx">微信</span> 大汉天子</td><td><span class="badge g">收</span></td><td>@imaia 周报统计一下</td></tr>
+          <tr><td class="num">16:42</td><td><span class="badge wx">微信</span> 大汉天子</td><td><span class="badge v">AI</span></td><td>本周 847 条消息，最活跃的是张三……</td></tr>
+          <tr><td class="num">16:38</td><td><span class="badge fs">飞书</span> 产品讨论组</td><td><span class="badge g">收</span></td><td><img-emoji>[表情包]</img-emoji></td></tr>
+          <tr><td class="num">16:35</td><td><span class="badge wx">微信</span> 张三</td><td><span class="badge g">收</span></td><td>晚上一起吃饭？</td></tr>
+          <tr><td class="num">16:35</td><td><span class="badge wx">微信</span> 张三</td><td><span class="badge v">AI</span></td><td>好呀，老地方？</td></tr>
+          <tr><td class="num">16:30</td><td><span class="badge fs">飞书</span> 产品讨论组</td><td><span class="badge g">收</span></td><td>[文件] Q4-roadmap.pdf</td></tr>
+          <tr><td class="num">16:28</td><td><span class="badge wx">微信</span> 大汉天子</td><td><span class="badge g">收</span></td><td><img-emoji>[图片]</img-emoji></td></tr>
+          <tr><td class="num">16:20</td><td><span class="badge wx">微信</span> 文件传输助手</td><td><span class="badge g">收</span></td><td>链接：https://mp.weixin.qq.com/s/…</td></tr>
+        </table>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="hd"><b>接入实例</b></div>
+          <div class="bd" style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px"><span class="badge wx">微信</span><b>default</b><span class="switch on" style="margin-left:auto"></span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span class="badge fs">飞书</span><b>default</b><span class="switch" style="margin-left:auto"></span></div>
+            <div style="font-size:11px;color:var(--muted)">修改接入配置需重启生效 · <a href="#" onclick="go('apps')">管理 →</a></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="hd"><b>本周活跃榜</b><span class="hint">按消息数</span></div>
+          <table>
+            <tr><td>张三</td><td class="num">312</td><td><div class="bar"><i style="width:92%"></i></div></td></tr>
+            <tr><td>李四</td><td class="num">198</td><td><div class="bar"><i style="width:58%"></i></div></td></tr>
+            <tr><td>王五</td><td class="num">141</td><td><div class="bar"><i style="width:41%"></i></div></td></tr>
+            <tr><td>AI（imaia）</td><td class="num">86</td><td><div class="bar"><i style="width:25%;background:#2563eb"></i></div></td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== PAGE: 会话与消息 ======== -->
+  <section class="page" id="page-sessions">
+    <div class="topbar">
+      <div><h1>会话与消息</h1><div class="sub">跨接入实例聚合 · 检索会话 ID / 联系人 / 内容</div></div>
+      <div class="top-actions"><input placeholder="搜索会话或内容…" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;width:220px"><button class="btn primary">搜索</button></div>
+    </div>
+    <div class="card"><div class="chat-wrap">
+      <div class="chat-list">
+        <div class="session active"><div class="avatar" style="background:#d97706">汉</div><div class="meta"><b>大汉天子 <time>16:42</time></b><p>AI：本周 847 条消息，最活跃…</p><div class="flags"><span class="badge wx">微信</span><span class="badge g">群聊</span><span class="badge a"> persona ✓</span></div></div></div>
+        <div class="session"><div class="avatar" style="background:#2563eb">产</div><div class="meta"><b>产品讨论组 <time>16:38</time></b><p>[表情包]</p><div class="flags"><span class="badge fs">飞书</span><span class="badge g">群聊</span></div></div></div>
+        <div class="session"><div class="avatar" style="background:#16a34a">张</div><div class="meta"><b>张三 <time>16:35</time></b><p>AI：好呀，老地方？</p><div class="flags"><span class="badge wx">微信</span><span class="badge g">私聊</span><span class="badge v"> persona ✓</span></div></div></div>
+        <div class="session"><div class="avatar" style="background:#7c3aed">文</div><div class="meta"><b>文件传输助手 <time>16:20</time></b><p>链接：https://mp.weixin…</p><div class="flags"><span class="badge wx">微信</span><span class="badge g">私聊</span></div></div></div>
+        <div class="session"><div class="avatar" style="background:#dc2626">李</div><div class="meta"><b>李四 <time>昨天</time></b><p>收到</p><div class="flags"><span class="badge wx">微信</span><span class="badge g">私聊</span><span class="badge r"> muted</span></div></div></div>
+      </div>
+      <div class="chat-body">
+        <div class="chat-hd">
+          <span class="badge wx">微信</span><b>大汉天子</b><span class="chip">39139985111@chatroom</span><span class="chip">线级记忆 12 条</span>
+          <span class="sp"></span>
+          <button class="btn sm">✎ 人设</button><button class="btn sm">📝 备注</button><button class="btn sm">🔕 静音</button><button class="btn sm">🔄 重开 AI 对话</button>
+        </div>
+        <div class="msgs">
+          <div class="msg out"><div class="who">王五 · <span class="chip">收</span></div>今天谁值班？<div class="t">09:02</div></div>
+          <div class="msg"><div class="who">李四</div>我。<div class="t">09:03</div></div>
+          <div class="msg out"><div class="who">张三 · <span class="chip">收</span> <span class="chip">@imaia</span></div>imaia 帮我记一下：周五交周报<div class="t">09:10</div></div>
+          <div class="msg ai"><div class="who">imaia · AI <span class="chip">ai_session #7</span></div>已记住：张三周五交周报 📌<div class="t">09:10（延迟 2.3s）</div></div>
+          <div class="msg out"><div class="who">张三 · <span class="chip">收</span></div><img-emoji>[表情包]</img-emoji><div class="t">09:11</div></div>
+          <div class="msg out"><div class="who">王五 · <span class="chip">收</span></div>看这张图 <span class="chip">[图片 1024×768]</span><div class="t">10:02</div></div>
+          <div class="msg ai"><div class="who">imaia · AI</div>图中是一张白板照片，写着“Q4 复盘”……<div class="t">10:02（含视觉输入）</div></div>
+        </div>
+        <div class="chat-hd" style="border-top:1px solid var(--border);border-bottom:none;color:var(--muted);font-size:11px">
+          归档 12,408 条 · AI 流 1,022 条 · 绑定 ai_session #7（当前）· #5、#3（历史）
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ======== PAGE: 记忆 ======== -->
+  <section class="page" id="page-memories">
+    <div class="topbar">
+      <div><h1>长期记忆</h1><div class="sub">模型通过 [MEMORY:] 产生 · 线级记忆仅该会话可见，全局记忆所有会话可见</div></div>
+      <div class="top-actions"><button class="btn primary">+ 新增记忆</button></div>
+    </div>
+    <div class="tag-legend"><span class="badge g">全局</span><span class="badge wx">线级 · 微信</span><span class="badge fs">线级 · 飞书</span><span class="badge a">status: superseded</span></div>
+    <div class="card">
+      <table>
+        <tr><th>作用域</th><th>内容</th><th>来源</th><th>状态</th><th>操作</th></tr>
+        <tr><td><span class="badge g">全局</span></td><td>主人周三晚上固定健身，不安排其他事</td><td class="num">—</td><td><span class="badge g">active</span></td><td><button class="btn sm">✎</button> <button class="btn sm">⬆ 降回线级</button> <button class="btn sm">🗑</button></td></tr>
+        <tr><td><span class="badge g">全局</span></td><td>主人不喜欢被叫“亲”</td><td class="num">—</td><td><span class="badge g">active</span></td><td><button class="btn sm">✎</button> <button class="btn sm">🗑</button></td></tr>
+        <tr><td><span class="badge wx">微信 · 张三</span></td><td>张三周五要交周报</td><td class="num">ai_message #4121</td><td><span class="badge g">active</span></td><td><button class="btn sm">✎</button> <button class="btn sm">⬆ 晋升全局</button> <button class="btn sm">🗑</button></td></tr>
+        <tr><td><span class="badge wx">微信 · 大汉天子</span></td><td>群内每周五晚 8 点线上例会</td><td class="num">ai_message #3902</td><td><span class="badge g">active</span></td><td><button class="btn sm">✎</button> <button class="btn sm">⬆ 晋升全局</button> <button class="btn sm">🗑</button></td></tr>
+        <tr><td><span class="badge fs">飞书 · 产品讨论组</span></td><td>Q4 目标改为出海方向</td><td class="num">ai_message #5011</td><td><span class="badge g">active</span></td><td><button class="btn sm">✎</button> <button class="btn sm">🗑</button></td></tr>
+        <tr style="opacity:.55"><td><span class="badge wx">微信 · 张三</span></td><td>张三在准备 PMP 考试</td><td class="num">ai_message #2101</td><td><span class="badge a">superseded</span></td><td><button class="btn sm">🗑</button></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ======== PAGE: 定时动作 ======== -->
+  <section class="page" id="page-actions">
+    <div class="topbar">
+      <div><h1>定时动作</h1><div class="sub">一次性提醒与 cron 式主动消息 · 执行避开静默时段并附加随机抖动</div></div>
+      <div class="top-actions"><button class="btn primary">+ 新建动作</button></div>
+    </div>
+    <div class="alert">新建动作的目标会话必须在回复白名单（reply_conversations）内；AI 措辞动作执行时会先经模型润色再发送。</div>
+    <div class="card">
+      <table>
+        <tr><th>目标会话</th><th>类型</th><th>内容 / 提示词</th><th>计划</th><th>状态</th><th>操作</th></tr>
+        <tr><td><span class="badge wx">微信</span> 大汉天子</td><td><span class="badge v">cron · AI 措辞</span></td><td>“给大家说个早安，简短俏皮”</td><td class="num">每天 08:00（+抖动）</td><td><span class="badge g">pending</span><div style="font-size:10px;color:var(--muted)">上次 08:01 已发</div></td><td><button class="btn sm">⏸ 暂停</button> <button class="btn sm">⚡ 立即执行</button> <button class="btn sm">🗑</button></td></tr>
+        <tr><td><span class="badge wx">微信</span> 张三</td><td><span class="badge g">一次性 · 文本</span></td><td>周五别忘了交周报</td><td class="num">11-14（周五）09:00</td><td><span class="badge g">pending</span></td><td><button class="btn sm">✎</button> <button class="btn sm">🗑</button></td></tr>
+        <tr><td><span class="badge fs">飞书</span> 产品讨论组</td><td><span class="badge v">cron · AI 措辞</span></td><td>“汇总今天的产品讨论要点”</td><td class="num">工作日 18:00</td><td><span class="badge g">pending</span></td><td><button class="btn sm">⏸ 暂停</button> <button class="btn sm">🗑</button></td></tr>
+        <tr style="opacity:.6"><td><span class="badge wx">微信</span> 大汉天子</td><td><span class="badge g">一次性 · 文本</span></td><td>今晚例会改 8 点</td><td class="num">—</td><td><span class="badge r">failed</span><div style="font-size:10px;color:var(--muted)">发送失败，已停止重试</div></td><td><button class="btn sm">↻ 重置重试</button> <button class="btn sm">🗑</button></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ======== PAGE: 模型目录 ======== -->
+  <section class="page" id="page-models">
+    <div class="topbar">
+      <div><h1>模型目录</h1><div class="sub">接入商与模型即数据 · 协议决定能力（视觉/生图/生视频/TTS/ASR）· 编辑即时生效</div></div>
+      <div class="top-actions"><button class="btn">+ 添加接入商</button></div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="hd"><b>agnes</b><span><span class="badge g">openai-images · openai-video</span> <span class="switch on"></span></span></div>
+      <div class="bd" style="display:grid;grid-template-columns:260px 1fr;gap:12px">
+        <div>
+          <div class="field"><label>Base URL</label><input value="https://apihub.agnes-ai.com/v1"></div>
+          <div class="field"><label>API Key</label><input value="••••••••（掩码）"></div>
+          <button class="btn sm">测试连通</button>
+        </div>
+        <table>
+          <tr><th>模型</th><th>协议</th><th>输入</th><th>输出</th><th>参数</th><th></th></tr>
+          <tr><td>agnes-image-2.5-flash</td><td><span class="badge v">openai-images</span></td><td>text</td><td>image</td><td class="num">1024x768</td><td><button class="btn sm">✎</button> <button class="btn sm">🗑</button></td></tr>
+          <tr><td>agnes-video-2.5-flash</td><td><span class="badge v">openai-video</span></td><td>text</td><td>video</td><td class="num">5s · 16:9</td><td><button class="btn sm">✎</button> <button class="btn sm">🗑</button></td></tr>
+          <tr><td colspan="5"></td><td><button class="btn sm primary">+ 添加模型</button></td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="hd"><b>zhipu</b><span><span class="badge v">openai-completions</span> <span class="switch on"></span></span></div>
+      <div class="bd" style="display:grid;grid-template-columns:260px 1fr;gap:12px">
+        <div>
+          <div class="field"><label>Base URL</label><input value="https://open.bigmodel.cn/api/paas/v4"></div>
+          <div class="field"><label>API Key</label><input value="••••••••（掩码）"></div>
+        </div>
+        <table>
+          <tr><th>模型</th><th>协议</th><th>输入</th><th>输出</th><th>上下文</th><th></th></tr>
+          <tr><td>glm-4.5v</td><td><span class="badge v">openai-completions</span></td><td>text + image</td><td>text</td><td class="num">65,536</td><td><button class="btn sm">✎</button> <button class="btn sm">🗑</button></td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="hd"><b>minimax</b><span><span class="badge v">openai-audio-speech</span> <span class="switch on"></span></span></div>
+      <div class="bd" style="display:grid;grid-template-columns:260px 1fr;gap:12px">
+        <div>
+          <div class="field"><label>Base URL</label><input value="https://api.minimaxi.com/v1"></div>
+          <div class="field"><label>API Key</label><input value="••••••••（掩码）"></div>
+        </div>
+        <table>
+          <tr><th>模型</th><th>协议</th><th>输入</th><th>输出</th><th>参数</th><th></th></tr>
+          <tr><td>speech-02-turbo</td><td><span class="badge v">openai-audio-speech</span></td><td>text</td><td>audio</td><td class="num">voice: tongtong</td><td><button class="btn sm">✎</button> <button class="btn sm">🗑</button></td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== PAGE: 人设与策略 ======== -->
+  <section class="page" id="page-persona">
+    <div class="topbar">
+      <div><h1>人设与策略</h1><div class="sub">编辑即时生效于下一轮对话</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="hd"><b>AI 人设</b><span class="hint">assistant_profile</span></div>
+        <div class="bd">
+          <div class="field"><label>系统提示词（人设）</label><textarea>你是用户的智能助理（人设可自定义），用简洁口语化的中文回复，不要用列表。需要画图或生成视频时直接调用对应的工具；需要设置提醒时输出 [REMINDER: …]；需要记住重要事实时输出 [MEMORY: …]。</textarea></div>
+          <div class="grid2">
+            <div class="field"><label>历史窗口（轮）</label><input type="number" value="20"><div class="hint">超出后最旧轮次滚动淘汰</div></div>
+            <div class="field"><label>最短触发长度（字符）</label><input type="number" value="2"><div class="hint">低于该长度的消息不回复</div></div>
+          </div>
+          <div class="field"><label>回复白名单（reply_conversations）</label><textarea style="min-height:56px">39139985111@chatroom
+wxid_zhangsan
+feishu:oc_8f2d…</textarea><div class="hint">每行一个；支持 wechat: / feishu: 前缀，裸会话 ID 跨平台匹配。目标会话可在「会话与消息」页一键加入。</div></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px"><span class="switch on"></span><b>启用自动回复</b><span class="hint" style="color:var(--muted)">总开关（当前：开）</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span class="switch on"></span>群聊需要真 @ 才回复</div>
+            <div style="display:flex;align-items:center;gap:8px"><span class="switch on"></span>语音输入用语音回复（TTS）</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="hd"><b>风控策略</b><span class="hint">risk_policy</span></div>
+          <div class="bd">
+            <div class="grid2">
+              <div class="field"><label>单会话每分钟上限</label><input type="number" value="6"></div>
+              <div class="field"><label>超短消息阈值（字符）</label><input type="number" value="2"></div>
+              <div class="field"><label>全局每小时上限</label><input type="number" value="60"></div>
+              <div class="field"><label>全局每日上限</label><input type="number" value="80"></div>
+              <div class="field"><label>回复延迟下限（ms）</label><input type="number" value="1500"></div>
+              <div class="field"><label>回复延迟上限（ms）</label><input type="number" value="6000"></div>
+              <div class="field"><label>静默时段开始</label><input type="time" value="00:00"></div>
+              <div class="field"><label>静默时段结束</label><input type="time" value="07:00"></div>
+            </div>
+            <div class="hint">频控计数按平台隔离；计数服务不可用自动降级为进程内计数。</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="hd"><b>当前绑定</b><span class="hint">只读 · 演示</span></div>
+          <div class="bd" style="font-size:12px;display:flex;flex-direction:column;gap:8px">
+            <div><span class="badge wx">微信</span> 大汉天子 → <b>ai_session #7</b> <span class="badge g">当前</span></div>
+            <div style="padding-left:8px;color:var(--muted)">↳ 历史：#5（11-01 ~ 11-08）· #3（10-20 ~ 11-01）</div>
+            <div><span class="badge fs">飞书</span> 产品讨论组 → <b>ai_session #12</b> <span class="badge g">当前</span></div>
+            <div style="margin-top:6px;color:var(--muted)">「重开对话」= 关闭当前绑定并新建 AI 会话；归档、记忆、画像不受影响。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== PAGE: 接入实例 ======== -->
+  <section class="page" id="page-apps">
+    <div class="topbar">
+      <div><h1>接入实例</h1><div class="sub">每个实例 = hub 与一个外部 IM 的连接单元 · 同平台可多实例 · 凭据只显示掩码，提交掩码值不覆盖真实值</div></div>
+      <div class="top-actions"><button class="btn">+ 添加接入实例</button></div>
+    </div>
+    <div class="alert">接入配置为启动时加载：修改后需重启服务生效。</div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="hd"><b><span class="badge wx">微信</span> wechat / default</b><span><span class="badge g">已启用</span> <span class="switch on"></span></span></div>
+      <div class="bd">
+        <div class="json"><span class="key">baseUrl</span>: <span class="mask">"http://127.0.0.1:6174"</span>,
+<span class="key">token</span>: <span class="mask">"••••••••（掩码）"</span>,
+<span class="key">account</span>: <span class="mask">"account-203468…"</span>,
+<span class="key">consumerName</span>: <span class="mask">"imaia"</span>,
+<span class="key">ackEnabled</span>: true,
+<span class="key">reconnectDelayMillis</span>: 2000,
+<span class="key">exitOnFailure</span>: true</div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button class="btn sm primary">✎ 编辑配置</button>
+          <button class="btn sm">⏸ 停用</button>
+          <span style="font-size:11px;color:var(--muted)">修改后需重启生效</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="hd"><b><span class="badge fs">飞书</span> feishu / default</b><span><span class="badge a">未启用</span> <span class="switch"></span></span></div>
+      <div class="bd">
+        <div class="json"><span class="key">appId</span>: <span class="mask">"cli_xxx"</span>,
+<span class="key">appSecret</span>: <span class="mask">"••••••••（掩码）"</span>,
+<span class="key">domain</span>: <span class="mask">"https://open.feishu.cn"</span>,
+<span class="key">exitOnFailure</span>: true</div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button class="btn sm primary">✎ 编辑并启用</button>
+          <span style="font-size:11px;color:var(--muted)">前置：飞书自建应用（机器人能力 + 事件订阅 im.message.receive_v1 + 权限 im:message.* / im:resource）</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+  // 原型交互：侧边栏页面切换（静态假数据，仅演示信息架构）
+  document.querySelectorAll('.nav-item').forEach(function (item) {
+    item.addEventListener('click', function () {
+      document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
+      item.classList.add('active');
+      document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+      document.getElementById('page-' + item.dataset.page).classList.add('active');
+      window.scrollTo(0, 0);
+    });
+  });
+  function go(page) {
+    var item = document.querySelector('.nav-item[data-page="' + page + '"]');
+    if (item) item.click();
+  }
+  // 开关演示
+  document.querySelectorAll('.switch').forEach(function (s) {
+    s.addEventListener('click', function () { s.classList.toggle('on'); });
+  });
+</script>
+</body>
+</html>
