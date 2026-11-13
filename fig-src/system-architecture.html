@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>imaia 系统架构图</title>
+<style>
+  html,body{margin:0;padding:0;background:#fff}
+  svg{display:block}
+  text{font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif}
+</style>
+</head>
+<body>
+<svg width="1480" height="1030" viewBox="0 0 1480 1030" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#52525b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-violet" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <style>
+    .box{fill:#ffffff;stroke:#d4d4d8;stroke-width:1.2;rx:10}
+    .zone{fill:#fafafa;stroke:#c8c8ce;stroke-width:1.2;stroke-dasharray:6 4;rx:14}
+    .zone-chat{fill:#f0f7ff;stroke:#93c5fd;stroke-width:1.3;stroke-dasharray:7 4;rx:14}
+    .zone-insight{fill:#f5f0ff;stroke:#c4b5fd;stroke-width:1.3;stroke-dasharray:7 4;rx:14}
+    .zone-skill{fill:#fff8f0;stroke:#fdba74;stroke-width:1.3;stroke-dasharray:7 4;rx:14}
+    .zone-admin{fill:#f0fdf4;stroke:#86efac;stroke-width:1.3;stroke-dasharray:7 4;rx:14}
+    .ext{fill:#f4f4f5;stroke:#a1a1aa;stroke-width:1.2;rx:10}
+    .title{font-size:20px;font-weight:700;fill:#09090b}
+    .zone-title{font-size:14px;font-weight:700}
+    .box-name{font-size:13px;font-weight:600;fill:#18181b}
+    .box-sub{font-size:10.5px;fill:#71717a}
+    .lane{font-size:10px;fill:#a1a1aa;letter-spacing:1px}
+    .flow{stroke:#52525b;stroke-width:1.4;fill:none;marker-end:url(#arrow)}
+    .flow-blue{stroke:#2563eb;stroke-width:1.5;fill:none;marker-end:url(#arrow-blue)}
+    .flow-violet{stroke:#7c3aed;stroke-width:1.5;fill:none;marker-end:url(#arrow-violet)}
+    .lbl{font-size:10.5px;fill:#52525b}
+    .lbl-b{font-size:10.5px;fill:#2563eb;font-weight:600}
+    .lbl-v{font-size:10.5px;fill:#7c3aed;font-weight:600}
+  </style>
+
+  <text x="40" y="38" class="title">imaia 系统架构 — 智能聚合中枢 IM</text>
+  <text x="40" y="60" class="box-sub">两个能力域（Chat / 洞察）+ 横切 AI 技能层 + 完整管理后台 · 仅本机回环访问</text>
+
+  <!-- ============ 左：外部平台 ============ -->
+  <text x="40" y="105" class="lane">EXTERNAL · 外部</text>
+  <rect x="40" y="118" width="190" height="112" class="ext" rx="10"/>
+  <text x="135" y="146" text-anchor="middle" class="box-name">微信</text>
+  <text x="135" y="166" text-anchor="middle" class="box-sub">agent-wechat daemon</text>
+  <text x="135" y="182" text-anchor="middle" class="box-sub">SSE 事件流 + 游标 ack</text>
+  <text x="135" y="198" text-anchor="middle" class="box-sub">个人号（同号模式）</text>
+
+  <rect x="40" y="248" width="190" height="112" class="ext" rx="10"/>
+  <text x="135" y="276" text-anchor="middle" class="box-name">飞书</text>
+  <text x="135" y="296" text-anchor="middle" class="box-sub">官方自建应用</text>
+  <text x="135" y="312" text-anchor="middle" class="box-sub">WS 长连接</text>
+  <text x="135" y="328" text-anchor="middle" class="box-sub">im.message.receive_v1</text>
+
+  <rect x="40" y="392" width="190" height="70" class="ext" rx="10"/>
+  <text x="135" y="416" text-anchor="middle" class="box-name">用户</text>
+  <text x="135" y="438" text-anchor="middle" class="box-sub">IM 联系人 / 群成员（非系统用户）</text>
+
+  <!-- ============ 中：hub ============ -->
+  <text x="330" y="105" class="lane">IMAIA HUB · 本机 127.0.0.1:8091</text>
+
+  <!-- 接入层 -->
+  <rect x="330" y="118" width="230" height="242" class="zone" rx="14"/>
+  <text x="445" y="142" text-anchor="middle" class="zone-title" fill="#52525b">接入层 · adapter</text>
+  <rect x="350" y="156" width="190" height="88" class="box" rx="9"/>
+  <text x="445" y="180" text-anchor="middle" class="box-name">wechat 适配器</text>
+  <text x="445" y="198" text-anchor="middle" class="box-sub">WechatPlatformSource</text>
+  <text x="445" y="214" text-anchor="middle" class="box-sub">WechatAdapter</text>
+  <text x="445" y="230" text-anchor="middle" class="box-sub">连接/重连/游标/媒体/发送幂等</text>
+
+  <rect x="350" y="256" width="190" height="88" class="box" rx="9"/>
+  <text x="445" y="280" text-anchor="middle" class="box-name">feishu 适配器</text>
+  <text x="445" y="298" text-anchor="middle" class="box-sub">FeishuPlatformSource</text>
+  <text x="445" y="314" text-anchor="middle" class="box-sub">FeishuAdapter</text>
+  <text x="445" y="330" text-anchor="middle" class="box-sub">SDK 长连接/收发/资源下载</text>
+
+  <!-- 归一化总线 -->
+  <rect x="350" y="366" width="190" height="76" class="box" rx="9"/>
+  <text x="445" y="390" text-anchor="middle" class="box-name">归一化事件总线</text>
+  <text x="445" y="408" text-anchor="middle" class="box-sub">ImEvent / ImMessage</text>
+  <text x="445" y="424" text-anchor="middle" class="box-sub">conversation_id 统一身份</text>
+  <text x="445" y="440" text-anchor="middle" class="box-sub">分发 · 至少一次 · 幂等账本</text>
+
+  <!-- Chat 域 -->
+  <rect x="610" y="118" width="420" height="324" class="zone-chat" rx="14"/>
+  <text x="820" y="142" text-anchor="middle" class="zone-title" fill="#1d4ed8">能力域 Chat · 对话</text>
+
+  <rect x="630" y="156" width="180" height="118" class="box" rx="9"/>
+  <text x="720" y="180" text-anchor="middle" class="box-name">会话与归档</text>
+  <text x="720" y="198" text-anchor="middle" class="box-sub">im_session 会话线</text>
+  <text x="720" y="214" text-anchor="middle" class="box-sub">im_message 档案(raw)</text>
+  <text x="720" y="230" text-anchor="middle" class="box-sub">origin 标记 human/ai</text>
+  <text x="720" y="246" text-anchor="middle" class="box-sub">线级开关 · 群成员快照</text>
+
+  <rect x="830" y="156" width="180" height="118" class="box" rx="9"/>
+  <text x="920" y="180" text-anchor="middle" class="box-name">AI 回复引擎</text>
+  <text x="920" y="198" text-anchor="middle" class="box-sub">多模态理解/输出</text>
+  <text x="920" y="214" text-anchor="middle" class="box-sub">人设四级回落</text>
+  <text x="920" y="230" text-anchor="middle" class="box-sub">护栏：@门控/频控/静默</text>
+  <text x="920" y="246" text-anchor="middle" class="box-sub">双层会话 ai_session</text>
+
+  <rect x="630" y="290" width="180" height="118" class="box" rx="9"/>
+  <text x="720" y="314" text-anchor="middle" class="box-name">对话式任务</text>
+  <text x="720" y="332" text-anchor="middle" class="box-sub">schedule_task 提醒</text>
+  <text x="720" y="348" text-anchor="middle" class="box-sub">remember_fact 记忆</text>
+  <text x="720" y="364" text-anchor="middle" class="box-sub">analyze_person 画像</text>
+  <text x="720" y="380" text-anchor="middle" class="box-sub">后台执行引擎</text>
+
+  <rect x="830" y="290" width="180" height="118" class="box" rx="9"/>
+  <text x="920" y="314" text-anchor="middle" class="box-name">长期记忆</text>
+  <text x="920" y="332" text-anchor="middle" class="box-sub">线级 + 全局</text>
+  <text x="920" y="348" text-anchor="middle" class="box-sub">AI 沉淀 + 手动录入</text>
+  <text x="920" y="364" text-anchor="middle" class="box-sub">晋升 / 编辑 / 淘汰</text>
+  <text x="920" y="380" text-anchor="middle" class="box-sub">注入系统提示词</text>
+
+  <!-- Insight 域 -->
+  <rect x="610" y="470" width="420" height="196" class="zone-insight" rx="14"/>
+  <text x="820" y="494" text-anchor="middle" class="zone-title" fill="#6d28d9">能力域 Insight · 洞察</text>
+
+  <rect x="630" y="508" width="180" height="128" class="box" rx="9"/>
+  <text x="720" y="532" text-anchor="middle" class="box-name">统计引擎</text>
+  <text x="720" y="550" text-anchor="middle" class="box-sub">字数/条数/活跃榜</text>
+  <text x="720" y="566" text-anchor="middle" class="box-sub">开场者 · @回复率</text>
+  <text x="720" y="582" text-anchor="middle" class="box-sub">表情计数 · 回复时延</text>
+  <text x="720" y="598" text-anchor="middle" class="box-sub">任意区间聚合</text>
+
+  <rect x="830" y="508" width="180" height="128" class="box" rx="9"/>
+  <text x="920" y="532" text-anchor="middle" class="box-name">AI 评析</text>
+  <text x="920" y="550" text-anchor="middle" class="box-sub">幽默度 · 口头禅</text>
+  <text x="920" y="566" text-anchor="middle" class="box-sub">话题分类与热度</text>
+  <text x="920" y="582" text-anchor="middle" class="box-sub">周/月/年报告落库</text>
+  <text x="920" y="598" text-anchor="middle" class="box-sub">conversation_report</text>
+
+  <!-- 技能层 -->
+  <rect x="610" y="694" width="420" height="196" class="zone-skill" rx="14"/>
+  <text x="820" y="718" text-anchor="middle" class="zone-title" fill="#c2410c">AI 技能层 · 横切支撑（控制台可启停/配 key）</text>
+
+  <rect x="626" y="732" width="126" height="58" class="box" rx="9"/>
+  <text x="689" y="756" text-anchor="middle" class="box-name">生图</text>
+  <text x="689" y="772" text-anchor="middle" class="box-sub">images API</text>
+
+  <rect x="762" y="732" width="126" height="58" class="box" rx="9"/>
+  <text x="825" y="756" text-anchor="middle" class="box-name">生视频</text>
+  <text x="825" y="772" text-anchor="middle" class="box-sub">video task API</text>
+
+  <rect x="898" y="732" width="126" height="58" class="box" rx="9"/>
+  <text x="961" y="756" text-anchor="middle" class="box-name">TTS</text>
+  <text x="961" y="772" text-anchor="middle" class="box-sub">语音合成</text>
+
+  <rect x="626" y="800" width="126" height="58" class="box" rx="9"/>
+  <text x="689" y="824" text-anchor="middle" class="box-name">ASR</text>
+  <text x="689" y="840" text-anchor="middle" class="box-sub">语音转写</text>
+
+  <rect x="762" y="800" width="126" height="58" class="box" rx="9" stroke="#f59e0b" stroke-width="1.6"/>
+  <text x="825" y="824" text-anchor="middle" class="box-name">网页搜索 ★</text>
+  <text x="825" y="840" text-anchor="middle" class="box-sub">v1 新增接入</text>
+
+  <rect x="898" y="800" width="126" height="58" class="box" rx="9"/>
+  <text x="961" y="824" text-anchor="middle" class="box-name">模型网关</text>
+  <text x="961" y="840" text-anchor="middle" class="box-sub">magpie OpenAI 兼容</text>
+
+  <!-- 管理后台 -->
+  <rect x="1080" y="118" width="360" height="772" class="zone-admin" rx="14"/>
+  <text x="1260" y="142" text-anchor="middle" class="zone-title" fill="#15803d">管理后台 WebUI · 完整后台系统</text>
+  <text x="1260" y="160" text-anchor="middle" class="box-sub">控制台对话面板 + 全资源管理闭环</text>
+
+  <rect x="1100" y="176" width="320" height="74" class="box" rx="9"/>
+  <text x="1260" y="200" text-anchor="middle" class="box-name">统一收件箱 + 检索</text>
+  <text x="1260" y="218" text-anchor="middle" class="box-sub">跨平台会话 · AI/真人区分</text>
+  <text x="1260" y="234" text-anchor="middle" class="box-sub">与 AI 对话面板（进会话列表）</text>
+
+  <rect x="1100" y="262" width="320" height="74" class="box" rx="9"/>
+  <text x="1260" y="286" text-anchor="middle" class="box-name">调教台</text>
+  <text x="1260" y="304" text-anchor="middle" class="box-sub">人设 · 策略 · 记忆编辑</text>
+  <text x="1260" y="320" text-anchor="middle" class="box-sub">线级开关 · 定时动作 · 模型目录</text>
+
+  <rect x="1100" y="348" width="320" height="74" class="box" rx="9"/>
+  <text x="1260" y="372" text-anchor="middle" class="box-name">接入实例管理</text>
+  <text x="1260" y="390" text-anchor="middle" class="box-sub">增删改启停 · 凭据掩码</text>
+  <text x="1260" y="406" text-anchor="middle" class="box-sub">配置修改重启生效</text>
+
+  <rect x="1100" y="434" width="320" height="74" class="box" rx="9"/>
+  <text x="1260" y="458" text-anchor="middle" class="box-name">洞察报表</text>
+  <text x="1260" y="476" text-anchor="middle" class="box-sub">统计筛选 · 报告回看</text>
+  <text x="1260" y="492" text-anchor="middle" class="box-sub">周期报告自动生成</text>
+
+  <rect x="1100" y="520" width="320" height="88" class="box" rx="9"/>
+  <text x="1260" y="546" text-anchor="middle" class="box-name">控制台 API /api</text>
+  <text x="1260" y="564" text-anchor="middle" class="box-sub">全资源管理端点</text>
+  <text x="1260" y="580" text-anchor="middle" class="box-sub">系统级交互：分页/筛选/空态/</text>
+  <text x="1260" y="596" text-anchor="middle" class="box-sub">确认/校验 · 凭据仅掩码</text>
+
+  <!-- 侧：数据层 -->
+  <rect x="1080" y="640" width="360" height="176" class="zone" rx="14"/>
+  <text x="1260" y="664" text-anchor="middle" class="zone-title" fill="#52525b">数据与状态</text>
+  <rect x="1100" y="678" width="320" height="120" class="box" rx="9"/>
+  <text x="1260" y="700" text-anchor="middle" class="box-name">PostgreSQL（19 表）</text>
+  <text x="1260" y="716" text-anchor="middle" class="box-sub">im_app / im_session / im_message</text>
+  <text x="1260" y="732" text-anchor="middle" class="box-sub">ai_session(+binding) / ai_message</text>
+  <text x="1260" y="748" text-anchor="middle" class="box-sub">memory / action / report / 目录策略</text>
+  <text x="1260" y="764" text-anchor="middle" class="box-sub">接入配置(config JSONB 含密钥)</text>
+  <text x="1260" y="782" text-anchor="middle" class="box-sub" style="font-size:10px">Redis：频控计数 / 游标（降级内存）</text>
+
+  <!-- 外部技能服务 -->
+  <rect x="1080" y="836" width="360" height="130" class="ext" rx="10"/>
+  <text x="1260" y="860" text-anchor="middle" class="box-name">AI 服务（经 magpie 网关）</text>
+  <text x="1260" y="880" text-anchor="middle" class="box-sub">Chat 模型(GLM-4.5V) · Agnes 生图/生视频</text>
+  <text x="1260" y="896" text-anchor="middle" class="box-sub">MiniMax TTS · ASR 转写 · 搜索 API(待接)</text>
+  <text x="1260" y="916" text-anchor="middle" class="box-sub" style="font-size:10px">模型目录即数据：控制台增删改模型与 key</text>
+
+  <!-- ============ 连线 ============ -->
+  <!-- 微信/飞书 -> 适配器 -->
+  <line x1="230" y1="174" x2="350" y2="192" class="flow"/>
+  <text x="282" y="168" class="lbl">SSE/REST</text>
+  <line x1="230" y1="304" x2="350" y2="308" class="flow"/>
+  <text x="282" y="296" class="lbl">WS</text>
+
+  <!-- 适配器 -> 归一化总线 -->
+  <line x1="445" y1="244" x2="445" y2="366" class="flow"/>
+
+  <!-- 总线 -> Chat 域（归档 + 回复） -->
+  <line x1="540" y1="394" x2="630" y2="240" class="flow"/>
+  <text x="560" y="330" class="lbl">归一化投递</text>
+
+  <!-- 用户 <-> 微信（双向社交） -->
+  <line x1="135" y1="392" x2="135" y2="360" class="flow" style="marker-end:none"/>
+  <text x="143" y="380" class="lbl">IM 消息</text>
+
+  <!-- Chat -> 技能层 -->
+  <line x1="820" y1="408" x2="820" y2="470" class="flow"/>
+  <line x1="820" y1="666" x2="820" y2="694" class="flow"/>
+  <text x="828" y="686" class="lbl">工具调用</text>
+
+  <!-- Insight 消费归档 -->
+  <path d="M 630 572 L 580 572 L 580 434 L 540 434" class="flow" fill="none" stroke="#52525b"/>
+  <text x="584" y="560" class="lbl">消费归档</text>
+
+  <!-- 技能层 -> AI 服务 -->
+  <line x1="1030" y1="800" x2="1080" y2="880" class="flow"/>
+  <text x="1040" y="848" class="lbl">API</text>
+
+  <!-- WebUI -> API -->
+  <line x1="1260" y1="520" x2="1260" y2="608" class="flow"/>
+
+  <!-- WebUI 指挥 Chat（虚线管控，用蓝） -->
+  <path d="M 1100 299 L 1030 299" class="flow-blue" stroke-dasharray="5 4"/>
+  <text x="1044" y="290" class="lbl-b">策略/开关</text>
+
+  <!-- 控制台对话面板 -> Chat -->
+  <path d="M 1100 213 L 1060 213 L 1060 250 L 1030 250" class="flow-blue" stroke-dasharray="5 4"/>
+  <text x="1036" y="242" class="lbl-b">对话</text>
+
+  <!-- Chat -> 数据 -->
+  <path d="M 1030 430 L 1100 700" class="flow-violet"/>
+  <text x="1060" y="560" class="lbl-v">读写</text>
+
+  <!-- Insight -> 数据 -->
+  <path d="M 1030 572 L 1082 690" class="flow-violet"/>
+
+  <!-- 后台执行引擎（定时）标注 -->
+  <text x="652" y="398" class="lbl" style="font-size:10px">定时器到点 → 发送</text>
+</svg>
+</body>
+</html>
