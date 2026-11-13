@@ -34,6 +34,10 @@ public interface ImAdapter {
     /** The configured connection row this adapter serves. */
     ImConnection connection();
 
+    /** Whether this platform has an enabled connection row (console runtime flag,
+     *  as opposed to {@link #connection()} which throws when the wiring is missing). */
+    boolean configured();
+
     /** Fetches one message by its platform id, normalized. Throws
      * ImContractException when the fetched identity drifts from the event. */
     FetchedMessage fetchMessage(String messageId);

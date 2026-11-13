@@ -117,11 +117,8 @@ class EventStreamResumeTest {
 
     @Test
     void resumesWithTheHandledCursorAfterACleanClose() {
-        WebClient webClient = WebClient.builder()
-                .baseUrl(server.url("/").toString())
-                .build();
         WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
-        DaemonClient daemonClient = new DaemonClient(webClient, connection);
+        DaemonClient daemonClient = new DaemonClient(connection);
         DaemonEventDecoder decoder = new DaemonEventDecoder(JsonMapper.builder().build());
         WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(ProcessedMessageLedger.class), connection);
         LoggingMessageHandler loggingHandler = new LoggingMessageHandler(new ImAdapters(List.of(adapter)));

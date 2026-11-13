@@ -29,6 +29,7 @@ public class WechatConnection {
     private volatile ImConnection appRow;
     private volatile WebClient client;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public WechatConnection(ImConnectionRepository accounts, JsonMapper jsonMapper) {
         this(accounts, jsonMapper, null);
     }

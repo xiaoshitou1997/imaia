@@ -29,13 +29,11 @@ import org.springframework.web.util.UriBuilder;
 @Component
 public class DaemonClient {
 
-    private final WebClient daemonWebClient;
     private final WechatConnection connection;
     private final Object accountLock = new Object();
     private volatile String accountId;
 
-    public DaemonClient(WebClient daemonWebClient, WechatConnection connection) {
-        this.daemonWebClient = daemonWebClient;
+    public DaemonClient(WechatConnection connection) {
         this.connection = connection;
     }
 
@@ -88,7 +86,7 @@ public class DaemonClient {
      * consumer progress only; it never marks chats read.
      */
     public void ackCursor(String consumerName, String cursor) {
-        blocking(daemonWebClient.post()
+        blocking(connection.client().post()
                 .uri(builder -> builder.path("/v1/accounts/{accountId}/consumers/{consumer}/ack")
                         .build(accountId(), consumerName))
                 .bodyValue(new EventAckRequest(cursor))
@@ -107,7 +105,7 @@ public class DaemonClient {
      * never resent under a new key.
      */
     public SendReceipt sendText(String threadId, String text, String idempotencyKey) {
-        JsonNode body = blocking(daemonWebClient.post()
+        JsonNode body = blocking(connection.client().post()
                 .uri(builder -> builder.path("/v1/accounts/{accountId}/sends").build(accountId()))
                 .header("Idempotency-Key", idempotencyKey)
                 .bodyValue(new TextSendRequest("text", threadId, text))
@@ -118,7 +116,7 @@ public class DaemonClient {
 
     private JsonNode getJson(Function<UriBuilder, URI> uri, String what) {
         try {
-            JsonNode body = blocking(daemonWebClient.get().uri(uri).retrieve().bodyToMono(JsonNode.class));
+            JsonNode body = blocking(connection.client().get().uri(uri).retrieve().bodyToMono(JsonNode.class));
             if (body == null) {
                 throw new DaemonContractException("Empty response for " + what + ".");
             }
@@ -160,7 +158,7 @@ public class DaemonClient {
     /** Downloads the bytes behind a daemon media path such as /v1/accounts/…/content. */
     public MediaBytes getBytesByPath(String path) {
         try {
-            org.springframework.http.ResponseEntity<byte[]> response = blocking(daemonWebClient.get()
+            org.springframework.http.ResponseEntity<byte[]> response = blocking(connection.client().get()
                     .uri(path)
                     .retrieve()
                     .toEntity(byte[].class));
@@ -180,7 +178,7 @@ public class DaemonClient {
      * finishes, bounded by a fixed budget. One request per call, never a resend.
      */
     public void requestTransferAndWait(String messageId, String assetId) {
-        JsonNode job = blocking(daemonWebClient.post()
+        JsonNode job = blocking(connection.client().post()
                 .uri(builder -> builder.path("/v1/accounts/{accountId}/messages/{messageId}/media-transfers")
                         .build(accountId(), messageId))
                 .bodyValue(new MediaTransferRequest(messageId, assetId, "best"))
@@ -234,7 +232,7 @@ public class DaemonClient {
                 return filename;
             }
         }).contentType(org.springframework.http.MediaType.valueOf(mimeType));
-        JsonNode body = blocking(daemonWebClient.post()
+        JsonNode body = blocking(connection.client().post()
                 .uri(uriBuilder -> uriBuilder.path("/v1/accounts/{accountId}/uploads").build(accountId()))
                 .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA)
                 .body(org.springframework.web.reactive.function.BodyInserters.fromMultipartData(builder.build()))
@@ -249,7 +247,7 @@ public class DaemonClient {
 
     /** Sends one staged media source to the chat under an idempotency key. */
     public SendReceipt sendMedia(String threadId, String kind, String sourceId, String idempotencyKey) {
-        JsonNode body = blocking(daemonWebClient.post()
+        JsonNode body = blocking(connection.client().post()
                 .uri(builder -> builder.path("/v1/accounts/{accountId}/sends").build(accountId()))
                 .header("Idempotency-Key", idempotencyKey)
                 .bodyValue(new MediaSendRequest(threadId, kind, sourceId, null, null))

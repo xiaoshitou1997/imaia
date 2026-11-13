@@ -10,7 +10,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.IOException;
 
@@ -26,11 +25,7 @@ class DaemonClientTest {
     void startServer() throws IOException {
         server = new MockWebServer();
         server.start();
-        WebClient webClient = WebClient.builder()
-                .baseUrl(server.url("/").toString())
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer test-token")
-                .build();
-        client = new DaemonClient(webClient, TestProperties.wechat(server.url("/").toString(), "acc1"));
+        client = new DaemonClient(TestProperties.wechat(server.url("/").toString(), "acc1"));
     }
 
     @AfterEach
@@ -99,9 +94,7 @@ class DaemonClientTest {
         server.enqueue(new MockResponse()
                 .setBody("{\"items\":[{\"id\":\"a9\",\"alias\":\"me\"}]}")
                 .addHeader("Content-Type", "application/json"));
-        DaemonClient autoClient = new DaemonClient(
-                WebClient.builder().baseUrl(server.url("/").toString()).build(),
-                TestProperties.wechat(server.url("/").toString(), ""));
+        DaemonClient autoClient = new DaemonClient(TestProperties.wechat(server.url("/").toString(), ""));
 
         assertThat(autoClient.accountId()).isEqualTo("a9");
         assertThat(autoClient.accountId()).isEqualTo("a9");

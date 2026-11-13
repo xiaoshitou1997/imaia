@@ -23,11 +23,11 @@ CREATE TABLE im_connection (
 COMMENT ON TABLE im_connection IS
     'IM 接入连接：hub 与一个外部 IM 的连接单元；config 为该平台结构化接入参数（含凭据，勿外发）';
 
--- wechat: agent-wechat daemon — 启动前填 config->>'token'：
+-- wechat: agent-wechat daemon — 填好 config 后在控制台启用连接，启动前勿启用->>'token'：
 -- UPDATE im_connection SET config = jsonb_set(config, '{token}', '"<token>"'::jsonb)
 -- WHERE platform = 'wechat';
 INSERT INTO im_connection (platform, name, enabled, config) VALUES
-    ('wechat', 'default', TRUE,
+    ('wechat', 'default', FALSE,
     '{"baseUrl": "http://127.0.0.1:6174", "token": "", "account": "",
       "connectTimeoutMillis": 5000, "callTimeoutSeconds": 15,
       "consumerName": "imaia", "ackEnabled": true,

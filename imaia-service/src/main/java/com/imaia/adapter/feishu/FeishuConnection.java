@@ -23,6 +23,7 @@ public class FeishuConnection {
     private volatile ImConnection appRow;
     private volatile Client client;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public FeishuConnection(ImConnectionRepository accounts, JsonMapper jsonMapper) {
         this(accounts, jsonMapper, null);
     }

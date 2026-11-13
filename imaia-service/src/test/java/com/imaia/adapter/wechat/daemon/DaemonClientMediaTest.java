@@ -7,7 +7,6 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,11 +29,7 @@ class DaemonClientMediaTest {
     void startServer() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new DaemonClient(
-                WebClient.builder().baseUrl(server.url("/").toString())
-                        .defaultHeader(org.springframework.http.HttpHeaders.AUTHORIZATION, "Bearer test-token")
-                        .build(),
-                TestProperties.wechat(server.url("/").toString(), "acc1"));
+        client = new DaemonClient(TestProperties.wechat(server.url("/").toString(), "acc1"));
     }
 
     @AfterEach

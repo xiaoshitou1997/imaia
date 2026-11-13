@@ -108,7 +108,7 @@ public class OverviewController {
                 .map(provider -> StringUtils.hasText(provider.getApiKey()) && provider.isEnabled())
                 .orElse(false);
         List<PlatformState> platforms = adapters.all().stream()
-                .map(adapter -> new PlatformState(adapter.platform(), adapter.connection().isEnabled()))
+                .map(adapter -> new PlatformState(adapter.platform(), adapter.configured()))
                 .toList();
         return ApiEnvelope.ok(new RuntimeRow(catalog.hasChat(), catalog.hasImageGeneration(),
                 catalog.hasVideoGeneration(), search, platforms));

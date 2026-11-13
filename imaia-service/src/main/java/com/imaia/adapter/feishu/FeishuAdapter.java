@@ -71,6 +71,11 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
+    public boolean configured() {
+        return connection.enabled();
+    }
+
+    @Override
     public FetchedMessage fetchMessage(String messageId) {
         Message message = fetchApiMessage(messageId);
         if (!messageId.equals(message.getMessageId()) || blank(message.getChatId())) {

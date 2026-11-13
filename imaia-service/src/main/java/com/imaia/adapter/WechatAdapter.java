@@ -57,6 +57,11 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
+    public boolean configured() {
+        return connection.enabled();
+    }
+
+    @Override
     public FetchedMessage fetchMessage(String messageId) {
         Message message = daemonClient.getMessage(messageId);
         if (!message.id().equals(messageId) || !StringUtils.hasText(message.threadId())) {
