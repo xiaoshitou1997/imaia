@@ -1,36 +1,37 @@
 package com.imaia.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-
-import java.util.List;
 import com.imaia.domain.ImMessage;
-import com.imaia.domain.ConversationSummary;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-/** Persistence for archived IM messages across platforms. */
+import java.time.Instant;
+import java.util.List;
+
 public interface ImMessageRepository extends JpaRepository<ImMessage, Long> {
 
-    /** Per-chat archive summary: thread id, message count, last archived time. */
-    @org.springframework.data.jpa.repository.Query(
-            "select new com.imaia.domain.ConversationSummary(w.conversationId, count(w), max(w.archivedAt)) " +
-            "from ImMessage w where w.accountId = ?1 group by w.conversationId order by max(w.archivedAt) desc")
-    List<ConversationSummary> summarizeConversations(String accountId);
+    boolean existsByConversationIdAndMessageId(Long conversationId, String messageId);
 
-    /** The most recent messages of one chat, newest first. */
-    List<ImMessage> findTop200ByAccountIdAndThreadIdOrderByArchivedAtDesc(String accountId, String conversationId);
+    long countByArchivedAtAfter(Instant archivedAt);
 
-    /** The most recent messages of one sender across all chats, newest first. */
-    List<ImMessage> findTop100ByAccountIdAndSenderIdOrderByArchivedAtDesc(String accountId, String senderId);
+    /** Messages of one conversation, newest first (console conversation view). */
+    List<ImMessage> findTop200ByConversationIdOrderByArchivedAtDesc(Long conversationId);
 
-    /** The most recent messages matching a sender name fragment, newest first. */
-    List<ImMessage> findTop100ByAccountIdAndSenderNameContainingIgnoreCaseOrderByArchivedAtDesc(
-            String accountId, String senderName);
+    /** Recent messages of one conversation since a point in time (insight aggregation). */
+    List<ImMessage> findTop2000ByConversationIdAndArchivedAtAfterOrderByArchivedAtDesc(
+            Long conversationId, Instant after);
 
-    /** The most recent archived messages of one account, newest first. */
-    java.util.List<ImMessage> findTop200ByAccountIdOrderByArchivedAtDesc(String accountId);
+    List<ImMessage> findTop100ByConversationIdAndSenderIdOrderByArchivedAtDesc(Long conversationId, String senderId);
 
-    /** Whether the message has already been archived. */
-    boolean existsByAccountIdAndMessageId(String accountId, String messageId);
+    List<ImMessage> findTop100ByConversationIdAndSenderNameContainingIgnoreCaseOrderByArchivedAtDesc(
+            Long conversationId, String senderName);
 
-    /** Messages archived since the given instant (overview stats). */
-    long countByAccountIdAndArchivedAtAfter(String accountId, java.time.Instant after);
+    /** Hub-wide keyword search over archived bodies (console检索). */
+    @Query("select m from ImMessage m where m.body like %:keyword% order by m.archivedAt desc")
+    List<ImMessage> searchByBody(@Param("keyword") String keyword, Pageable pageable);
+
+    /** Message count per conversation, one group-by for list views (no N+1). */
+    @Query("select m.conversationId, count(m) from ImMessage m group by m.conversationId")
+    List<Object[]> countPerConversation();
 }

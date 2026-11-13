@@ -6,49 +6,53 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
 /**
- * Entity layer over the message streams: a contact is a friend, a group or an
- * official account, and its external_id IS the thread id of the conversation with
- * it. persona gives the conversation its own reply style; display_name and
- * last_seen are refreshed from the archive on every observed message.
+ * One conversation line (微信私聊/群、飞书会话): the long-lived channel messages flow
+ * through, owned by an {@link ImConnection}. {@code id} is the hub's unified
+ * conversation identity — every child table hangs off it; {@code externalId} keeps
+ * the platform-native chat id and is only ever translated at the adapter boundary.
+ * {@code persona} is the line-level persona (empty = the global default prompt);
+ * {@code autoreply} is the line-level AI reply switch, default off, the global
+ * master switch in assistant_settings is the second safety.
  */
 @Entity
-@Table(name = "contact")
-public class Contact {
+@Table(name = "im_conversation", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"connection_id", "external_id"})})
+public class ImConversation {
 
-    public static final String KIND_FRIEND = "friend";
+    public static final String KIND_DIRECT = "direct";
     public static final String KIND_GROUP = "group";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "account_id", nullable = false)
-    private String accountId;
+    @Column(name = "connection_id", nullable = false)
+    private Long connectionId;
 
-    @Column(nullable = false)
-    private String platform;
-
-    @Column(name = "external_id")
+    @Column(name = "external_id", nullable = false)
     private String externalId;
 
     @Column(name = "display_name")
     private String displayName;
 
+    /** direct | group. */
     @Column(nullable = false)
     private String kind;
 
     @Column
     private String remark;
 
+    /** Line-level persona; null/blank = assistant_settings.system_prompt default. */
     @Column
     private String persona;
 
-    @Column
-    private Boolean muted;
+    @Column(nullable = false)
+    private boolean autoreply;
 
     @Column(name = "first_seen_at")
     private Instant firstSeenAt;
@@ -59,13 +63,12 @@ public class Contact {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected Contact() {
+    protected ImConversation() {
     }
 
-    public Contact(String accountId, String platform, String externalId, String displayName, String kind,
+    public ImConversation(Long connectionId, String externalId, String displayName, String kind,
             Instant firstSeenAt, Instant lastSeenAt, Instant createdAt) {
-        this.accountId = accountId;
-        this.platform = platform;
+        this.connectionId = connectionId;
         this.externalId = externalId;
         this.displayName = displayName;
         this.kind = kind;
@@ -75,21 +78,22 @@ public class Contact {
     }
 
     public Long getId() { return id; }
-    public String getAccountId() { return accountId; }
-    public String getPlatform() { return platform; }
+    public void setId(Long id) { this.id = id; }
+
+    public Long getConnectionId() { return connectionId; }
     public String getExternalId() { return externalId; }
     public String getDisplayName() { return displayName; }
     public String getKind() { return kind; }
     public String getRemark() { return remark; }
     public String getPersona() { return persona; }
-    public Boolean getMuted() { return muted; }
+    public boolean isAutoreply() { return autoreply; }
     public Instant getFirstSeenAt() { return firstSeenAt; }
     public Instant getLastSeenAt() { return lastSeenAt; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setDisplayName(String displayName) { this.displayName = displayName; }
-    public void setPersona(String persona) { this.persona = persona; }
     public void setRemark(String remark) { this.remark = remark; }
-    public void setMuted(Boolean muted) { this.muted = muted; }
+    public void setPersona(String persona) { this.persona = persona; }
+    public void setAutoreply(boolean autoreply) { this.autoreply = autoreply; }
     public void setLastSeenAt(Instant lastSeenAt) { this.lastSeenAt = lastSeenAt; }
 }

@@ -1,10 +1,12 @@
 package com.imaia.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
 import com.imaia.domain.AiArtifact;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
 
 public interface AiArtifactRepository extends JpaRepository<AiArtifact, Long> {
 
-    /** The most recent generated artifacts (WebUI gallery). */
-    java.util.List<AiArtifact> findTop50ByAccountIdOrderByCreatedAtDesc(String accountId);
+    /** The most recent generated artifacts (console gallery). */
+    List<AiArtifact> findTop50ByOrderByCreatedAtDesc();
 }

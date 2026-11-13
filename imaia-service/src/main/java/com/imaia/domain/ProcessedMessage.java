@@ -6,26 +6,30 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
-/** A message an adapter has already handled, keyed per platform for idempotency. */
+/**
+ * Idempotency ledger behind at-least-once delivery: a (connection, message id) pair
+ * that was fully handled. Replays of handled messages stay silent even across
+ * restarts. Keyed by connection — the gate runs before the conversation row is
+ * resolved, and a message id never crosses conversations within one connection.
+ */
 @Entity
-@Table(name = "processed_message")
+@Table(name = "processed_message", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"connection_id", "message_id"})})
 public class ProcessedMessage {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String platform;
+    @Column(name = "connection_id", nullable = false)
+    private Long connectionId;
 
     @Column(name = "message_id", nullable = false)
     private String messageId;
-
-    @Column(name = "conversation_id", nullable = false)
-    private String conversationId;
 
     @Column(name = "processed_at", nullable = false)
     private Instant processedAt;
@@ -33,16 +37,13 @@ public class ProcessedMessage {
     protected ProcessedMessage() {
     }
 
-    public ProcessedMessage(String platform, String messageId, String conversationId, Instant processedAt) {
-        this.platform = platform;
+    public ProcessedMessage(Long connectionId, String messageId, Instant processedAt) {
+        this.connectionId = connectionId;
         this.messageId = messageId;
-        this.conversationId = conversationId;
         this.processedAt = processedAt;
     }
 
-    public Long getId() { return id; }
-    public String getPlatform() { return platform; }
+    public Long getConnectionId() { return connectionId; }
     public String getMessageId() { return messageId; }
-    public String getConversationId() { return conversationId; }
     public Instant getProcessedAt() { return processedAt; }
 }

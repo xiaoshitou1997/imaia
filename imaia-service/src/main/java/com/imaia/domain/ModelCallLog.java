@@ -19,7 +19,7 @@ public class ModelCallLog {
     private Long id;
 
     @Column(name = "conversation_id")
-    private String conversationId;
+    private Long conversationId;
 
     @Column(name = "ai_message_id")
     private Long aiMessageId;
@@ -54,7 +54,7 @@ public class ModelCallLog {
     protected ModelCallLog() {
     }
 
-    public ModelCallLog(Long aiMessageId, String conversationId, String purpose, String providerName, String modelId,
+    public ModelCallLog(Long aiMessageId, Long conversationId, String purpose, String providerName, String modelId,
             Integer promptTokens, Integer completionTokens, Long durationMs, Boolean ok,
             String error, Instant createdAt) {
         this.aiMessageId = aiMessageId;
@@ -69,8 +69,10 @@ public class ModelCallLog {
         this.error = error;
         this.createdAt = createdAt;
     }
+
+    public Long getId() { return id; }
     public Long getAiMessageId() { return aiMessageId; }
-    public String getConversationId() { return conversationId; }
+    public Long getConversationId() { return conversationId; }
     public String getPurpose() { return purpose; }
     public String getProviderName() { return providerName; }
     public String getModelId() { return modelId; }

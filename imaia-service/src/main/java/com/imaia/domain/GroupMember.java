@@ -6,26 +6,26 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
-/** Membership snapshot of one member inside one group contact. */
+/**
+ * Member snapshot of one group conversation: who is in the group, under which
+ * display name, when last seen. Fed by inbound group messages (best-effort) and
+ * consumed by person analysis and conversation insights.
+ */
 @Entity
-@Table(name = "group_member")
+@Table(name = "group_member", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"conversation_id", "member_external_id"})})
 public class GroupMember {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "account_id", nullable = false)
-    private String accountId;
-
-    @Column(nullable = false)
-    private String platform;
-
-    @Column(name = "group_contact_id", nullable = false)
-    private Long groupContactId;
+    @Column(name = "conversation_id", nullable = false)
+    private Long conversationId;
 
     @Column(name = "member_external_id", nullable = false)
     private String memberExternalId;
@@ -42,21 +42,16 @@ public class GroupMember {
     protected GroupMember() {
     }
 
-    public GroupMember(String accountId, String platform, Long groupContactId, String memberExternalId,
-            String displayName, Instant lastSeenAt, Instant createdAt) {
-        this.accountId = accountId;
-        this.platform = platform;
-        this.groupContactId = groupContactId;
+    public GroupMember(Long conversationId, String memberExternalId, String displayName, Instant createdAt) {
+        this.conversationId = conversationId;
         this.memberExternalId = memberExternalId;
         this.displayName = displayName;
-        this.lastSeenAt = lastSeenAt;
+        this.lastSeenAt = createdAt;
         this.createdAt = createdAt;
     }
 
     public Long getId() { return id; }
-    public String getPlatform() { return platform; }
-    public String getAccountId() { return accountId; }
-    public Long getGroupContactId() { return groupContactId; }
+    public Long getConversationId() { return conversationId; }
     public String getMemberExternalId() { return memberExternalId; }
     public String getDisplayName() { return displayName; }
     public Instant getLastSeenAt() { return lastSeenAt; }

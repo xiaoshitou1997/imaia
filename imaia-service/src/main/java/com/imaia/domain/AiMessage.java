@@ -10,10 +10,11 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * One message of the model conversation: {@code user} turns carry the raw user text
- * and link to the archived IM message, {@code tool} rows record what the model
- * generated (audit only — never replayed into the model context), {@code assistant}
- * rows the final reply. Persisted so a restart does not erase the model\u0027s context.
+ * One message of the model context stream of a conversation: {@code user} turns
+ * carry the user text and link to the archived IM message, {@code tool} rows record
+ * what tools the model called (audit only — never replayed into the model context),
+ * {@code assistant} rows the final reply. History hangs directly off the
+ * conversation and scrolls with the configured window; the archive is separate.
  */
 @Entity
 @Table(name = "ai_message")
@@ -27,14 +28,8 @@ public class AiMessage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "account_id", nullable = false)
-    private String accountId;
-
-    @Column(nullable = false)
-    private String platform;
-
     @Column(name = "conversation_id", nullable = false)
-    private String conversationId;
+    private Long conversationId;
 
     @Column(nullable = false)
     private String role;
@@ -54,15 +49,12 @@ public class AiMessage {
     protected AiMessage() {
     }
 
-    public AiMessage(String accountId, String platform, String conversationId, String role, String content,
-            String sourceMessageId, Instant createdAt) {
-        this(accountId, platform, conversationId, role, content, sourceMessageId, null, createdAt);
+    public AiMessage(Long conversationId, String role, String content, String sourceMessageId, Instant createdAt) {
+        this(conversationId, role, content, sourceMessageId, null, createdAt);
     }
 
-    public AiMessage(String accountId, String platform, String conversationId, String role, String content,
-            String sourceMessageId, String toolName, Instant createdAt) {
-        this.accountId = accountId;
-        this.platform = platform;
+    public AiMessage(Long conversationId, String role, String content, String sourceMessageId, String toolName,
+            Instant createdAt) {
         this.conversationId = conversationId;
         this.role = role;
         this.content = content;
@@ -75,15 +67,7 @@ public class AiMessage {
         return id;
     }
 
-    public String getPlatform() {
-        return platform;
-    }
-
-    public String getAccountId() {
-        return accountId;
-    }
-
-    public String getConversationId() {
+    public Long getConversationId() {
         return conversationId;
     }
 

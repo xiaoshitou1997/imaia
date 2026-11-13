@@ -6,23 +6,32 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
-/** Cached personality profile of one contact, regenerated on demand. */
+/**
+ * The synthesized profile of one group member within one conversation: 性格、兴趣、
+ * 说话风格与互动方式，generated from the archived messages on demand (console button
+ * or in-group command) and kept for回看; one row per (conversation, member).
+ */
 @Entity
-@Table(name = "person_analysis")
+@Table(name = "person_analysis", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"conversation_id", "member_external_id"})})
 public class PersonAnalysis {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "account_id", nullable = false)
-    private String accountId;
+    @Column(name = "conversation_id", nullable = false)
+    private Long conversationId;
 
-    @Column(name = "contact_id", nullable = false)
-    private Long contactId;
+    @Column(name = "member_external_id", nullable = false)
+    private String memberExternalId;
+
+    @Column(name = "member_name")
+    private String memberName;
 
     @Column(nullable = false, columnDefinition = "text")
     private String profile;
@@ -39,10 +48,11 @@ public class PersonAnalysis {
     protected PersonAnalysis() {
     }
 
-    public PersonAnalysis(String accountId, Long contactId, String profile,
-            Integer messageCount, String modelId, Instant generatedAt) {
-        this.accountId = accountId;
-        this.contactId = contactId;
+    public PersonAnalysis(Long conversationId, String memberExternalId, String memberName,
+            String profile, Integer messageCount, String modelId, Instant generatedAt) {
+        this.conversationId = conversationId;
+        this.memberExternalId = memberExternalId;
+        this.memberName = memberName;
         this.profile = profile;
         this.messageCount = messageCount;
         this.modelId = modelId;
@@ -50,8 +60,9 @@ public class PersonAnalysis {
     }
 
     public Long getId() { return id; }
-    public String getAccountId() { return accountId; }
-    public Long getContactId() { return contactId; }
+    public Long getConversationId() { return conversationId; }
+    public String getMemberExternalId() { return memberExternalId; }
+    public String getMemberName() { return memberName; }
     public String getProfile() { return profile; }
     public Integer getMessageCount() { return messageCount; }
     public String getModelId() { return modelId; }
@@ -60,5 +71,5 @@ public class PersonAnalysis {
     public void setProfile(String profile) { this.profile = profile; }
     public void setMessageCount(Integer messageCount) { this.messageCount = messageCount; }
     public void setModelId(String modelId) { this.modelId = modelId; }
-    public void setGeneratedAt(Instant generatedAt) { this.generatedAt = generatedAt; }
+    public void setMemberName(String memberName) { this.memberName = memberName; }
 }

@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 
-/** Media the AI generated through its tools: prompt, model, and delivery state. */
+/** Media the AI generated through its tools: prompt, delivery state and platform ref. */
 @Entity
 @Table(name = "ai_artifact")
 public class AiArtifact {
@@ -24,12 +24,10 @@ public class AiArtifact {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "account_id", nullable = false)
-    private String accountId;
-
     @Column(name = "conversation_id", nullable = false)
-    private String conversationId;
+    private Long conversationId;
 
+    /** image | video (MediaKind value). */
     @Column(nullable = false)
     private String kind;
 
@@ -45,6 +43,7 @@ public class AiArtifact {
     @Column(name = "source_ref")
     private String sourceRef;
 
+    /** Platform storage type the ref points at (daemon / feishu ...). */
     @Column(name = "source_type", nullable = false)
     private String sourceType;
 
@@ -60,9 +59,8 @@ public class AiArtifact {
     protected AiArtifact() {
     }
 
-    public AiArtifact(String accountId, String conversationId, String kind, String prompt,
-            String filename, String status, Instant createdAt) {
-        this.accountId = accountId;
+    public AiArtifact(Long conversationId, String kind, String prompt, String filename,
+            String status, Instant createdAt) {
         this.conversationId = conversationId;
         this.kind = kind;
         this.prompt = prompt;
@@ -72,8 +70,7 @@ public class AiArtifact {
     }
 
     public Long getId() { return id; }
-    public String getAccountId() { return accountId; }
-    public String getConversationId() { return conversationId; }
+    public Long getConversationId() { return conversationId; }
     public String getKind() { return kind; }
     public String getPrompt() { return prompt; }
     public String getModelId() { return modelId; }

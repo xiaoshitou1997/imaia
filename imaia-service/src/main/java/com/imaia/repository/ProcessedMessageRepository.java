@@ -1,13 +1,13 @@
 package com.imaia.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
 import com.imaia.domain.ProcessedMessage;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-/** Persistence for messages the AI has already handled. */
+import java.time.Instant;
+
 public interface ProcessedMessageRepository extends JpaRepository<ProcessedMessage, Long> {
 
-    /** AI replies sent since the given instant (overview stats). */
-    boolean existsByPlatformAndMessageId(String platform, String messageId);
+    boolean existsByConnectionIdAndMessageId(Long connectionId, String messageId);
 
-    long countByProcessedAtAfter(java.time.Instant after);
+    long countByProcessedAtAfter(Instant processedAt);
 }
