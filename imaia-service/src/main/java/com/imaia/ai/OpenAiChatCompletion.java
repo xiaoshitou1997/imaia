@@ -1,9 +1,9 @@
 package com.imaia.ai;
 
 import com.imaia.config.ChatModelFactory;
-import com.imaia.domain.ModelCallLog;
-import com.imaia.repository.ModelCallLogRepository;
-import com.imaia.config.ModelRegistry;
+import com.imaia.domain.AiCallLog;
+import com.imaia.repository.AiCallLogRepository;
+import com.imaia.config.AiModelCatalog;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -45,15 +45,15 @@ public class OpenAiChatCompletion {
     }
 
     private final ChatModelFactory chatModels;
-    private final ModelRegistry registry;
-    private final ModelCallLogRepository callLogs;
+    private final AiModelCatalog catalog;
+    private final AiCallLogRepository callLogs;
 
     private final ToolCallingManager toolCallingManager = ToolCallingManager.builder().build();
 
-    public OpenAiChatCompletion(ChatModelFactory chatModels, ModelRegistry registry,
-            ModelCallLogRepository callLogs) {
+    public OpenAiChatCompletion(ChatModelFactory chatModels, AiModelCatalog catalog,
+            AiCallLogRepository callLogs) {
         this.chatModels = chatModels;
-        this.registry = registry;
+        this.catalog = catalog;
         this.callLogs = callLogs;
     }
 
@@ -68,7 +68,7 @@ public class OpenAiChatCompletion {
 
     public ChatResult complete(String systemPrompt, List<Turn> history, String userText,
             byte[] image, String imageMimeType, List<ToolCallback> tools) {
-        ModelRegistry.Resolved brain = registry.chatFor(image != null);
+        AiModelCatalog.Resolved brain = catalog.chatFor(image != null);
         OpenAiChatModel chatModel = chatModels.forProvider(
                 brain.providerName(), brain.baseUrl(), brain.apiKey());
         List<Message> messages = new ArrayList<>();
@@ -129,7 +129,7 @@ public class OpenAiChatCompletion {
     }
 
     /** Best-effort metering: a logging failure must never break the chat flow. */
-    private void logCall(ModelRegistry.Resolved brain, long start, ChatResponse response,
+    private void logCall(AiModelCatalog.Resolved brain, long start, ChatResponse response,
             boolean ok, String error) {
         try {
             Integer promptTokens = null;
@@ -140,7 +140,7 @@ public class OpenAiChatCompletion {
                 promptTokens = usage.getPromptTokens();
                 completionTokens = usage.getCompletionTokens();
             }
-            callLogs.save(new ModelCallLog(null, null, "chat", brain.providerName(), brain.id(),
+            callLogs.save(new AiCallLog(null, null, "chat", brain.providerName(), brain.id(),
                     promptTokens, completionTokens, System.currentTimeMillis() - start, ok,
                     error, Instant.now()));
         } catch (RuntimeException loggingFailure) {

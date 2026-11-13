@@ -6,6 +6,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
@@ -18,6 +21,8 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "ai_message")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiMessage {
 
     public static final String ROLE_USER = "user";
@@ -46,9 +51,6 @@ public class AiMessage {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected AiMessage() {
-    }
-
     public AiMessage(Long conversationId, String role, String content, String sourceMessageId, Instant createdAt) {
         this(conversationId, role, content, sourceMessageId, null, createdAt);
     }
@@ -61,33 +63,5 @@ public class AiMessage {
         this.sourceMessageId = sourceMessageId;
         this.toolName = toolName;
         this.createdAt = createdAt;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getConversationId() {
-        return conversationId;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public String getSourceMessageId() {
-        return sourceMessageId;
-    }
-
-    public String getToolName() {
-        return toolName;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

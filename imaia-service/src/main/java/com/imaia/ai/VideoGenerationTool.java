@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The generate_video tool the chat model calls instead of emitting a [VIDEO:] text
- * marker. Generation goes through the directory\u0027s openai-video model (an Agnes
+ * marker. Generation goes through the catalog's video-generation model (an Agnes
  * style task API); the finished MP4 bytes land in the turn collector and the
  * handler delivers them after the model loop ends.
  */

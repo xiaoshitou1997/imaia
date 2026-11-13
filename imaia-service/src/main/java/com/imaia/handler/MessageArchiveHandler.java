@@ -70,7 +70,7 @@ public class MessageArchiveHandler implements ImEventHandler {
             return;
         }
         ImMessage archived = new ImMessage(conversation.getId(), fetched.messageId(), fetched.senderId(),
-                fetched.senderName(), fetched.direction(), fetched.providerType(), fetched.category(),
+                fetched.senderName(), fetched.direction(), fetched.platformType(), fetched.category(),
                 fetched.mentioned(), fetched.origin(), fetched.body(), fetched.createdAt());
         archived.setRaw(fetched.raw());
         repository.save(archived);

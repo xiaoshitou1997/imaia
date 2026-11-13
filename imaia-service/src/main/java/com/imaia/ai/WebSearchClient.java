@@ -1,6 +1,6 @@
 package com.imaia.ai;
 
-import com.imaia.repository.ProviderRepository;
+import com.imaia.repository.AiProviderRepository;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -25,16 +25,16 @@ public class WebSearchClient extends AbstractAiHttpClient {
     private static final int RESULT_SNIPPET_CHARS = 300;
     private static final int OUTPUT_LIMIT_CHARS = 3_000;
 
-    private final ProviderRepository providers;
+    private final AiProviderRepository providers;
 
-    public WebSearchClient(ProviderRepository providers) {
+    public WebSearchClient(AiProviderRepository providers) {
         this.providers = providers;
     }
 
     /** Whether a tavily provider with a key is configured and enabled. */
     public boolean available() {
         return providers.findByName(PROVIDER_NAME)
-                .map(provider -> Boolean.TRUE.equals(provider.getEnabled()) && provider.getApiKey() != null
+                .map(provider -> provider.isEnabled() && provider.getApiKey() != null
                         && !provider.getApiKey().isBlank())
                 .orElse(false);
     }

@@ -122,6 +122,7 @@ export interface ReportRow {
   conversationLabel: string
   periodType: string
   periodStart: string
+  stats: string | null
   aiReport: string | null
   createdAt: string
 }
@@ -153,19 +154,28 @@ export interface ModelRow {
   id: number
   modelId: string
   name: string | null
-  protocol: string
-  contextWindow: number | null
-  inputModalities: string
-  outputModalities: string
-  maxOutputTokens: number | null
+  description: string | null
+  modalitiesIn: string
+  modalitiesOut: string
+  vision: boolean
+  reasoning: boolean
+  toolCall: boolean
+  limitContext: number | null
+  limitOutput: number | null
+  costInput: number | null
+  costOutput: number | null
   params: string
+  available: boolean
   enabled: boolean
+  source: string
+  syncedAt: string | null
 }
 
 export interface Provider {
   id: number
   name: string
   baseUrl: string
+  modelsDevId: string | null
   apiKey: string
   enabled: boolean
   models: ModelRow[]
@@ -229,7 +239,7 @@ export const api = {
       `/conversations/${id}/messages` + (keyword ? '?keyword=' + encodeURIComponent(keyword) : '')),
   conversationAiMessages: (id: number) => request<AiMessageRow[]>(`/conversations/${id}/ai-messages`),
   searchMessages: (keyword: string) =>
-    request<Record<string, unknown>[]>('/messages/search?keyword=' + encodeURIComponent(keyword)),
+    request<Record<string, unknown>[]>('/conversations/search?keyword=' + encodeURIComponent(keyword)),
   conversationMembers: (id: number) => request<MemberRow[]>(`/conversations/${id}/members`),
   runAnalysis: (id: number, memberExternalId: string, memberName?: string) =>
     request<AnalysisRow>(`/conversations/${id}/analysis`, {
@@ -260,25 +270,38 @@ export const api = {
   artifacts: () => request<Artifact[]>('/artifacts'),
   calls: () => request<CallRow[]>('/calls'),
 
-  // ---- 模型目录
-  providers: () => request<Provider[]>('/providers'),
-  createProvider: (body: { name: string; baseUrl: string; apiKey?: string; enabled?: boolean }) =>
-    request<Provider>('/providers', { method: 'POST', body: JSON.stringify(body) }),
-  updateProvider: (id: number, body: { baseUrl?: string; apiKey?: string; enabled?: boolean }) =>
-    request<Provider>(`/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteProvider: (id: number) => request<string>(`/providers/${id}`, { method: 'DELETE' }),
+  // ---- 模型目录（/v1/models 同步为准，本地只做标注）
+  providers: () => request<Provider[]>('/ai-providers'),
+  createProvider: (body: { name: string; baseUrl: string; apiKey?: string; enabled?: boolean; modelsDevId?: string }) =>
+    request<{ provider: Provider; sync: string }>('/ai-providers', { method: 'POST', body: JSON.stringify(body) }),
+  updateProvider: (id: number, body: { baseUrl?: string; apiKey?: string; enabled?: boolean; modelsDevId?: string | null }) =>
+    request<Provider>(`/ai-providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteProvider: (id: number) => request<string>(`/ai-providers/${id}`, { method: 'DELETE' }),
+  syncModels: (id: number) =>
+    request<{ listed: number; added: number; updated: number; retired: number }>(`/ai-providers/${id}/sync-models`, { method: 'POST' }),
   createModel: (providerId: number, body: {
     modelId: string
     name?: string
-    protocol: string
-    contextWindow?: number | null
-    inputModalities?: string[]
-    outputModalities?: string[]
-    maxOutputTokens?: number | null
-    params?: Record<string, string>
+    modalitiesIn?: string
+    modalitiesOut?: string
+    vision?: boolean
+    toolCall?: boolean
+    params?: string
     enabled?: boolean
-  }) => request<ModelRow>(`/providers/${providerId}/models`, { method: 'POST', body: JSON.stringify(body) }),
-  deleteModel: (id: number) => request<string>(`/models/${id}`, { method: 'DELETE' }),
+  }) => request<ModelRow>(`/ai-providers/${providerId}/ai-models`, { method: 'POST', body: JSON.stringify(body) }),
+  updateModel: (id: number, body: {
+    name?: string
+    modalitiesIn?: string
+    modalitiesOut?: string
+    vision?: boolean
+    reasoning?: boolean
+    toolCall?: boolean
+    limitContext?: number | null
+    limitOutput?: number | null
+    params?: string
+    enabled?: boolean
+  }) => request<ModelRow>(`/ai-providers/ai-models/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteModel: (id: number) => request<string>(`/ai-providers/ai-models/${id}`, { method: 'DELETE' }),
 
   // ---- 设置与运行时
   getSettings: () => request<Settings>('/settings'),

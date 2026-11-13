@@ -8,6 +8,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -23,6 +27,9 @@ import java.time.Instant;
 @Entity
 @Table(name = "im_message", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"conversation_id", "message_id"})})
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ImMessage {
 
     public static final String DIRECTION_INCOMING = "incoming";
@@ -50,8 +57,8 @@ public class ImMessage {
     private String direction;
 
     /** Platform-native type code (wechat only); other platforms leave it null. */
-    @Column
-    private Integer providerType;
+    @Column(name = "platform_type")
+    private Integer platformType;
 
     @Convert(converter = MessageCategory.Converter.class)
     @Column(nullable = false)
@@ -71,24 +78,22 @@ public class ImMessage {
     @Column
     private String raw;
 
+    /** The message's own creation time on the platform. */
     @Column(name = "created_at")
     private Instant createdAt;
 
     @Column(name = "archived_at", nullable = false)
     private Instant archivedAt;
 
-    protected ImMessage() {
-    }
-
     public ImMessage(Long conversationId, String messageId, String senderId, String senderName,
-            String direction, Integer providerType, MessageCategory category, boolean mentioned,
+            String direction, Integer platformType, MessageCategory category, boolean mentioned,
             String origin, String body, Instant createdAt) {
         this.conversationId = conversationId;
         this.messageId = messageId;
         this.senderId = senderId;
         this.senderName = senderName;
         this.direction = direction;
-        this.providerType = providerType;
+        this.platformType = platformType;
         this.category = category;
         this.mentioned = mentioned;
         this.origin = origin;
@@ -96,20 +101,4 @@ public class ImMessage {
         this.createdAt = createdAt;
         this.archivedAt = Instant.now();
     }
-
-    public Long getId() { return id; }
-    public Long getConversationId() { return conversationId; }
-    public String getMessageId() { return messageId; }
-    public String getSenderId() { return senderId; }
-    public String getSenderName() { return senderName; }
-    public String getDirection() { return direction; }
-    public Integer getProviderType() { return providerType; }
-    public MessageCategory getCategory() { return category; }
-    public boolean isMentioned() { return mentioned; }
-    public String getOrigin() { return origin; }
-    public String getBody() { return body; }
-    public String getRaw() { return raw; }
-    public void setRaw(String raw) { this.raw = raw; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getArchivedAt() { return archivedAt; }
 }

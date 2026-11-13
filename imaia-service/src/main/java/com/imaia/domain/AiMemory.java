@@ -6,6 +6,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 
@@ -16,6 +20,9 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "ai_memory")
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiMemory {
 
     public static final String STATUS_ACTIVE = "active";
@@ -36,21 +43,10 @@ public class AiMemory {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected AiMemory() {
-    }
-
     public AiMemory(Long conversationId, String fact, Instant createdAt) {
         this.conversationId = conversationId;
         this.fact = fact;
         this.status = STATUS_ACTIVE;
         this.createdAt = createdAt;
     }
-
-    public Long getId() { return id; }
-    public Long getConversationId() { return conversationId; }
-    public String getFact() { return fact; }
-    public String getStatus() { return status; }
-    public Instant getCreatedAt() { return createdAt; }
-
-    public void setFact(String fact) { this.fact = fact; }
 }

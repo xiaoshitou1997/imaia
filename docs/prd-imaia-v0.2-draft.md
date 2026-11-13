@@ -240,4 +240,11 @@ code/message/data、错误码枚举、Bean Validation、枚举全链路+STRING �
 4. ✅ WebUI React 实装（2026-11-13，`npm run build` 通过）：概览 / 统一收件箱（检索+
    人设快编+自动回复开关+AI 上下文+成员画像）/ 定时任务 / 长期记忆 / 洞察报表 / AI 产物 /
    接入连接（掩码还原）/ 模型目录 / 设置（含静默时段）/ 调用日志；模板 demo 已清理。
-5. 双平台真机联调（主人填凭据）。
+5. ✅ AI 目录二次定名与同步化（2026-11-13）：`ai_provider` / `ai_model` / `ai_call_log` /
+   `member_analysis`；模型不再手填——`ModelSyncService` 从网关 `/v1/models` 拉取同步
+   （available 为准，本地 enabled/params 永不覆盖，消失模型 available=false，可选
+   models.dev 富化），`AiModelCatalog` 按数据推导能力槽位（对话=enabled+tool_call+文本，
+   生图=image∈out，生视频=video∈out，同槽多候选 fail fast）；AdminApiController 拆为
+   10 个按资源的 Controller（统一 `ApiEnvelope` + 全局异常处理）；后端 58 tests 全绿、
+   前端契约同步（/api/ai-providers + 同步/标注/手动登记）。
+6. 双平台真机联调（主人填凭据；dev 库先重置，reset 前先 `\dt` 核对表名）。

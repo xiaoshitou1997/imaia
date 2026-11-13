@@ -47,7 +47,7 @@ class VideoGenerationClientTest {
             }
         });
         server.start();
-        client = new VideoGenerationClient(TestProperties.modelRegistry(server.url("/").toString()));
+        client = new VideoGenerationClient(TestProperties.catalog(server.url("/").toString()));
     }
 
     @AfterEach

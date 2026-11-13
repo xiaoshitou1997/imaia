@@ -1,15 +1,16 @@
 package com.imaia.ai;
 
-import com.imaia.config.ModelRegistry;
+import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ImMessage;
-import com.imaia.domain.PersonAnalysis;
+import com.imaia.domain.MemberAnalysis;
 import com.imaia.repository.ImMessageRepository;
-import com.imaia.repository.PersonAnalysisRepository;
+import com.imaia.repository.MemberAnalysisRepository;
 import org.springframework.stereotype.Component;
 
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -21,23 +22,23 @@ import java.util.List;
  * analysis row for回看.
  */
 @Component
-public class PersonAnalyzer {
+public class MemberAnalyzer {
 
     private static final int MAX_CONTEXT_CHARS = 12_000;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
 
     private final ImMessageRepository messages;
-    private final PersonAnalysisRepository analyses;
+    private final MemberAnalysisRepository analyses;
     private final OpenAiChatCompletion chatCompletion;
-    private final ModelRegistry registry;
+    private final AiModelCatalog catalog;
 
-    public PersonAnalyzer(ImMessageRepository messages, PersonAnalysisRepository analyses,
-            OpenAiChatCompletion chatCompletion, ModelRegistry registry) {
+    public MemberAnalyzer(ImMessageRepository messages, MemberAnalysisRepository analyses,
+            OpenAiChatCompletion chatCompletion, AiModelCatalog catalog) {
         this.messages = messages;
         this.analyses = analyses;
         this.chatCompletion = chatCompletion;
-        this.registry = registry;
+        this.catalog = catalog;
     }
 
     /**
@@ -45,7 +46,7 @@ public class PersonAnalyzer {
      * display-name fragment). Returns the persisted analysis, or null when the
      * archive holds no messages for such a member in this conversation.
      */
-    public PersonAnalysis analyzeMember(ImConversation conversation, String memberExternalId,
+    public MemberAnalysis analyzeMember(ImConversation conversation, String memberExternalId,
             String memberName) {
         List<ImMessage> found = new ArrayList<>(messages
                 .findTop100ByConversationIdAndSenderIdOrderByArchivedAtDesc(
@@ -81,24 +82,26 @@ public class PersonAnalyzer {
         String prompt = "以下是「" + label + "」在本会话中的历史消息：\n\n" + context
                 + "\n\n请基于这些记录分析这个成员：性格特点、兴趣爱好、近期在关注什么、说话风格，以及与主人的互动方式。"
                 + "用简洁的中文分段回答，不要臆造记录里没有的信息。";
-        String modelId = null;
+        String resolved;
         try {
-            modelId = registry.chatFor(false).id();
+            resolved = catalog.chatFor(false).id();
         } catch (RuntimeException failure) {
-            // analysis still runs on whatever default the gateway resolves
+            resolved = null; // 目录缺对话模型时画像照常生成，只是不记 model_id
         }
+        final String modelId = resolved;
         String profile = chatCompletion.complete(
                 "你是聊天记录分析助手。只基于给出的记录分析，不臆造；用简洁中文分段回答。",
                 List.of(), prompt, null, null).strip();
         int messageCount = found.size();
-        final String resolvedModelId = modelId;
-        PersonAnalysis analysis = analyses
+        Instant now = Instant.now();
+        MemberAnalysis analysis = analyses
                 .findByConversationIdAndMemberExternalId(conversation.getId(), memberExternalId)
-                .orElseGet(() -> new PersonAnalysis(conversation.getId(), memberExternalId,
-                        memberName, profile, messageCount, resolvedModelId, java.time.Instant.now()));
+                .orElseGet(() -> new MemberAnalysis(conversation.getId(), memberExternalId,
+                        memberName, profile, messageCount, modelId, now));
         analysis.setProfile(profile);
         analysis.setMessageCount(messageCount);
         analysis.setModelId(modelId);
+        analysis.setGeneratedAt(now);
         return analyses.save(analysis);
     }
 }

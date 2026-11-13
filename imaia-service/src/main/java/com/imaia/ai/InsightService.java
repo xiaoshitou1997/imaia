@@ -1,6 +1,6 @@
 package com.imaia.ai;
 
-import com.imaia.config.ModelRegistry;
+import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.ConversationReport;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ImMessage;
@@ -46,14 +46,14 @@ public class InsightService {
     private final ImMessageRepository messages;
     private final ConversationReportRepository reports;
     private final OpenAiChatCompletion chatCompletion;
-    private final ModelRegistry registry;
+    private final AiModelCatalog catalog;
 
     public InsightService(ImMessageRepository messages, ConversationReportRepository reports,
-            OpenAiChatCompletion chatCompletion, ModelRegistry registry) {
+            OpenAiChatCompletion chatCompletion, AiModelCatalog catalog) {
         this.messages = messages;
         this.reports = reports;
         this.chatCompletion = chatCompletion;
-        this.registry = registry;
+        this.catalog = catalog;
     }
 
     /** In-group command dispatch: 「本周统计/周报」「本月统计/月报」「本年统计/年报」.
@@ -97,7 +97,7 @@ public class InsightService {
         String statsJson = buildStats(window);
         String modelId = null;
         try {
-            modelId = registry.chatFor(false).id();
+            modelId = catalog.chatFor(false).id();
         } catch (RuntimeException failure) {
             log.warn("No chat model for report writing; stats-only report: {}", failure.getMessage());
         }
@@ -120,7 +120,7 @@ public class InsightService {
         report.setStats(statsJson);
         report.setAiReport(aiReport);
         report.setModelId(modelId);
-        report.setCreatedAt(Instant.now());
+        report.setGeneratedAt(Instant.now());
         return reports.save(report);
     }
 

@@ -6,6 +6,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -21,6 +25,9 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "scheduled_task")
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ScheduledTask {
 
     public static final String KIND_REMINDER = "reminder";
@@ -84,9 +91,6 @@ public class ScheduledTask {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected ScheduledTask() {
-    }
-
     public ScheduledTask(Long conversationId, String kind, String content, String prompt,
             Instant fireAt, String cron, String createdBy, Instant createdAt) {
         this.conversationId = conversationId;
@@ -101,27 +105,4 @@ public class ScheduledTask {
         this.createdBy = createdBy;
         this.createdAt = createdAt;
     }
-
-    public Long getId() { return id; }
-    public Long getConversationId() { return conversationId; }
-    public String getKind() { return kind; }
-    public String getContent() { return content; }
-    public String getPrompt() { return prompt; }
-    public String getParams() { return params; }
-    public Instant getFireAt() { return fireAt; }
-    public String getCron() { return cron; }
-    public Instant getNextFireAt() { return nextFireAt; }
-    public String getStatus() { return status; }
-    public String getCreatedBy() { return createdBy; }
-    public Long getSourceAiMessageId() { return sourceAiMessageId; }
-    public Instant getLastFiredAt() { return lastFiredAt; }
-    public String getLastError() { return lastError; }
-    public Instant getCreatedAt() { return createdAt; }
-
-    public void setParams(String params) { this.params = params; }
-    public void setStatus(String status) { this.status = status; }
-    public void setNextFireAt(Instant nextFireAt) { this.nextFireAt = nextFireAt; }
-    public void setFireAt(Instant fireAt) { this.fireAt = fireAt; }
-    public void setLastFiredAt(Instant lastFiredAt) { this.lastFiredAt = lastFiredAt; }
-    public void setLastError(String lastError) { this.lastError = lastError; }
 }

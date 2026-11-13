@@ -34,6 +34,12 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Lombok：实体访问器（JDK21 下与 record 分工：实体=Lombok 类，值形状=record） -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <!-- Core (no web server): the consumer is a headless daemon client -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

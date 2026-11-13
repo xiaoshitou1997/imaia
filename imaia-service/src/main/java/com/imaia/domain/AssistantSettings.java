@@ -4,6 +4,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 
@@ -15,6 +19,9 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "assistant_settings")
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AssistantSettings {
 
     @Id
@@ -46,9 +53,6 @@ public class AssistantSettings {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected AssistantSettings() {
-    }
-
     public AssistantSettings(String systemPrompt, int historyLimit, boolean requireGroupMention,
             boolean quietHoursEnabled, String quietHoursStart, String quietHoursEnd, boolean enabled) {
         this.id = 1;
@@ -61,24 +65,4 @@ public class AssistantSettings {
         this.enabled = enabled;
         this.updatedAt = Instant.now();
     }
-
-    public Integer getId() { return id; }
-    public String getSystemPrompt() { return systemPrompt; }
-    public int getHistoryLimit() { return historyLimit; }
-    public boolean isRequireGroupMention() { return requireGroupMention; }
-    public boolean isQuietHoursEnabled() { return quietHoursEnabled; }
-    public String getQuietHoursStart() { return quietHoursStart; }
-    public String getQuietHoursEnd() { return quietHoursEnd; }
-    public boolean isEnabled() { return enabled; }
-    public Instant getUpdatedAt() { return updatedAt; }
-
-    public void setId(Integer id) { this.id = id; }
-    public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
-    public void setHistoryLimit(int historyLimit) { this.historyLimit = historyLimit; }
-    public void setRequireGroupMention(boolean requireGroupMention) { this.requireGroupMention = requireGroupMention; }
-    public void setQuietHoursEnabled(boolean quietHoursEnabled) { this.quietHoursEnabled = quietHoursEnabled; }
-    public void setQuietHoursStart(String quietHoursStart) { this.quietHoursStart = quietHoursStart; }
-    public void setQuietHoursEnd(String quietHoursEnd) { this.quietHoursEnd = quietHoursEnd; }
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }

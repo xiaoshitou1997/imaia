@@ -5,6 +5,9 @@
 -- (im_conversation.persona，见 V2)；assistant_settings.system_prompt 是线未配置人设
 -- 时的默认提示词，机制说明由系统注入、不受人设影响。无平台级人设、无 console 内置
 -- 连接、无频控策略表（护栏 = 线级开关 + 群@门控 + 幂等 + 静默时段，见 assistant_settings）。
+-- AI 目录（ai_provider / ai_model）三层来源：网关 /v1/models 同步（availability）→
+-- models.dev 富化（modalities/flags/limits/cost）→ 本地标注（enabled/params）；
+-- 能力槽位不建列，由 modalities + tool_call 推导。
 
 CREATE TABLE im_connection (
     id         BIGSERIAL PRIMARY KEY,
@@ -42,54 +45,68 @@ INSERT INTO im_connection (platform, name, enabled, config) VALUES
     '{"appId": "", "appSecret": "", "domain": "https://open.feishu.cn",
       "exitOnFailure": true}'::jsonb);
 
-CREATE TABLE provider (
-    id         BIGSERIAL PRIMARY KEY,
-    name       TEXT        NOT NULL UNIQUE,
-    base_url   TEXT        NOT NULL,
-    api_key    TEXT,
-    enabled    BOOLEAN     NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE ai_provider (
+    id            BIGSERIAL PRIMARY KEY,
+    name          TEXT        NOT NULL UNIQUE,
+    base_url      TEXT        NOT NULL,
+    api_key       TEXT,
+    enabled       BOOLEAN     NOT NULL DEFAULT TRUE,
+    models_dev_id TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE model (
-    id                BIGSERIAL PRIMARY KEY,
-    provider_id       BIGINT      NOT NULL REFERENCES provider (id),
-    model_id          TEXT        NOT NULL,
-    name              TEXT,
-    protocol          TEXT        NOT NULL,
-    context_window    INTEGER,
-    input_modalities  TEXT        NOT NULL DEFAULT '[]',
-    output_modalities TEXT        NOT NULL DEFAULT '[]',
-    max_output_tokens INTEGER,
-    params            TEXT        NOT NULL DEFAULT '{}',
-    enabled           BOOLEAN     NOT NULL DEFAULT TRUE,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+COMMENT ON TABLE ai_provider IS
+    'AI 接入商（OpenAI 协议族 /v1）；网页搜索走名为 tavily 的接入商';
+
+CREATE TABLE ai_model (
+    id             BIGSERIAL PRIMARY KEY,
+    provider_id    BIGINT      NOT NULL REFERENCES ai_provider (id),
+    model_id       TEXT        NOT NULL,
+    name           TEXT,
+    description    TEXT,
+    modalities_in  JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    modalities_out JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    vision         BOOLEAN     NOT NULL DEFAULT FALSE,
+    reasoning      BOOLEAN     NOT NULL DEFAULT FALSE,
+    tool_call      BOOLEAN     NOT NULL DEFAULT TRUE,
+    limit_context  INTEGER,
+    limit_output   INTEGER,
+    cost_input     NUMERIC,
+    cost_output    NUMERIC,
+    params         JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    available      BOOLEAN     NOT NULL DEFAULT TRUE,
+    enabled        BOOLEAN     NOT NULL DEFAULT FALSE,
+    source         VARCHAR(8)  NOT NULL DEFAULT 'sync',
+    synced_at      TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (provider_id, model_id)
 );
 
-INSERT INTO provider (name, base_url, api_key) VALUES
-    ('agnes', 'https://apihub.agnes-ai.com/v1', ''),
-    ('zhipu', 'https://open.bigmodel.cn/api/paas/v4', ''),
-    ('minimax', 'https://api.minimaxi.com/v1', '');
+COMMENT ON TABLE ai_model IS
+    'AI 模型目录：网关 /v1/models 同步 + models.dev 富化 + 本地标注；能力槽位由 modalities+tool_call 推导，不建列';
 
--- 模型种子：生图 / 生视频 / 视觉理解。语音类模型 v1 不接入（PRD §4 砍语音）。
-INSERT INTO model (provider_id, model_id, name, protocol, context_window,
-                   input_modalities, output_modalities, max_output_tokens, params)
-SELECT p.id, v.model_id, v.name, v.protocol, v.context_window,
-       v.input_modalities::jsonb::text, v.output_modalities::jsonb::text,
-       v.max_output_tokens, v.params::jsonb::text
+INSERT INTO ai_provider (name, base_url, api_key, models_dev_id) VALUES
+    ('agnes', 'https://apihub.agnes-ai.com/v1', '', NULL),
+    ('zhipu', 'https://open.bigmodel.cn/api/paas/v4', '', 'zhipu'),
+    ('minimax', 'https://api.minimaxi.com/v1', '', NULL);
+
+-- 模型种子（source=manual，available/enabled 直接管用）：
+-- 视觉对话 glm-4.5v + 生图 + 生视频。语音模型 v1 不接入（PRD §4 砍语音）。
+INSERT INTO ai_model (provider_id, model_id, name, modalities_in, modalities_out,
+                      vision, tool_call, params, available, enabled, source, synced_at)
+SELECT p.id, v.model_id, v.name, v.modalities_in::jsonb, v.modalities_out::jsonb,
+       v.vision, v.tool_call, v.params::jsonb, TRUE, TRUE, 'manual', now()
 FROM (VALUES
-    ('agnes',   'agnes-image-2.5-flash', 'Agnes Image 2.5 Flash', 'openai-images',
-     8192, '["text"]', '["image"]', NULL, '{"size":"1024x768"}'),
-    ('agnes',   'agnes-video-2.5-flash', 'Agnes Video 2.5 Flash', 'openai-video',
-     8192, '["text"]', '["video"]', NULL, '{"seconds":"5","aspect-ratio":"16:9"}'),
-    ('zhipu',   'glm-4.5v', 'GLM-4.5V', 'openai-completions',
-     65536, '["text","image"]', '["text"]', 4096, '{}')
-) AS v(provider_name, model_id, name, protocol, context_window,
-       input_modalities, output_modalities, max_output_tokens, params)
-JOIN provider p ON p.name = v.provider_name;
+    ('agnes', 'agnes-image-2.5-flash', 'Agnes Image 2.5 Flash',
+     '["text"]', '["image"]', FALSE, FALSE, '{"size":"1024x768"}'),
+    ('agnes', 'agnes-video-2.5-flash', 'Agnes Video 2.5 Flash',
+     '["text"]', '["video"]', FALSE, FALSE, '{"seconds":"5","aspect-ratio":"16:9"}'),
+    ('zhipu', 'glm-4.5v', 'GLM-4.5V',
+     '["text","image"]', '["text"]', TRUE, TRUE, '{}')
+) AS v(provider_name, model_id, name, modalities_in, modalities_out, vision, tool_call, params)
+JOIN ai_provider p ON p.name = v.provider_name;
 
 -- 全局助理设置：system_prompt = 线未配置人设时的默认提示词；护栏在此表
 -- （全局总开关 enabled + 群@门控 require_group_mention + 静默时段 quiet_hours_*）。

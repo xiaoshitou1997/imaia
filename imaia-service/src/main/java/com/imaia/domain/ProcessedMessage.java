@@ -7,6 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
@@ -19,6 +23,9 @@ import java.time.Instant;
 @Entity
 @Table(name = "processed_message", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"connection_id", "message_id"})})
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProcessedMessage {
 
     @Id
@@ -34,16 +41,9 @@ public class ProcessedMessage {
     @Column(name = "processed_at", nullable = false)
     private Instant processedAt;
 
-    protected ProcessedMessage() {
-    }
-
     public ProcessedMessage(Long connectionId, String messageId, Instant processedAt) {
         this.connectionId = connectionId;
         this.messageId = messageId;
         this.processedAt = processedAt;
     }
-
-    public Long getConnectionId() { return connectionId; }
-    public String getMessageId() { return messageId; }
-    public Instant getProcessedAt() { return processedAt; }
 }

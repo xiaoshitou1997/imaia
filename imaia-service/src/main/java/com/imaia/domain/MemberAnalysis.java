@@ -7,6 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 
@@ -16,9 +20,12 @@ import java.time.Instant;
  * or in-group command) and kept for回看; one row per (conversation, member).
  */
 @Entity
-@Table(name = "person_analysis", uniqueConstraints = {
+@Table(name = "member_analysis", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"conversation_id", "member_external_id"})})
-public class PersonAnalysis {
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class MemberAnalysis {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,10 +52,7 @@ public class PersonAnalysis {
     @Column(name = "generated_at", nullable = false)
     private Instant generatedAt;
 
-    protected PersonAnalysis() {
-    }
-
-    public PersonAnalysis(Long conversationId, String memberExternalId, String memberName,
+    public MemberAnalysis(Long conversationId, String memberExternalId, String memberName,
             String profile, Integer messageCount, String modelId, Instant generatedAt) {
         this.conversationId = conversationId;
         this.memberExternalId = memberExternalId;
@@ -58,18 +62,4 @@ public class PersonAnalysis {
         this.modelId = modelId;
         this.generatedAt = generatedAt;
     }
-
-    public Long getId() { return id; }
-    public Long getConversationId() { return conversationId; }
-    public String getMemberExternalId() { return memberExternalId; }
-    public String getMemberName() { return memberName; }
-    public String getProfile() { return profile; }
-    public Integer getMessageCount() { return messageCount; }
-    public String getModelId() { return modelId; }
-    public Instant getGeneratedAt() { return generatedAt; }
-
-    public void setProfile(String profile) { this.profile = profile; }
-    public void setMessageCount(Integer messageCount) { this.messageCount = messageCount; }
-    public void setModelId(String modelId) { this.modelId = modelId; }
-    public void setMemberName(String memberName) { this.memberName = memberName; }
 }

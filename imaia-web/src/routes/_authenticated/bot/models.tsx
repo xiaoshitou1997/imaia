@@ -16,8 +16,6 @@ export const Route = createFileRoute('/_authenticated/bot/models')({
   component: ModelsPage,
 })
 
-const PROTOCOLS = ['openai-completions', 'openai-images', 'openai-video', 'openai-audio-speech', 'openai-audio-transcription']
-
 function ModelsPage() {
   const qc = useQueryClient()
   const providers = useQuery({ queryKey: ['providers'], queryFn: api.providers })
@@ -38,64 +36,76 @@ function NewProviderForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [modelsDevId, setModelsDevId] = useState('')
 
   const create = () => {
-    api.createProvider({ name, baseUrl, apiKey: apiKey || undefined })
-      .then(() => { toast.success('接入商已创建'); setName(''); setBaseUrl(''); setApiKey(''); onDone() })
+    api.createProvider({ name, baseUrl, apiKey: apiKey.trim() || undefined, modelsDevId: modelsDevId.trim() || undefined })
+      .then((res) => {
+        toast.success('接入商已创建：' + res.sync)
+        setName(''); setBaseUrl(''); setApiKey(''); setModelsDevId('')
+        onDone()
+      })
       .catch((e: Error) => toast.error(e.message))
   }
 
   return (
     <Card>
       <CardHeader className='pb-2'>
-        <CardTitle className='text-sm'>新接入商（OpenAI 协议族；网页搜索走名为 tavily 的接入商）</CardTitle>
+        <CardTitle className='text-sm'>
+          新接入商（OpenAI 协议族；网页搜索走名为 tavily 的接入商；模型清单创建后自动从 /v1/models 同步）
+        </CardTitle>
       </CardHeader>
       <CardContent className='flex flex-wrap items-center gap-3'>
         <Input placeholder='名称（如 zhipu）' className='w-40' value={name} onChange={(e) => setName(e.target.value)} />
         <Input placeholder='Base URL（…/v1）' className='w-80' value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
         <Input placeholder='API Key（可选）' className='w-60' value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+        <Input placeholder='models.dev ID（可选，富化元数据）' className='w-56' value={modelsDevId} onChange={(e) => setModelsDevId(e.target.value)} />
         <Button onClick={create}>创建</Button>
       </CardContent>
     </Card>
   )
 }
 
+const fail = (e: Error) => toast.error(e.message)
+
 function ProviderCard({ provider, onDone }: { provider: Provider; onDone: () => void }) {
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl)
   const [apiKey, setApiKey] = useState(provider.apiKey)
-  const [form, setForm] = useState({ modelId: '', name: '', protocol: 'openai-completions', modalities: '' })
-
-  const invalidate = () => onDone()
-  const fail = (e: Error) => toast.error(e.message)
-
-  const saveBase = () => {
-    api.updateProvider(provider.id, {
-      baseUrl,
-      apiKey: apiKey && apiKey !== provider.apiKey ? apiKey : undefined,
-    }).then(() => toast.success('已保存')).catch(fail)
-  }
+  const [modelsDevId, setModelsDevId] = useState(provider.modelsDevId ?? '')
+  const [form, setForm] = useState({ modelId: '', name: '', modalitiesIn: 'text', modalitiesOut: 'text' })
 
   const toggle = (on: boolean) =>
-    api.updateProvider(provider.id, { enabled: on }).then(invalidate).catch(fail)
+    api.updateProvider(provider.id, { enabled: on }).then(onDone).catch(fail)
+
+  const saveBase = () =>
+    api.updateProvider(provider.id, {
+      baseUrl,
+      apiKey: apiKey === provider.apiKey ? undefined : apiKey,
+      modelsDevId: modelsDevId.trim() || null,
+    }).then(() => { toast.success('连接已保存'); onDone() }).catch(fail)
+
+  const sync = () =>
+    api.syncModels(provider.id).then((res) => {
+      toast.success(`同步完成：目录 ${res.listed}，新增 ${res.added}，更新 ${res.updated}，下架 ${res.retired}`)
+      onDone()
+    }).catch(fail)
 
   const remove = () => {
-    if (!confirm('删除接入商及其全部模型？')) return
-    api.deleteProvider(provider.id).then(() => { toast.success('已删除'); invalidate() }).catch(fail)
+    if (!confirm('删除接入商会一并删除其模型目录，确认？')) return
+    api.deleteProvider(provider.id).then(() => { toast.success('已删除'); onDone() }).catch(fail)
   }
 
   const addModel = () => {
-    if (!form.modelId || !form.protocol) {
-      toast.error('modelId 与 protocol 必填')
+    if (!form.modelId.trim()) {
+      toast.error('modelId 必填')
       return
     }
     api.createModel(provider.id, {
-      modelId: form.modelId,
-      name: form.name || undefined,
-      protocol: form.protocol,
-      inputModalities: form.modalities ? form.modalities.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
-      params: {},
-    })
-      .then(() => { toast.success('模型已添加'); setForm({ ...form, modelId: '', name: '', modalities: '' }); invalidate() })
+      modelId: form.modelId.trim(),
+      name: form.name.trim() || undefined,
+      modalitiesIn: form.modalitiesIn,
+      modalitiesOut: form.modalitiesOut,
+    }).then(() => { toast.success('模型已登记'); setForm({ modelId: '', name: '', modalitiesIn: 'text', modalitiesOut: 'text' }); onDone() })
       .catch(fail)
   }
 
@@ -108,7 +118,10 @@ function ProviderCard({ provider, onDone }: { provider: Provider; onDone: () => 
             {provider.enabled ? '启用' : '停用'}
           </Badge>
         </CardTitle>
-        <Switch checked={provider.enabled} onCheckedChange={toggle} />
+        <div className='flex items-center gap-2'>
+          <Button size='sm' variant='secondary' onClick={sync}>同步模型</Button>
+          <Switch checked={provider.enabled} onCheckedChange={toggle} />
+        </div>
       </CardHeader>
       <CardContent className='space-y-4'>
         <div className='flex flex-wrap items-center gap-3'>
@@ -119,6 +132,12 @@ function ProviderCard({ provider, onDone }: { provider: Provider; onDone: () => 
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
           />
+          <Input
+            className='w-56'
+            placeholder='models.dev ID'
+            value={modelsDevId}
+            onChange={(e) => setModelsDevId(e.target.value)}
+          />
           <Button size='sm' variant='secondary' onClick={saveBase}>保存连接</Button>
           <Button size='sm' variant='destructive' onClick={remove}>删除接入商</Button>
         </div>
@@ -128,10 +147,10 @@ function ProviderCard({ provider, onDone }: { provider: Provider; onDone: () => 
             <TableRow>
               <TableHead>Model ID</TableHead>
               <TableHead>名称</TableHead>
-              <TableHead>协议</TableHead>
-              <TableHead>输入模态</TableHead>
-              <TableHead>输出模态</TableHead>
-              <TableHead>最大输出</TableHead>
+              <TableHead>模态（入 → 出）</TableHead>
+              <TableHead>能力</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>启用</TableHead>
               <TableHead>操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -140,15 +159,34 @@ function ProviderCard({ provider, onDone }: { provider: Provider; onDone: () => 
               <TableRow key={model.id}>
                 <TableCell className='text-xs font-medium'>{model.modelId}</TableCell>
                 <TableCell className='text-xs'>{model.name ?? '—'}</TableCell>
-                <TableCell><Badge variant='outline'>{model.protocol}</Badge></TableCell>
-                <TableCell className='text-muted-foreground text-xs'>{model.inputModalities}</TableCell>
-                <TableCell className='text-muted-foreground text-xs'>{model.outputModalities}</TableCell>
-                <TableCell className='text-muted-foreground text-xs'>{model.maxOutputTokens ?? '—'}</TableCell>
+                <TableCell className='text-muted-foreground text-xs'>
+                  {model.modalitiesIn} → {model.modalitiesOut}
+                </TableCell>
+                <TableCell className='space-x-1'>
+                  {model.vision && <Badge variant='outline'>vision</Badge>}
+                  {model.toolCall && <Badge variant='outline'>tools</Badge>}
+                  {model.reasoning && <Badge variant='outline'>reasoning</Badge>}
+                  {!model.vision && !model.toolCall && !model.reasoning && (
+                    <span className='text-muted-foreground text-xs'>—</span>
+                  )}
+                </TableCell>
+                <TableCell className='space-x-1'>
+                  <Badge variant={model.available ? 'outline' : 'secondary'}>
+                    {model.available ? '网关可用' : '网关已消失'}
+                  </Badge>
+                  <Badge variant='outline'>{model.source === 'manual' ? '手动登记' : '同步'}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Switch
+                    checked={model.enabled}
+                    onCheckedChange={(on) => api.updateModel(model.id, { enabled: on }).then(onDone).catch(fail)}
+                  />
+                </TableCell>
                 <TableCell>
                   <Button
                     size='sm'
                     variant='destructive'
-                    onClick={() => api.deleteModel(model.id).then(() => { toast.success('已删除'); invalidate() }).catch(fail)}
+                    onClick={() => api.deleteModel(model.id).then(() => { toast.success('已删除'); onDone() }).catch(fail)}
                   >删除</Button>
                 </TableCell>
               </TableRow>
@@ -157,17 +195,11 @@ function ProviderCard({ provider, onDone }: { provider: Provider; onDone: () => 
         </Table>
 
         <div className='flex flex-wrap items-center gap-3'>
-          <Input placeholder='model-id' className='w-44' value={form.modelId} onChange={(e) => setForm({ ...form, modelId: e.target.value })} />
+          <Input placeholder='model-id（必填）' className='w-44' value={form.modelId} onChange={(e) => setForm({ ...form, modelId: e.target.value })} />
           <Input placeholder='显示名（可选）' className='w-36' value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <select
-            className='border-input bg-background rounded-md border px-3 py-2 text-sm'
-            value={form.protocol}
-            onChange={(e) => setForm({ ...form, protocol: e.target.value })}
-          >
-            {PROTOCOLS.map((protocol) => <option key={protocol} value={protocol}>{protocol}</option>)}
-          </select>
-          <Input placeholder='输入模态（逗号分隔，如 text,image）' className='w-64' value={form.modalities} onChange={(e) => setForm({ ...form, modalities: e.target.value })} />
-          <Button size='sm' onClick={addModel}>添加模型</Button>
+          <Input placeholder='输入模态（如 text,image）' className='w-52' value={form.modalitiesIn} onChange={(e) => setForm({ ...form, modalitiesIn: e.target.value })} />
+          <Input placeholder='输出模态（如 text）' className='w-52' value={form.modalitiesOut} onChange={(e) => setForm({ ...form, modalitiesOut: e.target.value })} />
+          <Button size='sm' onClick={addModel}>手动登记模型</Button>
         </div>
       </CardContent>
     </Card>

@@ -7,6 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 
@@ -22,6 +26,9 @@ import java.time.Instant;
 @Entity
 @Table(name = "im_conversation", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"connection_id", "external_id"})})
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ImConversation {
 
     public static final String KIND_DIRECT = "direct";
@@ -63,9 +70,6 @@ public class ImConversation {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected ImConversation() {
-    }
-
     public ImConversation(Long connectionId, String externalId, String displayName, String kind,
             Instant firstSeenAt, Instant lastSeenAt, Instant createdAt) {
         this.connectionId = connectionId;
@@ -76,24 +80,4 @@ public class ImConversation {
         this.lastSeenAt = lastSeenAt;
         this.createdAt = createdAt;
     }
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public Long getConnectionId() { return connectionId; }
-    public String getExternalId() { return externalId; }
-    public String getDisplayName() { return displayName; }
-    public String getKind() { return kind; }
-    public String getRemark() { return remark; }
-    public String getPersona() { return persona; }
-    public boolean isAutoreply() { return autoreply; }
-    public Instant getFirstSeenAt() { return firstSeenAt; }
-    public Instant getLastSeenAt() { return lastSeenAt; }
-    public Instant getCreatedAt() { return createdAt; }
-
-    public void setDisplayName(String displayName) { this.displayName = displayName; }
-    public void setRemark(String remark) { this.remark = remark; }
-    public void setPersona(String persona) { this.persona = persona; }
-    public void setAutoreply(boolean autoreply) { this.autoreply = autoreply; }
-    public void setLastSeenAt(Instant lastSeenAt) { this.lastSeenAt = lastSeenAt; }
 }

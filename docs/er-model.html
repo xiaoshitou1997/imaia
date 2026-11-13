@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>imaia v0.2 ER 模型</title>
+<style>
+  body {
+    margin: 0; padding: 16px 20px;
+    background: transparent;
+    color: var(--foreground, #1f2328);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .meta { color: var(--muted-foreground, #656d76); font-size: 12px; line-height: 1.7; margin-bottom: 12px; }
+  .meta b { color: var(--foreground, #1f2328); }
+  .mermaid {
+    background: var(--card, #ffffff);
+    border: 1px solid var(--border, #d0d7de);
+    border-radius: 10px;
+    padding: 12px;
+    overflow: auto;
+  }
+  .mermaid svg { max-width: none; }
+</style>
+</head>
+<body>
+<h1>imaia v0.2 ER 模型（14 实体区 + 幂等账本）</h1>
+<div class="meta">
+  实线 = 物理外键；虚线 = 逻辑引用（字符串 id，不建 FK）。<br>
+  <b>枢纽</b>：im_conversation.id 是 hub 统一会话身份，七个子表全部 conversation_id 物理外键挂在它上面；
+  平台原生会话 ID 只存 external_id，出适配器边界即消失。<br>
+  <b>幂等双锁</b>：im_message UNIQUE(conversation_id, message_id) 归档去重；
+  processed_message UNIQUE(connection_id, message_id)——投递门控发生在会话登记之前，故账本挂连接不挂会话。<br>
+  <b>模型目录</b>：ai_model 三层来源——网关 /v1/models 同步（availability）→ models.dev 富化（modalities/flags/limits/cost）→ 本地标注（enabled/params）；
+  能力槽位不建列，由 modalities + tool_call 推导（对话=text∧tool_call；生图=image∈out；生视频=video∈out）。
+</div>
+
+<pre class="mermaid">
+erDiagram
+    im_connection {
+        bigint id PK
+        varchar platform "wechat | feishu"
+        varchar name
+        boolean enabled
+        jsonb config "含凭据，响应掩码"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    processed_message {
+        bigint id PK
+        bigint connection_id FK
+        text message_id
+        timestamptz processed_at
+    }
+
+    im_conversation {
+        bigint id PK "hub 统一会话身份"
+        bigint connection_id FK
+        text external_id "平台原生会话 ID"
+        varchar display_name
+        varchar kind "direct | group"
+        varchar remark
+        text persona "线级人设，空=默认提示词"
+        boolean autoreply "线级开关，默认关"
+        timestamptz first_seen_at
+        timestamptz last_seen_at
+        timestamptz created_at
+    }
+
+    group_member {
+        bigint id PK
+        bigint conversation_id FK
+        text member_external_id
+        varchar display_name
+        timestamptz last_seen_at
+        timestamptz created_at
+    }
+
+    im_message {
+        bigint id PK
+        bigint conversation_id FK
+        text message_id "平台消息 id"
+        varchar sender_id
+        varchar sender_name
+        varchar direction "incoming | outgoing"
+        int platform_type "平台侧类型码"
+        varchar category "text|image|voice|video|sticker|file|rich|other"
+        boolean mentioned
+        varchar origin "human | ai"
+        text body
+        jsonb raw "平台原始报文"
+        timestamptz created_at
+        timestamptz archived_at
+    }
+
+    assistant_settings {
+        int id PK "恒为 1"
+        text system_prompt "默认提示词"
+        int history_limit
+        boolean require_group_mention
+        boolean quiet_hours_enabled
+        varchar quiet_hours_start
+        varchar quiet_hours_end
+        boolean enabled "全局总开关"
+        timestamptz updated_at
+    }
+
+    ai_provider {
+        bigint id PK
+        varchar name UK
+        text base_url
+        text api_key "掩码"
+        boolean enabled
+        text models_dev_id "models.dev 富化匹配 key"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    ai_model {
+        bigint id PK
+        bigint provider_id FK
+        text model_id "网关 /v1/models id"
+        text name
+        text description
+        jsonb modalities_in "text|image|audio|video"
+        jsonb modalities_out
+        boolean vision "图像输入"
+        boolean reasoning
+        boolean tool_call "对话槽位硬前提"
+        int limit_context
+        int limit_output
+        numeric cost_input "每 1M tokens"
+        numeric cost_output
+        jsonb params "本地特调 size/voice-id"
+        boolean available "网关目录仍在"
+        boolean enabled "本地勾选才参与选型"
+        varchar source "sync | manual"
+        timestamptz synced_at
+    }
+
+    ai_message {
+        bigint id PK
+        bigint conversation_id FK
+        varchar role "user | assistant | tool"
+        text content
+        text source_message_id
+        varchar tool_name
+        timestamptz created_at
+    }
+
+    ai_memory {
+        bigint id PK
+        bigint conversation_id FK
+        text fact
+        varchar status "active"
+        timestamptz created_at
+    }
+
+    scheduled_task {
+        bigint id PK
+        bigint conversation_id FK
+        varchar kind "reminder | cron | report"
+        text content
+        text prompt "cron 任务 AI 措辞指令"
+        jsonb params "report 周期等"
+        timestamptz fire_at
+        varchar cron
+        timestamptz next_fire_at
+        varchar status "pending|done|cancelled|failed"
+        varchar created_by "ai | console"
+        bigint source_ai_message_id
+        timestamptz last_fired_at
+        text last_error
+        timestamptz created_at
+    }
+
+    ai_artifact {
+        bigint id PK
+        bigint conversation_id FK
+        varchar kind "image | video"
+        text prompt
+        varchar model_id
+        bigint ai_message_id
+        text storage_ref "平台存储引用"
+        varchar storage_platform "归属平台"
+        text filename
+        varchar status "generated|delivered|failed"
+        timestamptz created_at
+    }
+
+    ai_call_log {
+        bigint id PK
+        bigint conversation_id FK "可空"
+        bigint ai_message_id
+        varchar purpose
+        varchar provider_name
+        varchar model_id
+        int prompt_tokens
+        int completion_tokens
+        bigint duration_ms
+        boolean ok
+        text error
+        timestamptz created_at
+    }
+
+    member_analysis {
+        bigint id PK
+        bigint conversation_id FK
+        text member_external_id
+        varchar member_name
+        text profile
+        int message_count
+        varchar model_id
+        timestamptz generated_at
+    }
+
+    conversation_report {
+        bigint id PK
+        bigint conversation_id FK
+        varchar period_type "week | month | year"
+        date period_start
+        jsonb stats
+        text ai_report
+        varchar model_id
+        timestamptz generated_at
+    }
+
+    im_connection ||--o{ im_conversation : connection_id
+    im_connection ||--o{ processed_message : connection_id
+    ai_provider ||--o{ ai_model : provider_id
+    im_conversation ||--o{ group_member : conversation_id
+    im_conversation ||--o{ im_message : conversation_id
+    im_conversation ||--o{ ai_message : conversation_id
+    im_conversation ||--o{ ai_memory : conversation_id
+    im_conversation ||--o{ scheduled_task : conversation_id
+    im_conversation ||--o{ member_analysis : conversation_id
+    im_conversation ||--o{ conversation_report : conversation_id
+    ai_message }o--|| im_message : "source_message_id 逻辑"
+    scheduled_task }o--o| ai_message : "source_ai_message_id 逻辑"
+    ai_artifact }o--o| ai_message : "ai_message_id 逻辑"
+    ai_call_log }o--|| ai_message : "ai_message_id 逻辑"
+    ai_artifact }o..o| ai_model : "model_id 逻辑"
+    ai_call_log }o..o| ai_model : "model_id 逻辑"
+    member_analysis }o..o| group_member : "member_external_id 逻辑"
+</pre>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'neutral',
+    er: { fontSize: 12, useMaxWidth: true },
+    themeVariables: {
+      fontSize: '12px',
+      primaryColor: 'var(--card, #ffffff)',
+      primaryTextColor: 'var(--foreground, #1f2328)',
+      primaryBorderColor: 'var(--border, #d0d7de)',
+      lineColor: 'var(--muted-foreground, #656d76)',
+    },
+  });
+  await mermaid.run();
+</script>
+</body>
+</html>

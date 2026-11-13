@@ -24,7 +24,7 @@ public interface ImAdapter {
     /** One message fetched from the platform, normalized; the archive handler
      * resolves the conversation row and persists it as an {@code ImMessage}. */
     record FetchedMessage(String conversationExternalId, String messageId, String senderId,
-            String senderName, String direction, Integer providerType, MessageCategory category,
+            String senderName, String direction, Integer platformType, MessageCategory category,
             boolean mentioned, String origin, String body, String raw, Instant createdAt) {
     }
 

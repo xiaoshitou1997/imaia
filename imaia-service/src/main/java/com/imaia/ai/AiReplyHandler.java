@@ -6,7 +6,7 @@ import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImContractException;
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;
-import com.imaia.config.ModelRegistry;
+import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.AssistantSettings;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.AiArtifact;
@@ -45,19 +45,19 @@ public class AiReplyHandler implements ImEventHandler {
     private final ImAdapters adapters;
     private final AiChatService chatService;
     private final AssistantSettingsService settings;
-    private final ModelRegistry modelRegistry;
+    private final AiModelCatalog catalog;
     private final InsightService insightService;
     private final ImMessageRepository archivedMessages;
     private final AiArtifactRepository artifacts;
 
     public AiReplyHandler(ImAdapters adapters, AiChatService chatService,
-            AssistantSettingsService settings, ModelRegistry modelRegistry,
+            AssistantSettingsService settings, AiModelCatalog catalog,
             InsightService insightService, ImMessageRepository archivedMessages,
             AiArtifactRepository artifacts) {
         this.adapters = adapters;
         this.chatService = chatService;
         this.settings = settings;
-        this.modelRegistry = modelRegistry;
+        this.catalog = catalog;
         this.insightService = insightService;
         this.archivedMessages = archivedMessages;
         this.artifacts = artifacts;
@@ -150,8 +150,8 @@ public class AiReplyHandler implements ImEventHandler {
                 sendWithConflictGuard(key, () -> adapter.sendMedia(externalId, media.kind(), sourceId, key));
                 AiArtifact artifact = new AiArtifact(conversationId, media.kind().value(), media.prompt(),
                         media.filename(), AiArtifact.STATUS_DELIVERED, java.time.Instant.now());
-                artifact.setSourceRef(sourceId);
-                artifact.setSourceType(adapter.platform());
+                artifact.setStorageRef(sourceId);
+                artifact.setStoragePlatform(adapter.platform());
                 artifacts.save(artifact);
             } catch (RuntimeException failure) {
                 log.warn("Delivery of generated {} failed: {}", media.kind(), failure.getMessage());
@@ -176,7 +176,7 @@ public class AiReplyHandler implements ImEventHandler {
                 String body = message.body();
                 yield body == null || body.isBlank() ? null : new PromptContent(body, null);
             }
-            case IMAGE -> modelRegistry.chatSupportsImages()
+            case IMAGE -> catalog.hasVisionChat()
                     ? fetchVisionContent(adapter, message.messageId(), "用户发来一张图片，请看图后回复")
                     : silent(message, MessageCategory.IMAGE);
             case VOICE -> {
@@ -184,10 +184,10 @@ public class AiReplyHandler implements ImEventHandler {
                 log.debug("Voice message arrives; archive-only in v1: message={}.", message.messageId());
                 yield null;
             }
-            case VIDEO -> modelRegistry.chatSupportsImages()
+            case VIDEO -> catalog.hasVisionChat()
                     ? fetchPreviewContent(adapter, message.messageId(), "用户发来一个视频，这是它的封面帧")
                     : silent(message, MessageCategory.VIDEO);
-            case STICKER -> modelRegistry.chatSupportsImages()
+            case STICKER -> catalog.hasVisionChat()
                     ? fetchPreviewContent(adapter, message.messageId(), "用户发来一个表情包")
                     : silent(message, MessageCategory.STICKER);
             case FILE, RICH, OTHER -> {

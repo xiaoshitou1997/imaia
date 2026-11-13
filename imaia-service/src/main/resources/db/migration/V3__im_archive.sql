@@ -10,7 +10,7 @@ CREATE TABLE im_message (
     sender_id       VARCHAR(128),
     sender_name     VARCHAR(256),
     direction       VARCHAR(16)  NOT NULL,
-    provider_type   INT,
+    platform_type   INT,
     category        VARCHAR(16)  NOT NULL DEFAULT 'other',
     mentioned       BOOLEAN      NOT NULL DEFAULT FALSE,
     origin          VARCHAR(8)   NOT NULL DEFAULT 'human',
@@ -25,9 +25,9 @@ CREATE INDEX idx_im_message_sender ON im_message (conversation_id, sender_id, ar
 CREATE UNIQUE INDEX idx_im_message_message_id ON im_message (conversation_id, message_id);
 
 CREATE TABLE processed_message (
-    id              BIGSERIAL PRIMARY KEY,
-    connection_id   BIGINT       NOT NULL REFERENCES im_connection (id),
-    message_id      TEXT         NOT NULL,
-    processed_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    id            BIGSERIAL PRIMARY KEY,
+    connection_id BIGINT      NOT NULL REFERENCES im_connection (id),
+    message_id    TEXT        NOT NULL,
+    processed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (connection_id, message_id)
 );

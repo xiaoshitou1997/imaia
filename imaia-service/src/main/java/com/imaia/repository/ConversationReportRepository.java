@@ -16,5 +16,5 @@ public interface ConversationReportRepository extends JpaRepository<Conversation
     List<ConversationReport> findTop50ByConversationIdOrderByPeriodStartDesc(Long conversationId);
 
     /** All recent reports (console report page). */
-    List<ConversationReport> findTop100ByOrderByCreatedAtDesc();
+    List<ConversationReport> findTop100ByOrderByGeneratedAtDesc();
 }

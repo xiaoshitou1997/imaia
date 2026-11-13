@@ -1,6 +1,6 @@
 package com.imaia.ai;
 
-import com.imaia.config.ModelRegistry;
+import com.imaia.config.AiModelCatalog;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -21,15 +21,15 @@ public class ImageGenerationClient extends AbstractAiHttpClient {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(300);
 
-    private final ModelRegistry registry;
+    private final AiModelCatalog catalog;
 
-    public ImageGenerationClient(ModelRegistry registry) {
-        this.registry = registry;
+    public ImageGenerationClient(AiModelCatalog catalog) {
+        this.catalog = catalog;
     }
 
     /** Generates one image for the prompt and returns its bytes (PNG/JPEG by the service). */
     public byte[] generate(String prompt) {
-        ModelRegistry.Resolved image = registry.byProtocol(ModelRegistry.PROTOCOL_IMAGES);
+        AiModelCatalog.Resolved image = catalog.imageGeneration();
         ObjectNode body = mapper.createObjectNode();
         body.put("model", image.id());
         body.put("prompt", prompt);

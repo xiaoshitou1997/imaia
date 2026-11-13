@@ -3,7 +3,7 @@ package com.imaia.ai;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImEvent;
-import com.imaia.config.ModelRegistry;
+import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.MessageCategory;
 import com.imaia.repository.AiArtifactRepository;
@@ -36,7 +36,7 @@ class AiReplyHandlerTest {
     private ImAdapter adapter;
     private AiChatService chatService;
     private com.imaia.ai.AssistantSettingsService settings;
-    private ModelRegistry modelRegistry;
+    private AiModelCatalog catalog;
     private InsightService insightService;
     private ImMessageRepository archivedMessages;
     private AiArtifactRepository artifacts;
@@ -55,7 +55,7 @@ class AiReplyHandlerTest {
         adapters = mock(ImAdapters.class);
         adapter = mock(ImAdapter.class);
         chatService = mock(AiChatService.class);
-        modelRegistry = mock(ModelRegistry.class);
+        catalog = mock(AiModelCatalog.class);
         insightService = mock(InsightService.class);
         archivedMessages = mock(ImMessageRepository.class);
         artifacts = mock(AiArtifactRepository.class);
@@ -79,13 +79,13 @@ class AiReplyHandlerTest {
         when(chatService.complete(any(ImConversation.class), anyString(), isNull(), isNull(),
                 isNull(), anyList(), anyString())).thenReturn(new AiChatService.ChatReply("好的", List.of()));
         when(insightService.handleCommand(any(ImConversation.class), anyString())).thenReturn(null);
-        when(modelRegistry.chatSupportsImages()).thenReturn(true);
+        when(catalog.hasVisionChat()).thenReturn(true);
         when(archivedMessages.findTop200ByConversationIdOrderByArchivedAtDesc(9L)).thenReturn(List.of());
     }
 
     private void rebuild() {
         settings = com.imaia.TestProperties.settingsService(settingsFixture.current);
-        handler = new AiReplyHandler(adapters, chatService, settings, modelRegistry, insightService,
+        handler = new AiReplyHandler(adapters, chatService, settings, catalog, insightService,
                 archivedMessages, artifacts);
     }
 

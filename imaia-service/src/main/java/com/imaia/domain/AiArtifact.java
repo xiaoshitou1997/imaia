@@ -6,12 +6,19 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 
-/** Media the AI generated through its tools: prompt, delivery state and platform ref. */
+/** Media the AI generated through its tools: prompt, delivery state and storage ref. */
 @Entity
 @Table(name = "ai_artifact")
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiArtifact {
 
     public static final String KIND_IMAGE = "image";
@@ -34,18 +41,20 @@ public class AiArtifact {
     @Column
     private String prompt;
 
+    /** Logical reference to ai_model.model_id (no FK — the model may later vanish). */
     @Column(name = "model_id")
     private String modelId;
 
     @Column(name = "ai_message_id")
     private Long aiMessageId;
 
-    @Column(name = "source_ref")
-    private String sourceRef;
+    /** The platform storage reference the media was uploaded to (daemon id / feishu key). */
+    @Column(name = "storage_ref")
+    private String storageRef;
 
-    /** Platform storage type the ref points at (daemon / feishu ...). */
-    @Column(name = "source_type", nullable = false)
-    private String sourceType;
+    /** Which platform the storage ref belongs to. */
+    @Column(name = "storage_platform", nullable = false)
+    private String storagePlatform;
 
     @Column
     private String filename;
@@ -56,9 +65,6 @@ public class AiArtifact {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected AiArtifact() {
-    }
-
     public AiArtifact(Long conversationId, String kind, String prompt, String filename,
             String status, Instant createdAt) {
         this.conversationId = conversationId;
@@ -68,19 +74,4 @@ public class AiArtifact {
         this.status = status;
         this.createdAt = createdAt;
     }
-
-    public Long getId() { return id; }
-    public Long getConversationId() { return conversationId; }
-    public String getKind() { return kind; }
-    public String getPrompt() { return prompt; }
-    public String getModelId() { return modelId; }
-    public Long getAiMessageId() { return aiMessageId; }
-    public String getFilename() { return filename; }
-    public String getStatus() { return status; }
-    public Instant getCreatedAt() { return createdAt; }
-
-    public void setModelId(String modelId) { this.modelId = modelId; }
-    public void setSourceRef(String sourceRef) { this.sourceRef = sourceRef; }
-    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
-    public void setStatus(String status) { this.status = status; }
 }

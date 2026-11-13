@@ -7,6 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -21,6 +25,9 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "conversation_report", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"conversation_id", "period_type", "period_start"})})
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ConversationReport {
 
     public static final String PERIOD_WEEK = "week";
@@ -52,34 +59,17 @@ public class ConversationReport {
     @Column(name = "model_id")
     private String modelId;
 
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
-
-    protected ConversationReport() {
-    }
+    @Column(name = "generated_at", nullable = false)
+    private Instant generatedAt;
 
     public ConversationReport(Long conversationId, String periodType, LocalDate periodStart,
-            String stats, String aiReport, String modelId, Instant createdAt) {
+            String stats, String aiReport, String modelId, Instant generatedAt) {
         this.conversationId = conversationId;
         this.periodType = periodType;
         this.periodStart = periodStart;
         this.stats = stats;
         this.aiReport = aiReport;
         this.modelId = modelId;
-        this.createdAt = createdAt;
+        this.generatedAt = generatedAt;
     }
-
-    public Long getId() { return id; }
-    public Long getConversationId() { return conversationId; }
-    public String getPeriodType() { return periodType; }
-    public LocalDate getPeriodStart() { return periodStart; }
-    public String getStats() { return stats; }
-    public String getAiReport() { return aiReport; }
-    public String getModelId() { return modelId; }
-    public Instant getCreatedAt() { return createdAt; }
-
-    public void setStats(String stats) { this.stats = stats; }
-    public void setAiReport(String aiReport) { this.aiReport = aiReport; }
-    public void setModelId(String modelId) { this.modelId = modelId; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

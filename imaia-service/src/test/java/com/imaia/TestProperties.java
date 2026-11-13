@@ -3,16 +3,16 @@ package com.imaia;
 import com.imaia.adapter.wechat.WechatAccountConfig;
 import com.imaia.adapter.wechat.WechatConnection;
 import com.imaia.ai.AssistantSettingsService;
+import com.imaia.config.AiModelCatalog;
 import com.imaia.config.DispatchProperties;
-import com.imaia.config.ModelRegistry;
+import com.imaia.domain.AiModel;
+import com.imaia.domain.AiProvider;
 import com.imaia.domain.AssistantSettings;
 import com.imaia.domain.ImConnection;
 import com.imaia.domain.ImConversation;
-import com.imaia.domain.Model;
-import com.imaia.domain.Provider;
+import com.imaia.repository.AiModelRepository;
+import com.imaia.repository.AiProviderRepository;
 import com.imaia.repository.AssistantSettingsRepository;
-import com.imaia.repository.ModelRepository;
-import com.imaia.repository.ProviderRepository;
 import org.mockito.Mockito;
 
 import java.time.Instant;
@@ -56,59 +56,72 @@ public final class TestProperties {
         return new DispatchProperties(3);
     }
 
-    public static Provider provider(String name, String baseUrl) {
-        Provider provider = new Provider(name, baseUrl, "key", Instant.now());
+    public static AiProvider aiProvider(String name, String baseUrl) {
+        AiProvider provider = new AiProvider(name, baseUrl, "key", Instant.now());
         provider.setId(IDS.incrementAndGet());
         return provider;
     }
 
-    public static Model model(Provider provider, String modelId, String name, String protocol,
-            List<String> input, List<String> output, Integer maxOutputTokens,
-            Map<String, String> params) {
-        return new Model(provider.getId(), modelId, name, protocol, 8192,
-                json(input), json(output), maxOutputTokens, json(params), Instant.now());
+    public static AiModel aiModel(AiProvider provider, String modelId, String name,
+            List<String> input, List<String> output, boolean vision, boolean toolCall,
+            Integer limitOutput, Map<String, String> params) {
+        AiModel model = new AiModel(provider.getId(), modelId);
+        model.setName(name);
+        model.setModalitiesIn(json(input));
+        model.setModalitiesOut(json(output));
+        model.setVision(vision);
+        model.setToolCall(toolCall);
+        model.setLimitOutput(limitOutput);
+        model.setParams(json(params));
+        model.setSource(AiModel.SOURCE_SYNC);
+        model.setAvailable(true);
+        model.setEnabled(true);
+        return model;
     }
 
-    public static ModelRegistry registry(Provider provider, Model... models) {
-        return registry(List.of(provider), List.of(models));
+    public static AiModelCatalog catalog(AiProvider provider, AiModel... models) {
+        return catalog(List.of(provider), List.of(models));
     }
 
-    public static ModelRegistry registry(List<Provider> providers, List<Model> models) {
-        ProviderRepository providerRepository = Mockito.mock(ProviderRepository.class);
-        ModelRepository modelRepository = Mockito.mock(ModelRepository.class);
+    public static AiModelCatalog catalog(List<AiProvider> providers, List<AiModel> models) {
+        AiProviderRepository providerRepository = Mockito.mock(AiProviderRepository.class);
+        AiModelRepository modelRepository = Mockito.mock(AiModelRepository.class);
         Mockito.when(providerRepository.findByEnabledTrue()).thenReturn(providers);
         Mockito.when(modelRepository.findByEnabledTrue()).thenReturn(models);
-        return new ModelRegistry(providerRepository, modelRepository);
+        return new AiModelCatalog(providerRepository, modelRepository);
     }
 
-    /** The default test directory: agnes image/video, zhipu chat. Voice is cut in v0.2. */
-    public static ModelRegistry modelRegistry(String baseUrl) {
-        Provider agnes = provider("agnes", baseUrl);
-        Provider zhipu = provider("zhipu", baseUrl);
-        return registry(List.of(agnes, zhipu), List.of(
-                model(agnes, "img-m", "Agnes Image 2.5 Flash", "openai-images",
-                        List.of("text"), List.of("image"), null, Map.of("size", "1024x768")),
-                model(agnes, "vid-m", "Agnes Video 2.5 Flash", "openai-video",
-                        List.of("text"), List.of("video"), null,
-                        Map.of("seconds", "5", "aspect-ratio", "16:9")),
-                model(zhipu, "chat-m", "GLM-4.5V", "openai-completions",
-                        List.of("text", "image"), List.of("text"), 4096, Map.of())));
+    /** The default test catalog: agnes image/video, zhipu vision chat. */
+    public static AiModelCatalog catalog(String baseUrl) {
+        AiProvider agnes = aiProvider("agnes", baseUrl);
+        AiProvider zhipu = aiProvider("zhipu", baseUrl);
+        return catalog(List.of(agnes, zhipu), List.of(
+                aiModel(agnes, "img-m", "Agnes Image 2.5 Flash", List.of("text"), List.of("image"), false, false,
+                        null, Map.of("size", "1024x768")),
+                aiModel(agnes, "vid-m", "Agnes Video 2.5 Flash", List.of("text"), List.of("video"), false, false,
+                        null, Map.of("seconds", "5", "aspect-ratio", "16:9")),
+                aiModel(zhipu, "chat-m", "GLM-4.5V", List.of("text", "image"), List.of("text"), true, true,
+                        4096, Map.of())));
     }
 
-    /** The default directory minus every model of one protocol. */
-    public static ModelRegistry modelRegistryWithout(String baseUrl, String protocol) {
-        Provider agnes = provider("agnes", baseUrl);
-        Provider zhipu = provider("zhipu", baseUrl);
-        List<Model> all = List.of(
-                model(agnes, "img-m", "Agnes Image 2.5 Flash", "openai-images",
-                        List.of("text"), List.of("image"), null, Map.of("size", "1024x768")),
-                model(agnes, "vid-m", "Agnes Video 2.5 Flash", "openai-video",
-                        List.of("text"), List.of("video"), null,
-                        Map.of("seconds", "5", "aspect-ratio", "16:9")),
-                model(zhipu, "chat-m", "GLM-4.5V", "openai-completions",
-                        List.of("text", "image"), List.of("text"), 4096, Map.of()));
-        return registry(List.of(agnes, zhipu),
-                all.stream().filter(model -> !protocol.equals(model.getProtocol())).toList());
+    /** The default catalog minus one capability slot (image | video | chat). */
+    public static AiModelCatalog catalogWithout(String baseUrl, String slot) {
+        AiProvider agnes = aiProvider("agnes", baseUrl);
+        AiProvider zhipu = aiProvider("zhipu", baseUrl);
+        List<AiModel> all = List.of(
+                aiModel(agnes, "img-m", "Agnes Image 2.5 Flash", List.of("text"), List.of("image"), false, false,
+                        null, Map.of("size", "1024x768")),
+                aiModel(agnes, "vid-m", "Agnes Video 2.5 Flash", List.of("text"), List.of("video"), false, false,
+                        null, Map.of("seconds", "5", "aspect-ratio", "16:9")),
+                aiModel(zhipu, "chat-m", "GLM-4.5V", List.of("text", "image"), List.of("text"), true, true,
+                        4096, Map.of()));
+        String dropped = switch (slot) {
+            case "image" -> "img-m";
+            case "video" -> "vid-m";
+            default -> "chat-m";
+        };
+        return catalog(List.of(agnes, zhipu),
+                all.stream().filter(model -> !model.getModelId().equals(dropped)).toList());
     }
 
     public static AssistantSettings settings(String systemPrompt, int historyLimit,

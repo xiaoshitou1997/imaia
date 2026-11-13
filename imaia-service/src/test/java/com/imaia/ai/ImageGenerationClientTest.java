@@ -1,7 +1,7 @@
 package com.imaia.ai;
 
 import com.imaia.TestProperties;
-import com.imaia.config.ModelRegistry;
+import com.imaia.config.AiModelCatalog;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -27,7 +27,7 @@ class ImageGenerationClientTest {
     void startServer() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new ImageGenerationClient(TestProperties.modelRegistry(server.url("/").toString()));
+        client = new ImageGenerationClient(TestProperties.catalog(server.url("/").toString()));
     }
 
     @AfterEach
@@ -88,11 +88,11 @@ class ImageGenerationClientTest {
 
     @Test
     void missingRouteFailsFast() {
-        ModelRegistry empty = TestProperties.modelRegistryWithout("http://127.0.0.1:1", "openai-images");
+        AiModelCatalog empty = TestProperties.catalogWithout("http://127.0.0.1:1", "image");
         ImageGenerationClient unconfigured = new ImageGenerationClient(empty);
 
         assertThatThrownBy(() -> unconfigured.generate("一只猫"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("openai-images");
+                .hasMessageContaining("image-generation models");
     }
 }

@@ -7,6 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.DatabindException;
@@ -25,6 +29,9 @@ import java.time.Instant;
 @Entity
 @Table(name = "im_connection", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"platform", "name"})})
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ImConnection {
 
     @Id
@@ -52,9 +59,6 @@ public class ImConnection {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected ImConnection() {
-    }
-
     public ImConnection(String platform, String name, boolean enabled, String config) {
         this.platform = platform;
         this.name = name;
@@ -62,47 +66,6 @@ public class ImConnection {
         this.config = config;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    /** Test seam only. */
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getPlatform() {
-        return platform;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getConfig() {
-        return config;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public void setConfig(String config) {
-        this.config = config;
     }
 
     /** The structured connection config parsed on demand; malformed JSON fails fast. */

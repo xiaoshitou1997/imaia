@@ -6,13 +6,18 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/** One model invocation: purpose, cost in tokens, latency, outcome. */
+/** One AI model invocation: purpose, cost in tokens, latency, outcome. Append-only. */
 @Entity
-@Table(name = "model_call_log")
-public class ModelCallLog {
+@Table(name = "ai_call_log")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class AiCallLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -43,7 +48,7 @@ public class ModelCallLog {
     private Long durationMs;
 
     @Column(nullable = false)
-    private Boolean ok;
+    private boolean success;
 
     @Column
     private String error;
@@ -51,35 +56,19 @@ public class ModelCallLog {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected ModelCallLog() {
-    }
-
-    public ModelCallLog(Long aiMessageId, Long conversationId, String purpose, String providerName, String modelId,
-            Integer promptTokens, Integer completionTokens, Long durationMs, Boolean ok,
+    public AiCallLog(Long conversationId, Long aiMessageId, String purpose, String providerName, String modelId,
+            Integer promptTokens, Integer completionTokens, Long durationMs, boolean success,
             String error, Instant createdAt) {
-        this.aiMessageId = aiMessageId;
         this.conversationId = conversationId;
+        this.aiMessageId = aiMessageId;
         this.purpose = purpose;
         this.providerName = providerName;
         this.modelId = modelId;
         this.promptTokens = promptTokens;
         this.completionTokens = completionTokens;
         this.durationMs = durationMs;
-        this.ok = ok;
+        this.success = success;
         this.error = error;
         this.createdAt = createdAt;
     }
-
-    public Long getId() { return id; }
-    public Long getAiMessageId() { return aiMessageId; }
-    public Long getConversationId() { return conversationId; }
-    public String getPurpose() { return purpose; }
-    public String getProviderName() { return providerName; }
-    public String getModelId() { return modelId; }
-    public Integer getPromptTokens() { return promptTokens; }
-    public Integer getCompletionTokens() { return completionTokens; }
-    public Long getDurationMs() { return durationMs; }
-    public Boolean getOk() { return ok; }
-    public String getError() { return error; }
-    public Instant getCreatedAt() { return createdAt; }
 }

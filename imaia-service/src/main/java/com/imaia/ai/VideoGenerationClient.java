@@ -1,6 +1,6 @@
 package com.imaia.ai;
 
-import com.imaia.config.ModelRegistry;
+import com.imaia.config.AiModelCatalog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -25,15 +25,15 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
     private static final long POLL_INTERVAL_MILLIS = 3_000;
     private static final Duration POLL_BUDGET = Duration.ofSeconds(600);
 
-    private final ModelRegistry registry;
+    private final AiModelCatalog catalog;
 
-    public VideoGenerationClient(ModelRegistry registry) {
-        this.registry = registry;
+    public VideoGenerationClient(AiModelCatalog catalog) {
+        this.catalog = catalog;
     }
 
     /** Generates one video for the prompt and returns the MP4 bytes. */
     public byte[] generate(String prompt) {
-        ModelRegistry.Resolved video = registry.byProtocol(ModelRegistry.PROTOCOL_VIDEO);
+        AiModelCatalog.Resolved video = catalog.videoGeneration();
         long deadline = System.currentTimeMillis() + POLL_BUDGET.toMillis();
         String taskId = createTask(video, prompt);
         JsonNode finished = pollUntilDone(video, taskId, deadline);
@@ -45,7 +45,7 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
         return sendBytes(baseRequest(URI.create(url.asString()), "", Duration.ofSeconds(120)).GET().build());
     }
 
-    private String createTask(ModelRegistry.Resolved video, String prompt) {
+    private String createTask(AiModelCatalog.Resolved video, String prompt) {
         ObjectNode body = mapper.createObjectNode();
         body.put("model", video.id());
         body.put("prompt", prompt);
@@ -67,7 +67,7 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
         return id.asString();
     }
 
-    private JsonNode pollUntilDone(ModelRegistry.Resolved video, String taskId, long deadline) {
+    private JsonNode pollUntilDone(AiModelCatalog.Resolved video, String taskId, long deadline) {
         String pollUrl = video.baseUrl().replaceAll("/v1$", "")
                 + "/agnesapi?video_id=" + taskId + "&model_name=" + video.id();
         while (System.currentTimeMillis() < deadline) {
