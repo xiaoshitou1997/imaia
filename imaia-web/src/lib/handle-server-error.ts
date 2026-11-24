@@ -1,4 +1,4 @@
-import { AxiosError } from 'axios'
+import { ApiError } from '@/lib/api'
 import { toast } from 'sonner'
 
 export function handleServerError(error: unknown) {
@@ -7,23 +7,8 @@ export function handleServerError(error: unknown) {
     console.log(error)
   }
 
-  let errMsg = 'Something went wrong!'
-
-  if (
-    error &&
-    typeof error === 'object' &&
-    'status' in error &&
-    Number(error.status) === 204
-  ) {
-    errMsg = 'No content.'
-  }
-
-  if (error instanceof AxiosError) {
-    const title = error.response?.data?.title
-    if (typeof title === 'string' && title.length > 0) {
-      errMsg = title
-    }
-  }
+  const errMsg =
+    error instanceof ApiError ? error.message : '出错了，请稍后再试'
 
   toast.error(errMsg)
 }

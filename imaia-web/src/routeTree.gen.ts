@@ -21,16 +21,16 @@ import { Route as errors404RouteImport } from './routes/(errors)/404'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedBotArtifactsRouteImport } from './routes/_authenticated/bot/artifacts'
-import { Route as AuthenticatedBotCallsRouteImport } from './routes/_authenticated/bot/calls'
-import { Route as AuthenticatedBotConnectionsRouteImport } from './routes/_authenticated/bot/connections'
-import { Route as AuthenticatedBotInboxRouteImport } from './routes/_authenticated/bot/inbox'
-import { Route as AuthenticatedBotMemoriesRouteImport } from './routes/_authenticated/bot/memories'
-import { Route as AuthenticatedBotModelsRouteImport } from './routes/_authenticated/bot/models'
-import { Route as AuthenticatedBotReportsRouteImport } from './routes/_authenticated/bot/reports'
-import { Route as AuthenticatedBotSettingsRouteImport } from './routes/_authenticated/bot/settings'
-import { Route as AuthenticatedBotTasksRouteImport } from './routes/_authenticated/bot/tasks'
+import { Route as AuthenticatedSettingsRouteRouteImport } from './routes/_authenticated/settings/route'
+import { Route as AuthenticatedAccountsIndexRouteImport } from './routes/_authenticated/accounts/index'
+import { Route as AuthenticatedConversationsIndexRouteImport } from './routes/_authenticated/conversations/index'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
+import { Route as AuthenticatedProvidersIndexRouteImport } from './routes/_authenticated/providers/index'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedSettingsImageRouteImport } from './routes/_authenticated/settings/image'
+import { Route as AuthenticatedSettingsSearchRouteImport } from './routes/_authenticated/settings/search'
+import { Route as AuthenticatedSettingsVideoRouteImport } from './routes/_authenticated/settings/video'
+import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -91,64 +91,69 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedBotArtifactsRoute =
-  AuthenticatedBotArtifactsRouteImport.update({
-    id: '/bot/artifacts',
-    path: '/bot/artifacts',
+const AuthenticatedSettingsRouteRoute =
+  AuthenticatedSettingsRouteRouteImport.update({
+    id: '/settings',
+    path: '/settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedBotCallsRoute = AuthenticatedBotCallsRouteImport.update({
-  id: '/bot/calls',
-  path: '/bot/calls',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBotConnectionsRoute =
-  AuthenticatedBotConnectionsRouteImport.update({
-    id: '/bot/connections',
-    path: '/bot/connections',
+const AuthenticatedAccountsIndexRoute =
+  AuthenticatedAccountsIndexRouteImport.update({
+    id: '/accounts/',
+    path: '/accounts/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedBotInboxRoute = AuthenticatedBotInboxRouteImport.update({
-  id: '/bot/inbox',
-  path: '/bot/inbox',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBotMemoriesRoute =
-  AuthenticatedBotMemoriesRouteImport.update({
-    id: '/bot/memories',
-    path: '/bot/memories',
+const AuthenticatedConversationsIndexRoute =
+  AuthenticatedConversationsIndexRouteImport.update({
+    id: '/conversations/',
+    path: '/conversations/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedBotModelsRoute = AuthenticatedBotModelsRouteImport.update({
-  id: '/bot/models',
-  path: '/bot/models',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBotReportsRoute = AuthenticatedBotReportsRouteImport.update({
-  id: '/bot/reports',
-  path: '/bot/reports',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBotSettingsRoute =
-  AuthenticatedBotSettingsRouteImport.update({
-    id: '/bot/settings',
-    path: '/bot/settings',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedBotTasksRoute = AuthenticatedBotTasksRouteImport.update({
-  id: '/bot/tasks',
-  path: '/bot/tasks',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedErrorsErrorRoute =
   AuthenticatedErrorsErrorRouteImport.update({
     id: '/errors/$error',
     path: '/errors/$error',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedProvidersIndexRoute =
+  AuthenticatedProvidersIndexRouteImport.update({
+    id: '/providers/',
+    path: '/providers/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedSettingsImageRoute =
+  AuthenticatedSettingsImageRouteImport.update({
+    id: '/image',
+    path: '/image',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedSettingsSearchRoute =
+  AuthenticatedSettingsSearchRouteImport.update({
+    id: '/search',
+    path: '/search',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedSettingsVideoRoute =
+  AuthenticatedSettingsVideoRouteImport.update({
+    id: '/video',
+    path: '/video',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
+  id: '/tasks/',
+  path: '/tasks/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
+  '/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/forgot-password': typeof authForgotPasswordRoute
   '/otp': typeof authOtpRoute
   '/sign-in': typeof authSignInRoute
@@ -159,16 +164,15 @@ export interface FileRoutesByFullPath {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
-  '/bot/artifacts': typeof AuthenticatedBotArtifactsRoute
-  '/bot/calls': typeof AuthenticatedBotCallsRoute
-  '/bot/connections': typeof AuthenticatedBotConnectionsRoute
-  '/bot/inbox': typeof AuthenticatedBotInboxRoute
-  '/bot/memories': typeof AuthenticatedBotMemoriesRoute
-  '/bot/models': typeof AuthenticatedBotModelsRoute
-  '/bot/reports': typeof AuthenticatedBotReportsRoute
-  '/bot/settings': typeof AuthenticatedBotSettingsRoute
-  '/bot/tasks': typeof AuthenticatedBotTasksRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/settings/image': typeof AuthenticatedSettingsImageRoute
+  '/settings/search': typeof AuthenticatedSettingsSearchRoute
+  '/settings/video': typeof AuthenticatedSettingsVideoRoute
+  '/accounts/': typeof AuthenticatedAccountsIndexRoute
+  '/conversations/': typeof AuthenticatedConversationsIndexRoute
+  '/providers/': typeof AuthenticatedProvidersIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/tasks/': typeof AuthenticatedTasksIndexRoute
 }
 export interface FileRoutesByTo {
   '/forgot-password': typeof authForgotPasswordRoute
@@ -182,20 +186,20 @@ export interface FileRoutesByTo {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/': typeof AuthenticatedIndexRoute
-  '/bot/artifacts': typeof AuthenticatedBotArtifactsRoute
-  '/bot/calls': typeof AuthenticatedBotCallsRoute
-  '/bot/connections': typeof AuthenticatedBotConnectionsRoute
-  '/bot/inbox': typeof AuthenticatedBotInboxRoute
-  '/bot/memories': typeof AuthenticatedBotMemoriesRoute
-  '/bot/models': typeof AuthenticatedBotModelsRoute
-  '/bot/reports': typeof AuthenticatedBotReportsRoute
-  '/bot/settings': typeof AuthenticatedBotSettingsRoute
-  '/bot/tasks': typeof AuthenticatedBotTasksRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/settings/image': typeof AuthenticatedSettingsImageRoute
+  '/settings/search': typeof AuthenticatedSettingsSearchRoute
+  '/settings/video': typeof AuthenticatedSettingsVideoRoute
+  '/accounts': typeof AuthenticatedAccountsIndexRoute
+  '/conversations': typeof AuthenticatedConversationsIndexRoute
+  '/providers': typeof AuthenticatedProvidersIndexRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/tasks': typeof AuthenticatedTasksIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/(auth)/forgot-password': typeof authForgotPasswordRoute
   '/(auth)/otp': typeof authOtpRoute
   '/(auth)/sign-in': typeof authSignInRoute
@@ -207,21 +211,21 @@ export interface FileRoutesById {
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/bot/artifacts': typeof AuthenticatedBotArtifactsRoute
-  '/_authenticated/bot/calls': typeof AuthenticatedBotCallsRoute
-  '/_authenticated/bot/connections': typeof AuthenticatedBotConnectionsRoute
-  '/_authenticated/bot/inbox': typeof AuthenticatedBotInboxRoute
-  '/_authenticated/bot/memories': typeof AuthenticatedBotMemoriesRoute
-  '/_authenticated/bot/models': typeof AuthenticatedBotModelsRoute
-  '/_authenticated/bot/reports': typeof AuthenticatedBotReportsRoute
-  '/_authenticated/bot/settings': typeof AuthenticatedBotSettingsRoute
-  '/_authenticated/bot/tasks': typeof AuthenticatedBotTasksRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/_authenticated/settings/image': typeof AuthenticatedSettingsImageRoute
+  '/_authenticated/settings/search': typeof AuthenticatedSettingsSearchRoute
+  '/_authenticated/settings/video': typeof AuthenticatedSettingsVideoRoute
+  '/_authenticated/accounts/': typeof AuthenticatedAccountsIndexRoute
+  '/_authenticated/conversations/': typeof AuthenticatedConversationsIndexRoute
+  '/_authenticated/providers/': typeof AuthenticatedProvidersIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/settings'
     | '/forgot-password'
     | '/otp'
     | '/sign-in'
@@ -232,16 +236,15 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
-    | '/bot/artifacts'
-    | '/bot/calls'
-    | '/bot/connections'
-    | '/bot/inbox'
-    | '/bot/memories'
-    | '/bot/models'
-    | '/bot/reports'
-    | '/bot/settings'
-    | '/bot/tasks'
     | '/errors/$error'
+    | '/settings/image'
+    | '/settings/search'
+    | '/settings/video'
+    | '/accounts/'
+    | '/conversations/'
+    | '/providers/'
+    | '/settings/'
+    | '/tasks/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/forgot-password'
@@ -255,19 +258,19 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/'
-    | '/bot/artifacts'
-    | '/bot/calls'
-    | '/bot/connections'
-    | '/bot/inbox'
-    | '/bot/memories'
-    | '/bot/models'
-    | '/bot/reports'
-    | '/bot/settings'
-    | '/bot/tasks'
     | '/errors/$error'
+    | '/settings/image'
+    | '/settings/search'
+    | '/settings/video'
+    | '/accounts'
+    | '/conversations'
+    | '/providers'
+    | '/settings'
+    | '/tasks'
   id:
     | '__root__'
     | '/_authenticated'
+    | '/_authenticated/settings'
     | '/(auth)/forgot-password'
     | '/(auth)/otp'
     | '/(auth)/sign-in'
@@ -279,16 +282,15 @@ export interface FileRouteTypes {
     | '/(errors)/500'
     | '/(errors)/503'
     | '/_authenticated/'
-    | '/_authenticated/bot/artifacts'
-    | '/_authenticated/bot/calls'
-    | '/_authenticated/bot/connections'
-    | '/_authenticated/bot/inbox'
-    | '/_authenticated/bot/memories'
-    | '/_authenticated/bot/models'
-    | '/_authenticated/bot/reports'
-    | '/_authenticated/bot/settings'
-    | '/_authenticated/bot/tasks'
     | '/_authenticated/errors/$error'
+    | '/_authenticated/settings/image'
+    | '/_authenticated/settings/search'
+    | '/_authenticated/settings/video'
+    | '/_authenticated/accounts/'
+    | '/_authenticated/conversations/'
+    | '/_authenticated/providers/'
+    | '/_authenticated/settings/'
+    | '/_authenticated/tasks/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -391,67 +393,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bot/artifacts': {
-      id: '/_authenticated/bot/artifacts'
-      path: '/bot/artifacts'
-      fullPath: '/bot/artifacts'
-      preLoaderRoute: typeof AuthenticatedBotArtifactsRouteImport
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bot/calls': {
-      id: '/_authenticated/bot/calls'
-      path: '/bot/calls'
-      fullPath: '/bot/calls'
-      preLoaderRoute: typeof AuthenticatedBotCallsRouteImport
+    '/_authenticated/accounts/': {
+      id: '/_authenticated/accounts/'
+      path: '/accounts'
+      fullPath: '/accounts/'
+      preLoaderRoute: typeof AuthenticatedAccountsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bot/connections': {
-      id: '/_authenticated/bot/connections'
-      path: '/bot/connections'
-      fullPath: '/bot/connections'
-      preLoaderRoute: typeof AuthenticatedBotConnectionsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot/inbox': {
-      id: '/_authenticated/bot/inbox'
-      path: '/bot/inbox'
-      fullPath: '/bot/inbox'
-      preLoaderRoute: typeof AuthenticatedBotInboxRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot/memories': {
-      id: '/_authenticated/bot/memories'
-      path: '/bot/memories'
-      fullPath: '/bot/memories'
-      preLoaderRoute: typeof AuthenticatedBotMemoriesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot/models': {
-      id: '/_authenticated/bot/models'
-      path: '/bot/models'
-      fullPath: '/bot/models'
-      preLoaderRoute: typeof AuthenticatedBotModelsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot/reports': {
-      id: '/_authenticated/bot/reports'
-      path: '/bot/reports'
-      fullPath: '/bot/reports'
-      preLoaderRoute: typeof AuthenticatedBotReportsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot/settings': {
-      id: '/_authenticated/bot/settings'
-      path: '/bot/settings'
-      fullPath: '/bot/settings'
-      preLoaderRoute: typeof AuthenticatedBotSettingsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot/tasks': {
-      id: '/_authenticated/bot/tasks'
-      path: '/bot/tasks'
-      fullPath: '/bot/tasks'
-      preLoaderRoute: typeof AuthenticatedBotTasksRouteImport
+    '/_authenticated/conversations/': {
+      id: '/_authenticated/conversations/'
+      path: '/conversations'
+      fullPath: '/conversations/'
+      preLoaderRoute: typeof AuthenticatedConversationsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/errors/$error': {
@@ -461,35 +421,89 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/providers/': {
+      id: '/_authenticated/providers/'
+      path: '/providers'
+      fullPath: '/providers/'
+      preLoaderRoute: typeof AuthenticatedProvidersIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/settings/image': {
+      id: '/_authenticated/settings/image'
+      path: '/image'
+      fullPath: '/settings/image'
+      preLoaderRoute: typeof AuthenticatedSettingsImageRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/settings/search': {
+      id: '/_authenticated/settings/search'
+      path: '/search'
+      fullPath: '/settings/search'
+      preLoaderRoute: typeof AuthenticatedSettingsSearchRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/settings/video': {
+      id: '/_authenticated/settings/video'
+      path: '/video'
+      fullPath: '/settings/video'
+      preLoaderRoute: typeof AuthenticatedSettingsVideoRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/tasks/': {
+      id: '/_authenticated/tasks/'
+      path: '/tasks'
+      fullPath: '/tasks/'
+      preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
+interface AuthenticatedSettingsRouteRouteChildren {
+  AuthenticatedSettingsImageRoute: typeof AuthenticatedSettingsImageRoute
+  AuthenticatedSettingsSearchRoute: typeof AuthenticatedSettingsSearchRoute
+  AuthenticatedSettingsVideoRoute: typeof AuthenticatedSettingsVideoRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+}
+
+const AuthenticatedSettingsRouteRouteChildren: AuthenticatedSettingsRouteRouteChildren =
+  {
+    AuthenticatedSettingsImageRoute: AuthenticatedSettingsImageRoute,
+    AuthenticatedSettingsSearchRoute: AuthenticatedSettingsSearchRoute,
+    AuthenticatedSettingsVideoRoute: AuthenticatedSettingsVideoRoute,
+    AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+  }
+
+const AuthenticatedSettingsRouteRouteWithChildren =
+  AuthenticatedSettingsRouteRoute._addFileChildren(
+    AuthenticatedSettingsRouteRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
-  AuthenticatedBotArtifactsRoute: typeof AuthenticatedBotArtifactsRoute
-  AuthenticatedBotCallsRoute: typeof AuthenticatedBotCallsRoute
-  AuthenticatedBotConnectionsRoute: typeof AuthenticatedBotConnectionsRoute
-  AuthenticatedBotInboxRoute: typeof AuthenticatedBotInboxRoute
-  AuthenticatedBotMemoriesRoute: typeof AuthenticatedBotMemoriesRoute
-  AuthenticatedBotModelsRoute: typeof AuthenticatedBotModelsRoute
-  AuthenticatedBotReportsRoute: typeof AuthenticatedBotReportsRoute
-  AuthenticatedBotSettingsRoute: typeof AuthenticatedBotSettingsRoute
-  AuthenticatedBotTasksRoute: typeof AuthenticatedBotTasksRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
+  AuthenticatedAccountsIndexRoute: typeof AuthenticatedAccountsIndexRoute
+  AuthenticatedConversationsIndexRoute: typeof AuthenticatedConversationsIndexRoute
+  AuthenticatedProvidersIndexRoute: typeof AuthenticatedProvidersIndexRoute
+  AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedBotArtifactsRoute: AuthenticatedBotArtifactsRoute,
-  AuthenticatedBotCallsRoute: AuthenticatedBotCallsRoute,
-  AuthenticatedBotConnectionsRoute: AuthenticatedBotConnectionsRoute,
-  AuthenticatedBotInboxRoute: AuthenticatedBotInboxRoute,
-  AuthenticatedBotMemoriesRoute: AuthenticatedBotMemoriesRoute,
-  AuthenticatedBotModelsRoute: AuthenticatedBotModelsRoute,
-  AuthenticatedBotReportsRoute: AuthenticatedBotReportsRoute,
-  AuthenticatedBotSettingsRoute: AuthenticatedBotSettingsRoute,
-  AuthenticatedBotTasksRoute: AuthenticatedBotTasksRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
+  AuthenticatedAccountsIndexRoute: AuthenticatedAccountsIndexRoute,
+  AuthenticatedConversationsIndexRoute: AuthenticatedConversationsIndexRoute,
+  AuthenticatedProvidersIndexRoute: AuthenticatedProvidersIndexRoute,
+  AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
