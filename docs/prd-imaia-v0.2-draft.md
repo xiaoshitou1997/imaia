@@ -243,8 +243,10 @@ code/message/data、错误码枚举、Bean Validation、枚举全链路+STRING �
 5. ✅ AI 目录二次定名与同步化（2026-11-13）：`ai_provider` / `ai_model` / `ai_call_log` /
    `member_analysis`；模型不再手填——`ModelSyncService` 从网关 `/v1/models` 拉取同步
    （available 为准，本地 enabled/params 永不覆盖，消失模型 available=false，可选
-   models.dev 富化），`AiModelCatalog` 按数据推导能力槽位（对话=enabled+tool_call+文本，
-   生图=image∈out，生视频=video∈out，同槽多候选 fail fast）；AdminApiController 拆为
-   10 个按资源的 Controller（统一 `ApiEnvelope` + 全局异常处理）；后端 58 tests 全绿、
-   前端契约同步（/api/ai-providers + 同步/标注/手动登记）。
+   models.dev 富化），接入商不预置、由用户手动添加；添加/修改/删除接入商自动触发同步，删除接入商级联删除其模型和
+   槽位绑定；`AiModelCatalog` 按 `ai_model_binding` 槽位取模型；AdminApiController 拆为
+   10 个按资源的 Controller（统一 `ApiEnvelope` + 全局异常处理）；后端 62 tests 全绿、
+   前端契约同步（/api/ai-providers + 自动同步/标注/槽位绑定，无预置模型、无手动登记）；
+   列表 API 统一 `page`/`size`，返回 `PageResult(items/page/size/total/totalPages)`，
+   控制台调用/任务/报表/产物/记忆/会话/回合列表均已分页。
 6. 双平台真机联调（主人填凭据；dev 库先重置，reset 前先 `\dt` 核对表名）。
