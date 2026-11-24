@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>imaia 数据结构 v0.2 定稿 ER 模型（17 表）</title>
+<style>
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; margin: 24px; color: #1a1a1a; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
+  .meta { color: #666; font-size: 13px; }
+  .summary { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.7; }
+  .summary b { color: #0550ae; }
+  .deleted { color: #cf222e; }
+  .diagram { margin-top: 8px; }
+  pre.fallback { display: none; background: #f6f8fa; padding: 12px; border-radius: 8px; font-size: 12px; overflow: auto; white-space: pre; }
+</style>
+</head>
+<body>
+<h1>imaia 数据结构 v0.2 定稿 ER 模型</h1>
+<div class="meta">17 表 · 2026-11-16 · 与 V1–V7 迁移（原地改后）同源 · 评审稿</div>
+
+<div class="summary">
+  <b>命名铁律</b>：实体=名词单数；关系=bind；账本=ledger；执行=run；前缀只有 <b>im_</b>（平台侧）/ <b>ai_</b>（AI 侧）；
+  持久配置=account、活链路=connection（运行时类）；画像挂 contact 不挂区间。<br>
+  <b>本轮删除（5）</b>：<span class="deleted">ai_turn / ai_context_message / ai_tool_call / ai_call_log / ai_model_binding</span>
+  ——上下文不落库（历史从 im_message 重建）、调用审计撤、槽位改推导。<br>
+  <b>本轮改名（4）</b>：im_member → <b>im_conversation_contact_bind</b>（表名两段=两个 FK，仅群会话建行）；
+  task_definition → <b>im_task_definition</b>；task_run → <b>im_task_run</b>；insight_report → <b>im_report</b>；
+  insight_member_profile → <b>im_contact_profile</b>（FK 改挂 contact，修退群重入孤立缺陷）。<br>
+  <b>捚除 FK 列（6）</b>：outbound_ledger.turn_id、memory.source_turn_id、artifact.turn_id/ai_tool_call_id、
+  task_definition.source_turn_id、report/profile.ai_call_log_id。<br>
+  <b>替补规则</b>：槽位推导——chat=enabled∧text入∧tool_calls；vision=enabled∧image入（无则回退 chat）；
+  image/video=enabled∧对应 modality 出；多候选取 id 最小，换模型靠目录 enabled 控制。
+  历史重建——会话最近 N 条 (incoming ∨ origin='ai') ∧ kind='text'，incoming→user、outgoing→assistant。<br>
+  <b>设置三分法</b>：基础设施=yml/环境变量；能力配置=<b>ai_setting</b>（四级作用域 KV）；sys_setting 暂不建。
+</div>
+
+<h2>ER 图</h2>
+<div class="diagram">
+<pre class="mermaid">
+erDiagram
+    im_account {
+        bigint id PK
+        varchar platform "wechat|feishu"
+        text name
+        bool enabled
+        jsonb config "凭据掩码外发"
+    }
+    im_conversation {
+        bigint id PK
+        bigint account_id FK
+        text platform_id "平台原生会话ID"
+        varchar kind "direct|group|channel"
+        text title "展示名"
+        text remark
+        timestamptz archived_at "NULL=活动"
+        timestamptz last_message_at
+    }
+    im_contact {
+        bigint id PK
+        bigint account_id FK
+        text platform_id
+        text display_name "平台昵称"
+        text alias
+        varchar kind "user|bot|system"
+    }
+    im_conversation_contact_bind {
+        bigint id PK
+        bigint conversation_id FK "仅群会话建行"
+        bigint contact_id FK
+        varchar role "owner|admin|member|bot"
+        text display_name "群昵称快照"
+        timestamptz joined_at
+        timestamptz left_at "NULL=在册"
+    }
+    im_message {
+        bigint id PK
+        bigint conversation_id FK
+        bigint contact_id FK "发送者"
+        text platform_id "UNIQUE(会话,平台ID)"
+        varchar direction "incoming|outgoing"
+        varchar origin "human|ai|system"
+        varchar kind "text|image|voice|video|sticker|file|rich|other"
+        bool mentioned
+        text body
+        jsonb raw_payload "平台原文"
+        bigint reply_to_message_id FK
+        timestamptz occurred_at
+    }
+    im_attachment {
+        bigint id PK
+        bigint message_id FK
+        varchar kind "image|voice|video|sticker|file|preview"
+        text platform_ref
+        text storage_ref "懒下载后回填"
+        varchar status "pending|downloaded|failed|skipped"
+    }
+    im_inbound_ledger {
+        bigint account_id PK
+        text platform_message_id PK
+        varchar event_kind PK
+        timestamptz processed_at
+    }
+    im_outbound_ledger {
+        bigint id PK
+        bigint conversation_id FK
+        text idempotency_key UK "全局唯一防重发"
+        varchar source "ai_reply|task|manual|api"
+        text body
+        bigint artifact_id FK
+        bigint message_id FK "归档回流回填"
+        varchar status "pending|sent|failed|skipped"
+    }
+    ai_setting {
+        text key PK
+        varchar platform "作用域1：可空"
+        bigint account_id FK "作用域2：可空"
+        bigint conversation_id FK "作用域3：可空"
+        jsonb value "三标识全NULL=全局"
+        timestamptz updated_at
+    }
+    ai_provider {
+        bigint id PK
+        text name UK
+        varchar kind "openai|tavily|other"
+        text base_url
+        text api_key
+    }
+    ai_model {
+        bigint id PK
+        bigint provider_id FK
+        text model_key "UNIQUE(provider,model)"
+        jsonb modalities_in
+        jsonb modalities_out
+        bool supports_tool_calls
+        bool enabled "可用池=槽位推导源"
+    }
+    ai_memory {
+        bigint id PK
+        bigint conversation_id FK
+        varchar kind "fact|preference|relationship|other"
+        text fact
+        varchar status "active|superseded|forgotten"
+        bigint source_message_id FK
+    }
+    ai_artifact {
+        bigint id PK
+        bigint conversation_id FK
+        varchar kind "image|video|audio|file"
+        text prompt
+        varchar(64) sha256
+        text storage_ref
+        varchar status "generated|delivered|failed"
+    }
+    im_task_definition {
+        bigint id PK
+        bigint conversation_id FK
+        varchar kind "reminder|cron|report"
+        varchar schedule_type "once|cron 互斥CHECK"
+        text content
+        text prompt
+        timestamptz run_at
+        text cron_expr
+        timestamptz next_run_at
+    }
+    im_task_run {
+        bigint id PK
+        bigint task_id FK
+        timestamptz scheduled_for "UNIQUE(task,计划点)"
+        varchar status "running|sent|failed|skipped"
+        bigint outbound_ledger_id FK
+    }
+    im_report {
+        bigint id PK
+        bigint conversation_id FK
+        varchar period_type "week|month|year"
+        date period_start "UNIQUE(会话,周期,起点)"
+        jsonb stats
+        text ai_report
+        varchar status "stats_only|final|failed"
+    }
+    im_contact_profile {
+        bigint id PK
+        bigint conversation_id FK
+        bigint contact_id FK "UNIQUE(会话,联系人)"
+        text profile
+        int message_count
+    }
+    im_account ||--o{ im_conversation : "接入"
+    im_account ||--o{ im_inbound_ledger : "入站幂等"
+    im_account ||--o{ ai_setting : "账号作用域"
+    im_conversation ||--o{ im_message : "归档"
+    im_conversation ||--o{ im_conversation_contact_bind : "群绑定"
+    im_contact ||--o{ im_conversation_contact_bind : "参与"
+    im_contact ||--o{ im_message : "发送"
+    im_message ||--o{ im_attachment : "附件"
+    im_message ||--o{ im_message : "引用回复"
+    im_conversation ||--o{ im_outbound_ledger : "出站"
+    im_conversation ||--o{ im_task_definition : "任务目标"
+    im_task_definition ||--o{ im_task_run : "执行"
+    im_task_run }o--o| im_outbound_ledger : "发送回指"
+    im_conversation ||--o{ im_report : "周期报告"
+    im_conversation ||--o{ im_contact_profile : "画像"
+    im_contact ||--o{ im_contact_profile : "画像对象"
+    im_conversation ||--o{ ai_memory : "记忆"
+    im_conversation ||--o{ ai_artifact : "产物"
+    im_conversation ||--o{ ai_setting : "会话作用域"
+    ai_provider ||--o{ ai_model : "提供"
+</pre>
+<pre class="fallback" id="fallback">mermaid 渲染失败（无网络）——关系清单：
+im_account 1—N im_conversation（接入）/ im_inbound_ledger（入站幂等）/ ai_setting（账号作用域）
+im_conversation 1—N im_message（归档）/ im_conversation_contact_bind（群绑定）/ im_outbound_ledger（出站）
+                / im_task_definition（任务）/ im_task_run（经 definition）/ im_report / im_contact_profile
+                / ai_memory / ai_artifact / ai_setting（会话作用域）
+im_contact 1—N im_message（发送）/ im_conversation_contact_bind（参与）/ im_contact_profile（画像对象）
+im_message 1—N im_attachment；自关联 reply_to_message_id
+im_task_definition 1—N im_task_run → outbound_ledger_id → im_outbound_ledger
+ai_provider 1—N ai_model（槽位推导：chat/vision/image/video）
+完整列定义见各实体块源码与本页 fallback 源码。</pre>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  function init() {
+    try {
+      mermaid.initialize({ startOnLoad: true, theme: 'neutral', er: { useMaxWidth: true } });
+    } catch (e) { document.getElementById('fallback').style.display = 'block'; }
+  }
+  if (window.mermaid) { init(); }
+  else {
+    var s = document.createElement('script');
+    s.src = 'https://unpkg.com/mermaid@11/dist/mermaid.min.js';
+    s.onload = init;
+    s.onerror = function () { document.getElementById('fallback').style.display = 'block'; };
+    document.head.appendChild(s);
+  }
+  setTimeout(function () {
+    if (!document.querySelector('.diagram svg')) document.getElementById('fallback').style.display = 'block';
+  }, 8000);
+</script>
+</body>
+</html>
