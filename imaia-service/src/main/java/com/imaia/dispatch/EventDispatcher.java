@@ -1,5 +1,7 @@
 package com.imaia.dispatch;
 
+import com.imaia.domain.Platform;
+
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;
 import com.imaia.adapter.PlatformSource;

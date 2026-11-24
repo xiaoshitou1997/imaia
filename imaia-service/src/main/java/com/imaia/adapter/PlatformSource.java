@@ -1,5 +1,7 @@
 package com.imaia.adapter;
 
+import com.imaia.domain.Platform;
+
 import reactor.core.publisher.Flux;
 
 import java.util.function.Consumer;
@@ -12,8 +14,8 @@ import java.util.function.Consumer;
  */
 public interface PlatformSource {
 
-    /** The platform identifier; equals the matching {@link ImAdapter#platform()}. */
-    String platform();
+    /** 平台代码；与 {@link ImAdapter#platform()} 一致。 */
+    Platform platform();
 
     /** Whether this platform has an enabled connection config; false skips the stream without failing. */
     boolean enabled();
@@ -42,4 +44,19 @@ public interface PlatformSource {
 
     /** Whether the process should exit when this stream terminates permanently. */
     boolean exitOnFailure();
+
+    /**
+     * Best-effort teardown of the live transport (a WS socket the disposed
+     * subscription cannot reach); no-op by default. Called by the orchestrator
+     * before a refresh restarts or retires this platform's stream.
+     */
+    default void stop() {
+    }
+
+    /**
+     * Clears cached connection state so the next start re-reads the account row.
+     * Called before re-evaluating {@link #enabled()} on a refresh; no-op by default.
+     */
+    default void reload() {
+    }
 }

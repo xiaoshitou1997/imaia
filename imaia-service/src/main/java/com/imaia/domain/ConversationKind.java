@@ -7,9 +7,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 import java.util.Locale;
 
-/** Conversation line shape: direct chat or group chat. */
+/** Conversation line shape: direct chat, group chat or channel. */
 public enum ConversationKind {
-    DIRECT, GROUP;
+    DIRECT,
+    GROUP,
+    CHANNEL;
 
     /** The stored/API representation (lowercase). */
     @JsonValue
@@ -26,7 +28,7 @@ public enum ConversationKind {
     @JsonCreator
     public static ConversationKind fromValue(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("ConversationKind 值不能为空。");
+            throw new IllegalArgumentException("ConversationKind 不能为空。");
         }
         try {
             return ConversationKind.valueOf(value.strip().toUpperCase(Locale.ROOT));
@@ -35,7 +37,7 @@ public enum ConversationKind {
         }
     }
 
-    /** JPA converter: enum ↔ lowercase VARCHAR. */
+    /** JPA converter: enum -> lowercase VARCHAR. */
     @jakarta.persistence.Converter
     public static class Converter implements AttributeConverter<ConversationKind, String> {
 

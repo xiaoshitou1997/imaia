@@ -59,6 +59,19 @@ class DaemonClientTest {
     }
 
     @Test
+    void currentEventCursorReadsAsOfEventCursor() throws Exception {
+        server.enqueue(new MockResponse()
+                .setBody("{\"items\":[],\"asOfEventCursor\":\"34830\"}")
+                .addHeader("Content-Type", "application/json"));
+
+        String cursor = client.currentEventCursor();
+
+        assertThat(cursor).isEqualTo("34830");
+        RecordedRequest request = server.takeRequest();
+        assertThat(request.getPath()).isEqualTo("/v1/accounts/acc1/threads?limit=1");
+    }
+
+    @Test
     void sendTextCarriesIdempotencyKey() throws Exception {
         server.enqueue(new MockResponse()
                 .setBody("{\"id\":\"send1\",\"state\":\"queued\"}")

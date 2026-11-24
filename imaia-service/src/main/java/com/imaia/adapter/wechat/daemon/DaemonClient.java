@@ -72,6 +72,35 @@ public class DaemonClient {
         return firstId.asString();
     }
 
+    /**
+     * The event cursor current at this moment, read from a cheap thread listing.
+     * Used to bootstrap a consumer that has no saved cursor: the daemon's event
+     * log expires old cursors, so starting at 0 is rejected with HTTP 410.
+     */
+    public String currentEventCursor() {
+        JsonNode response = getJson(builder -> builder
+                .path("/v1/accounts/{accountId}/threads")
+                .queryParam("limit", 1)
+                .build(accountId()), "threads");
+        String cursor = response.path("asOfEventCursor").asString("");
+        if (!StringUtils.hasText(cursor)) {
+            throw new DaemonContractException("The thread listing carries no asOfEventCursor.");
+        }
+        return cursor;
+    }
+
+    /** One page of one thread's saved messages, newest first. */
+    public JsonNode listThreadMessages(String threadId, String cursor, int limit) {
+        return getJson(builder -> {
+            var request = builder.path("/v1/accounts/{accountId}/threads/{threadId}/messages")
+                    .queryParam("limit", Math.min(200, Math.max(1, limit)));
+            if (StringUtils.hasText(cursor)) {
+                request.queryParam("cursor", cursor);
+            }
+            return request.build(accountId(), threadId);
+        }, "messages of " + threadId);
+    }
+
     /** Reads one saved message. */
     public Message getMessage(String messageId) {
         JsonNode body = getJson(

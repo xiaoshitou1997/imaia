@@ -1,5 +1,7 @@
 package com.imaia.adapter.wechat;
 
+import com.imaia.domain.Platform;
+
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;
 import com.imaia.adapter.PlatformSource;
@@ -49,8 +51,8 @@ public class WechatPlatformSource implements PlatformSource {
     }
 
     @Override
-    public String platform() {
-        return WechatAdapter.PLATFORM;
+    public Platform platform() {
+        return Platform.WECHAT;
     }
 
     @Override
@@ -59,23 +61,31 @@ public class WechatPlatformSource implements PlatformSource {
     }
 
     @Override
+    public void reload() {
+        connection.reload();
+    }
+
+    @Override
     public void validate() {
         if (connection.config().token().isBlank()) {
             throw new IllegalStateException("""
-                    wechat 接入缺少 daemon token。先在 daemon 创建 token，再写进 platform_account 表：
+                    wechat 接入缺少 daemon token。先在 daemon 创建 token，再写进 im_account 表：
                     wx tokens create imaia --accounts ACCOUNT_ID --scopes read,media,send
-                    UPDATE platform_account SET config = jsonb_set(config, '{token}', '"<token>"'::jsonb)
-                    WHERE platform = 'wechat';""");
+                    UPDATE im_account SET config = jsonb_set(config, '{token}', '"<token>"'::jsonb)
+                    WHERE platform_code = 'wechat';""");
         }
         if (connection.config().consumerName() == null || connection.config().consumerName().isBlank()) {
-            throw new IllegalStateException("platform_account(wechat) config.consumer-name is empty.");
+            throw new IllegalStateException("im_account(wechat) config.consumer-name is empty.");
         }
     }
 
     /** The infinite, resuming event source. Terminal failures reach the subscriber. */
     @Override
     public Flux<ImEvent> events(Consumer<ImEvent> dispatch) {
-        return Flux.defer(() -> streamClient.connect(daemonClient.accountId(), cursorStore.load()))
+        return Mono.fromCallable(() ->
+                        streamClient.connect(daemonClient.accountId(), resumeCursor()))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMapMany(flux -> flux)
                 .map(this::normalize)
                 .publishOn(Schedulers.boundedElastic())
                 .doOnNext(dispatch)
@@ -103,15 +113,32 @@ public class WechatPlatformSource implements PlatformSource {
                         Duration.ofMillis(connection.config().reconnectDelayMillis())));
     }
 
+    /**
+     * Resume from the saved cursor, or bootstrap from the daemon's current cursor when
+     * there is none. The daemon keeps only a bounded event log; starting at 0 after the
+     * log has rotated is rejected with event_cursor_expired, so a live tail is the only
+     * safe first position for a brand-new consumer.
+     */
+    private String resumeCursor() {
+        String saved = cursorStore.load();
+        if (saved != null && !saved.isBlank()) {
+            return saved;
+        }
+        String current = daemonClient.currentEventCursor();
+        cursorStore.save(current);
+        log.info("No saved wechat cursor; starting from the current event cursor {}.", current);
+        return current;
+    }
+
     /** Normalizes one decoded daemon event; message events must carry their identity. */
     private ImEvent normalize(DaemonEvent event) {
-        String messageId = EventPayload.optionalText(event.data(), "messageId");
-        String threadId = EventPayload.optionalText(event.data(), "threadId");
+        String platformMessageId = EventPayload.optionalText(event.data(), "messageId");
+        String conversationPlatformId = EventPayload.optionalText(event.data(), "threadId");
         if (ImEventHandler.KIND_MESSAGE_COMMITTED.equals(event.kind())) {
-            messageId = EventPayload.requiredText(event.data(), "messageId");
-            threadId = EventPayload.requiredText(event.data(), "threadId");
+            platformMessageId = EventPayload.requiredText(event.data(), "messageId");
+            conversationPlatformId = EventPayload.requiredText(event.data(), "threadId");
         }
-        return new ImEvent(platform(), event.kind(), messageId, threadId, event.cursor(), event.data());
+        return new ImEvent(platform(), event.kind(), platformMessageId, conversationPlatformId, event.cursor(), event.data());
     }
 
     @Override

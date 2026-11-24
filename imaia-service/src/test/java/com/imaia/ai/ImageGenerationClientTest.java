@@ -1,7 +1,7 @@
 package com.imaia.ai;
 
 import com.imaia.TestProperties;
-import com.imaia.config.AiModelCatalog;
+import com.imaia.domain.AiSettings;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -27,7 +27,15 @@ class ImageGenerationClientTest {
     void startServer() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new ImageGenerationClient(TestProperties.catalog(server.url("/").toString()));
+        client = new ImageGenerationClient(imageSettings(server.url("/").toString()));
+    }
+
+    private static AiSettingsService imageSettings(String baseUrl) {
+        AiSettings settings = TestProperties.settings("p", 20, false, false, "00:00", "07:00");
+        settings.setImageBaseUrl(baseUrl);
+        settings.setImageApiKey("key");
+        settings.setImageModel("img-m");
+        return TestProperties.settingsService(settings);
     }
 
     @AfterEach
@@ -48,7 +56,7 @@ class ImageGenerationClientTest {
         assertThat(request.getPath()).isEqualTo("/images/generations");
         assertThat(request.getHeader("Authorization")).isEqualTo("Bearer key");
         String body = request.getBody().readUtf8();
-        assertThat(body).contains("\"model\":\"img-m\"").contains("一只红色的猫").contains("1024x768");
+        assertThat(body).contains("\"model\":\"img-m\"").contains("一只红色的猫");
     }
 
     @Test
@@ -87,12 +95,13 @@ class ImageGenerationClientTest {
     }
 
     @Test
-    void missingRouteFailsFast() {
-        AiModelCatalog empty = TestProperties.catalogWithout("http://127.0.0.1:1", "image");
-        ImageGenerationClient unconfigured = new ImageGenerationClient(empty);
+    void unconfiguredToolFailsFastAndReportsUnavailable() {
+        ImageGenerationClient unconfigured = new ImageGenerationClient(
+                TestProperties.settingsService(TestProperties.settings("p", 20, false, false, "00:00", "07:00")));
 
+        assertThat(unconfigured.available()).isFalse();
         assertThatThrownBy(() -> unconfigured.generate("一只猫"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("image-generation models");
+                .hasMessageContaining("image 工具未配置");
     }
 }

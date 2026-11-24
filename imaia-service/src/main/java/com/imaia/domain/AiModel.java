@@ -7,8 +7,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -19,21 +20,17 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * One model in the AI directory — three layers of provenance: synced from the
- * provider's /v1/models listing (availability), enriched from models.dev
- * (modalities, flags, limits, cost), annotated locally (enabled, params).
- * Capability slots are NOT stored: they derive from {@code modalities} and
- * {@code tool_call} — chat = text in/out + tool_call, image gen = image out,
- * video gen = video out (see AiModelCatalog).
+ * One catalog model: gateway /v1/models listing (availability) enriched from
+ * models.dev, with local annotations (enabled, params) that sync never overwrites.
  */
 @Entity
-@Table(name = "ai_model", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"provider_id", "model_id"})})
+@Table(name = "ai_model")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class AiModel {
-
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,35 +39,31 @@ public class AiModel {
     @Column(name = "provider_id", nullable = false)
     private Long providerId;
 
-    /** The model id as the gateway's /v1/models listing reports it. */
-    @Column(name = "model_id", nullable = false)
-    private String modelId;
+    @Column(name = "model_key", nullable = false)
+    private String modelKey;
 
     @Column
     private String name;
 
-    @Column(columnDefinition = "text")
+    @Column
     private String description;
 
-    /** JSON array, e.g. ["text","image"]. */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "modalities_in", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "modalities_in", nullable = false)
     private String modalitiesIn;
 
-    /** JSON array, e.g. ["text","image","video","audio"]. */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "modalities_out", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "modalities_out", nullable = false)
     private String modalitiesOut;
 
-    /** Sees attachments/images (vision). */
-    @Column(nullable = false)
-    private boolean vision;
+    @Column(name = "supports_vision", nullable = false)
+    private boolean supportsVision;
 
-    @Column(nullable = false)
-    private boolean reasoning;
+    @Column(name = "supports_reasoning", nullable = false)
+    private boolean supportsReasoning;
 
-    @Column(name = "tool_call", nullable = false)
-    private boolean toolCall;
+    @Column(name = "supports_tool_calls", nullable = false)
+    private boolean supportsToolCalls;
 
     @Column(name = "limit_context")
     private Integer limitContext;
@@ -78,30 +71,24 @@ public class AiModel {
     @Column(name = "limit_output")
     private Integer limitOutput;
 
-    /** USD per 1M tokens (models.dev). */
     @Column(name = "cost_input")
     private BigDecimal costInput;
 
-    /** USD per 1M tokens (models.dev). */
     @Column(name = "cost_output")
     private BigDecimal costOutput;
 
-    /** Local gateway-specific knobs: size / voice-id / seconds (JSON object). */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
+    @Column(nullable = false)
     private String params;
 
-    /** Still present in the gateway's /v1/models listing. */
     @Column(nullable = false)
     private boolean available;
 
-    /** Locally checked-in: participates in runtime selection. */
     @Column(nullable = false)
     private boolean enabled;
 
-    /** sync | manual. */
-    @Column(nullable = false)
     @Convert(converter = ModelSource.Converter.class)
+    @Column(nullable = false)
     private ModelSource source;
 
     @Column(name = "synced_at")
@@ -112,18 +99,4 @@ public class AiModel {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    public AiModel(Long providerId, String modelId) {
-        this.providerId = providerId;
-        this.modelId = modelId;
-        this.modalitiesIn = "[]";
-        this.modalitiesOut = "[]";
-        this.toolCall = true;
-        this.params = "{}";
-        this.available = true;
-        this.enabled = false;
-        this.source = ModelSource.SYNC;
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
-    }
 }

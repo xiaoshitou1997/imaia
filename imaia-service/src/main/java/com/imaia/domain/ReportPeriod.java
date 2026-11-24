@@ -9,7 +9,9 @@ import java.util.Locale;
 
 /** Report period granularity. */
 public enum ReportPeriod {
-    WEEK, MONTH, YEAR;
+    WEEK,
+    MONTH,
+    YEAR;
 
     /** The stored/API representation (lowercase). */
     @JsonValue
@@ -26,7 +28,7 @@ public enum ReportPeriod {
     @JsonCreator
     public static ReportPeriod fromValue(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("ReportPeriod 值不能为空。");
+            throw new IllegalArgumentException("ReportPeriod 不能为空。");
         }
         try {
             return ReportPeriod.valueOf(value.strip().toUpperCase(Locale.ROOT));
@@ -35,7 +37,7 @@ public enum ReportPeriod {
         }
     }
 
-    /** JPA converter: enum ↔ lowercase VARCHAR. */
+    /** JPA converter: enum -> lowercase VARCHAR. */
     @jakarta.persistence.Converter
     public static class Converter implements AttributeConverter<ReportPeriod, String> {
 

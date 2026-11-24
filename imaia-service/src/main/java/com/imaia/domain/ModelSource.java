@@ -9,7 +9,8 @@ import java.util.Locale;
 
 /** Where a catalog model came from: gateway sync or manual entry. */
 public enum ModelSource {
-    SYNC, MANUAL;
+    SYNC,
+    MANUAL;
 
     /** The stored/API representation (lowercase). */
     @JsonValue
@@ -26,7 +27,7 @@ public enum ModelSource {
     @JsonCreator
     public static ModelSource fromValue(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("ModelSource 值不能为空。");
+            throw new IllegalArgumentException("ModelSource 不能为空。");
         }
         try {
             return ModelSource.valueOf(value.strip().toUpperCase(Locale.ROOT));
@@ -35,7 +36,7 @@ public enum ModelSource {
         }
     }
 
-    /** JPA converter: enum ↔ lowercase VARCHAR. */
+    /** JPA converter: enum -> lowercase VARCHAR. */
     @jakarta.persistence.Converter
     public static class Converter implements AttributeConverter<ModelSource, String> {
 

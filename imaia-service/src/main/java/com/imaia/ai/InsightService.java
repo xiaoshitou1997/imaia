@@ -1,18 +1,17 @@
 package com.imaia.ai;
 
-import com.imaia.domain.ReportPeriod;
-import com.imaia.domain.MessageOrigin;
-import com.imaia.domain.MessageDirection;
 import com.imaia.config.AiModelCatalog;
-import com.imaia.domain.ConversationReport;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ImMessage;
-import com.imaia.domain.MessageCategory;
-import com.imaia.repository.ConversationReportRepository;
+import com.imaia.domain.MessageKind;
+import com.imaia.domain.MessageDirection;
+import com.imaia.domain.MessageOrigin;
+import com.imaia.domain.ReportPeriod;
 import com.imaia.repository.ImMessageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -28,35 +27,32 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import org.springframework.util.StringUtils;
 import java.util.Map;
 
 /**
  * Conversation insights: aggregates the archive into per-period statistics and an
- * AI-written评析, persisted per (conversation, period type, period start). Three
- * outlets share this service — the console report page, the in-group command
- * (@机器人 本周统计/月报/年报), and the scheduled report tasks.
+ * AI-written review, returned as plain digest text (never persisted). Two outlets
+ * share this service — the in-group command and scheduled report tasks.
  */
 @Component
 public class InsightService {
 
     private static final Logger log = LoggerFactory.getLogger(InsightService.class);
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
-    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("MM-dd HH:mm")
-            .withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("MM-dd HH:mm");
     private static final int SAMPLE_MESSAGES = 40;
     private static final int SAMPLE_CHARS = 8_000;
 
     private final ImMessageRepository messages;
-    private final ConversationReportRepository reports;
-    private final OpenAiChatCompletion chatCompletion;
+    private final AiChatService chatService;
+    private final AiSettingsService settings;
     private final AiModelCatalog catalog;
 
-    public InsightService(ImMessageRepository messages, ConversationReportRepository reports,
-            OpenAiChatCompletion chatCompletion, AiModelCatalog catalog) {
+    public InsightService(ImMessageRepository messages,
+            AiChatService chatService, AiSettingsService settings, AiModelCatalog catalog) {
         this.messages = messages;
-        this.reports = reports;
-        this.chatCompletion = chatCompletion;
+        this.chatService = chatService;
+        this.settings = settings;
         this.catalog = catalog;
     }
 
@@ -76,7 +72,7 @@ public class InsightService {
             return null;
         }
         try {
-            return summarize(generateReport(conversation, period));
+            return generateDigest(conversation, period);
         } catch (RuntimeException failure) {
             log.warn("Report command failed on conversation {}: {}", conversation.getId(),
                     failure.getMessage());
@@ -84,13 +80,14 @@ public class InsightService {
         }
     }
 
-    /** Aggregates the period window, writes the AI评析 and upserts the report row. */
-    public ConversationReport generateReport(ImConversation conversation, ReportPeriod periodType) {
-        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+    /** Aggregates the period window, writes the AI review, and returns the digest text. */
+    public String generateDigest(ImConversation conversation, ReportPeriod periodType) {
+        ZoneId zone = ZoneId.of(settings.current().getTimezone());
+        LocalDate today = LocalDate.now(zone);
         LocalDate start = periodStart(today, periodType);
         LocalDate endExclusive = periodEndExclusive(start, periodType);
-        ZonedDateTime windowStart = start.atStartOfDay(ZoneId.systemDefault());
-        ZonedDateTime windowEnd = endExclusive.atStartOfDay(ZoneId.systemDefault());
+        ZonedDateTime windowStart = start.atStartOfDay(zone);
+        ZonedDateTime windowEnd = endExclusive.atStartOfDay(zone);
 
         List<ImMessage> window = new ArrayList<>(messages
                 .findTop2000ByConversationIdAndArchivedAtAfterOrderByArchivedAtDesc(
@@ -99,47 +96,27 @@ public class InsightService {
                 || !message.getArchivedAt().isBefore(windowEnd.toInstant()));
 
         String statsJson = buildStats(window);
-        String modelId = null;
-        try {
-            modelId = catalog.chatFor(false).id();
-        } catch (RuntimeException failure) {
-            log.warn("No chat model for report writing; stats-only report: {}", failure.getMessage());
-        }
         String aiReport = null;
-        if (modelId != null) {
+        if (catalog.hasChat()) {
             try {
-                aiReport = chatCompletion.complete(
-                        "你是群聊数据分析助手。只基于给出的统计与摘录写报告，不臆造；用简洁中文分段。",
-                        List.of(), buildReportPrompt(periodType, start, endExclusive, statsJson, window),
-                        null, null).strip();
+                aiReport = chatService.completeOnce(conversation,
+                        buildReportPrompt(periodType, start, endExclusive, statsJson, window)).text();
             } catch (RuntimeException failure) {
-                log.warn("AI report writing failed; stats-only report: {}", failure.getMessage());
+                log.warn("AI report writing failed; stats-only digest: {}", failure.getMessage());
             }
         }
-        final String resolvedModelId = modelId;
-        ConversationReport report = reports
-                .findByConversationIdAndPeriodTypeAndPeriodStart(conversation.getId(), periodType, start)
-                .orElseGet(() -> new ConversationReport(conversation.getId(), periodType, start,
-                        statsJson, null, resolvedModelId, Instant.now()));
-        report.setStats(statsJson);
-        report.setAiReport(aiReport);
-        report.setModelId(modelId);
-        report.setGeneratedAt(Instant.now());
-        return reports.save(report);
+        return digest(periodType, start, aiReport);
     }
 
-    /** The digest sent back to the group / returned to the console. */
-    public String summarize(ConversationReport report) {
-        String label = switch (report.getPeriodType()) {
+    private String digest(ReportPeriod periodType, LocalDate start, String aiReport) {
+        String label = switch (periodType) {
             case MONTH -> "本月";
             case YEAR -> "本年";
             default -> "本周";
         };
-        String head = "【" + label + "报告 " + report.getPeriodStart() + " 起】\n";
-        if (StringUtils.hasText(report.getAiReport())) {
-            return head + report.getAiReport();
-        }
-        return head + "AI 评析暂不可用，统计已生成，请到控制台报表页查看。";
+        String head = "【" + label + "报告 " + start + " 起】\n";
+        return StringUtils.hasText(aiReport) ? head + aiReport
+                : head + "AI 评析暂不可用，统计已直接附上。";
     }
 
     /** Aggregate statistics of the window into a JSON object. */
@@ -159,14 +136,15 @@ public class InsightService {
             if (message.getOrigin() == MessageOrigin.AI) {
                 aiOutgoing++;
             }
-            if (message.getCategory() == MessageCategory.STICKER) {
+            if (message.getKind() == MessageKind.STICKER) {
                 stickers++;
             }
             String body = message.getBody();
             if (StringUtils.hasText(body)) {
                 textChars += body.codePointCount(0, body.length());
             }
-            String key = message.getSenderId() == null ? "unknown" : message.getSenderId();
+            String key = message.getContactId() == null ? "unknown"
+                    : String.valueOf(message.getContactId());
             perMemberRaw.computeIfAbsent(key, k -> new int[1])[0]++;
             perMemberChars.computeIfAbsent(key, k -> new int[1])[0] += chars(body);
             String day = message.getArchivedAt().toString().substring(0, 10);
@@ -183,7 +161,7 @@ public class InsightService {
                 .sorted(Comparator.<Map.Entry<String, int[]>>comparingInt(e -> e.getValue()[0]).reversed())
                 .forEach(entry -> {
                     ObjectNode member = members.addObject();
-                    member.put("senderId", entry.getKey());
+                    member.put("contactId", entry.getKey());
                     member.put("messages", entry.getValue()[0]);
                     member.put("chars", perMemberChars.getOrDefault(entry.getKey(), new int[1])[0]);
                 });
@@ -202,14 +180,16 @@ public class InsightService {
         List<ImMessage> chronological = new ArrayList<>(window);
         chronological.sort(Comparator.comparing(ImMessage::getArchivedAt,
                 Comparator.nullsLast(Comparator.naturalOrder())));
+        ZoneId zone = ZoneId.of(settings.current().getTimezone());
         for (ImMessage message : chronological.reversed()) {
             if (!StringUtils.hasText(message.getBody())) {
                 continue;
             }
             String who = message.getDirection() == MessageDirection.OUTGOING
-                    ? "我" : (StringUtils.hasText(message.getSenderName())
-                    ? message.getSenderName() : String.valueOf(message.getSenderId()));
-            String line = "[" + DAY.format(message.getArchivedAt()) + " " + who + "] " + message.getBody();
+                    ? "我" : (message.getContactId() == null ? "成员"
+                    : "成员" + message.getContactId());
+            String line = "[" + DAY.format(message.getArchivedAt().atZone(zone)) + " " + who + "] "
+                    + message.getBody();
             if (excerpt.length() + line.length() > SAMPLE_CHARS) {
                 break;
             }

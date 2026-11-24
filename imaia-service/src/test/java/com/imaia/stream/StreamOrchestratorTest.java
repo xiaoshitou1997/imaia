@@ -1,5 +1,7 @@
 package com.imaia.stream;
 
+import com.imaia.domain.Platform;
+
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.PlatformSource;
 import com.imaia.config.DispatchProperties;
@@ -18,9 +20,9 @@ class StreamOrchestratorTest {
     @Test
     void disabledSourceIsSkippedWithoutValidation() {
         AtomicBoolean disabledValidated = new AtomicBoolean();
-        PlatformSource disabled = fakeSource("wechat", false, disabledValidated);
+        PlatformSource disabled = fakeSource(Platform.WECHAT, false, disabledValidated);
         AtomicBoolean enabledValidated = new AtomicBoolean();
-        PlatformSource enabled = fakeSource("feishu", true, enabledValidated);
+        PlatformSource enabled = fakeSource(Platform.FEISHU, true, enabledValidated);
 
         StreamOrchestrator orchestrator = new StreamOrchestrator(
                 List.of(disabled, enabled), List.of(), new DispatchProperties(3));
@@ -32,11 +34,11 @@ class StreamOrchestratorTest {
         assertThat(enabledValidated).isTrue();
     }
 
-    private static PlatformSource fakeSource(String platform, boolean enabled,
+    private static PlatformSource fakeSource(Platform platform, boolean enabled,
             AtomicBoolean validated) {
         return new PlatformSource() {
             @Override
-            public String platform() {
+            public Platform platform() {
                 return platform;
             }
 

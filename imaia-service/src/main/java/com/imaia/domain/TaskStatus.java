@@ -7,9 +7,13 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 import java.util.Locale;
 
-/** Scheduled task lifecycle state. */
+/** Scheduled task definition lifecycle state. */
 public enum TaskStatus {
-    PENDING, DONE, CANCELLED, FAILED;
+    ACTIVE,
+    PAUSED,
+    DONE,
+    FAILED,
+    CANCELLED;
 
     /** The stored/API representation (lowercase). */
     @JsonValue
@@ -26,7 +30,7 @@ public enum TaskStatus {
     @JsonCreator
     public static TaskStatus fromValue(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("TaskStatus 值不能为空。");
+            throw new IllegalArgumentException("TaskStatus 不能为空。");
         }
         try {
             return TaskStatus.valueOf(value.strip().toUpperCase(Locale.ROOT));
@@ -35,13 +39,13 @@ public enum TaskStatus {
         }
     }
 
-    /** JPA converter: enum ↔ lowercase VARCHAR. */
+    /** JPA converter: enum -> lowercase VARCHAR. */
     @jakarta.persistence.Converter
     public static class Converter implements AttributeConverter<TaskStatus, String> {
 
         @Override
         public String convertToDatabaseColumn(TaskStatus attribute) {
-            return attribute == null ? PENDING.value() : attribute.value();
+            return attribute == null ? ACTIVE.value() : attribute.value();
         }
 
         @Override

@@ -1,26 +1,31 @@
 package com.imaia;
 
-import java.util.Optional;
 import com.imaia.adapter.wechat.WechatAccountConfig;
 import com.imaia.adapter.wechat.WechatConnection;
-import com.imaia.ai.AssistantSettingsService;
+import com.imaia.ai.AiSettingsService;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.config.DispatchProperties;
 import com.imaia.domain.AiModel;
-import com.imaia.domain.ConversationKind;
-import com.imaia.domain.ModelSource;
 import com.imaia.domain.AiProvider;
-import com.imaia.domain.AssistantSettings;
-import com.imaia.domain.ImConnection;
+import com.imaia.domain.AiSetting;
+import com.imaia.domain.AiSettings;
+import com.imaia.domain.ConversationKind;
+import com.imaia.domain.ImAccount;
+import com.imaia.domain.Platform;
 import com.imaia.domain.ImConversation;
+import com.imaia.domain.ModelSource;
 import com.imaia.repository.AiModelRepository;
 import com.imaia.repository.AiProviderRepository;
-import com.imaia.repository.AssistantSettingsRepository;
+import com.imaia.repository.AiSettingRepository;
+import com.imaia.repository.ImAccountRepository;
 import org.mockito.Mockito;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -42,15 +47,21 @@ public final class TestProperties {
                 "imaia", true, 10, 50, 200, false);
     }
 
-    public static ImConnection connection(long id, String platform) {
-        ImConnection connection = new ImConnection(platform, "default", true, "{}");
+    public static ImAccount account(long id, String platform) {
+        Instant now = Instant.now();
+        ImAccount connection = ImAccount.builder()
+                .platform(Platform.fromValue(platform)).name("default").enabled(true).config("{}")
+                .createdAt(now).updatedAt(now).build();
         connection.setId(id);
         return connection;
     }
 
-    public static ImConversation imConversation(long id, String externalId) {
-        ImConversation conversation = new ImConversation(1L, externalId, null,
-                ConversationKind.DIRECT, Instant.now(), Instant.now(), Instant.now());
+    public static ImConversation imConversation(long id, String platformId) {
+        Instant now = Instant.now();
+        ImConversation conversation = ImConversation.builder()
+                .accountId(1L).platformId(platformId).kind(ConversationKind.DIRECT)
+                .firstSeenAt(now).lastSeenAt(now).createdAt(now).updatedAt(now)
+                .build();
         conversation.setId(id);
         return conversation;
     }
@@ -60,7 +71,10 @@ public final class TestProperties {
     }
 
     public static AiProvider aiProvider(String name, String baseUrl) {
-        AiProvider provider = new AiProvider(name, baseUrl, "key", Instant.now());
+        Instant now = Instant.now();
+        AiProvider provider = AiProvider.builder()
+                .name(name).baseUrl(baseUrl).apiKey("key")
+                .config("{}").enabled(true).createdAt(now).updatedAt(now).build();
         provider.setId(IDS.incrementAndGet());
         return provider;
     }
@@ -68,17 +82,24 @@ public final class TestProperties {
     public static AiModel aiModel(AiProvider provider, String modelId, String name,
             List<String> input, List<String> output, boolean vision, boolean toolCall,
             Integer limitOutput, Map<String, String> params) {
-        AiModel model = new AiModel(provider.getId(), modelId);
-        model.setName(name);
-        model.setModalitiesIn(json(input));
-        model.setModalitiesOut(json(output));
-        model.setVision(vision);
-        model.setToolCall(toolCall);
-        model.setLimitOutput(limitOutput);
-        model.setParams(json(params));
-        model.setSource(ModelSource.SYNC);
-        model.setAvailable(true);
-        model.setEnabled(true);
+        Instant now = Instant.now();
+        AiModel model = AiModel.builder()
+                .providerId(provider.getId())
+                .modelKey(modelId)
+                .name(name)
+                .modalitiesIn(json(input))
+                .modalitiesOut(json(output))
+                .supportsVision(vision)
+                .supportsToolCalls(toolCall)
+                .limitOutput(limitOutput)
+                .params(json(params))
+                .source(ModelSource.SYNC)
+                .available(true)
+                .enabled(true)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        model.setId(IDS.incrementAndGet());
         return model;
     }
 
@@ -91,54 +112,92 @@ public final class TestProperties {
         AiModelRepository modelRepository = Mockito.mock(AiModelRepository.class);
         Mockito.when(providerRepository.findByEnabledTrue()).thenReturn(providers);
         Mockito.when(modelRepository.findByEnabledTrue()).thenReturn(models);
+        for (AiProvider provider : providers) {
+            Mockito.when(providerRepository.findById(provider.getId())).thenReturn(Optional.of(provider));
+        }
+        for (AiModel model : models) {
+            Mockito.when(modelRepository.findById(model.getId())).thenReturn(Optional.of(model));
+        }
         return new AiModelCatalog(providerRepository, modelRepository);
     }
 
-    /** The default test catalog: agnes image/video, zhipu vision chat. */
+    /** The default test catalog: zhipu vision chat. */
     public static AiModelCatalog catalog(String baseUrl) {
-        AiProvider agnes = aiProvider("agnes", baseUrl);
         AiProvider zhipu = aiProvider("zhipu", baseUrl);
-        return catalog(List.of(agnes, zhipu), List.of(
-                aiModel(agnes, "img-m", "Agnes Image 2.5 Flash", List.of("text"), List.of("image"), false, false,
-                        null, Map.of("size", "1024x768")),
-                aiModel(agnes, "vid-m", "Agnes Video 2.5 Flash", List.of("text"), List.of("video"), false, false,
-                        null, Map.of("seconds", "5", "aspect-ratio", "16:9")),
+        return catalog(List.of(zhipu), List.of(
                 aiModel(zhipu, "chat-m", "GLM-4.5V", List.of("text", "image"), List.of("text"), true, true,
                         4096, Map.of())));
     }
 
-    /** The default catalog minus one capability slot (image | video | chat). */
-    public static AiModelCatalog catalogWithout(String baseUrl, String slot) {
-        AiProvider agnes = aiProvider("agnes", baseUrl);
-        AiProvider zhipu = aiProvider("zhipu", baseUrl);
-        List<AiModel> all = List.of(
-                aiModel(agnes, "img-m", "Agnes Image 2.5 Flash", List.of("text"), List.of("image"), false, false,
-                        null, Map.of("size", "1024x768")),
-                aiModel(agnes, "vid-m", "Agnes Video 2.5 Flash", List.of("text"), List.of("video"), false, false,
-                        null, Map.of("seconds", "5", "aspect-ratio", "16:9")),
-                aiModel(zhipu, "chat-m", "GLM-4.5V", List.of("text", "image"), List.of("text"), true, true,
-                        4096, Map.of()));
-        String dropped = switch (slot) {
-            case "image" -> "img-m";
-            case "video" -> "vid-m";
-            default -> "chat-m";
-        };
-        return catalog(List.of(agnes, zhipu),
-                all.stream().filter(model -> !model.getModelId().equals(dropped)).toList());
-    }
-
-    public static AssistantSettings settings(String systemPrompt, int historyLimit,
+    public static AiSettings settings(String systemPrompt, int historyLimit,
             boolean requireGroupMention, boolean quietHoursEnabled, String quietHoursStart,
             String quietHoursEnd) {
-        return new AssistantSettings(systemPrompt, historyLimit, requireGroupMention,
-                quietHoursEnabled, quietHoursStart, quietHoursEnd, true);
+        return AiSettings.builder()
+                .systemPrompt(systemPrompt)
+                .historyLimit(historyLimit)
+                .requireGroupMention(requireGroupMention)
+                .quietHoursEnabled(quietHoursEnabled)
+                .quietHoursStart(quietHoursStart)
+                .quietHoursEnd(quietHoursEnd)
+                .timezone("Asia/Shanghai")
+                .enabled(true)
+                .updatedAt(Instant.now())
+                .build();
     }
 
-    public static AssistantSettingsService settingsService(AssistantSettings settings) {
-        AssistantSettingsRepository repository = Mockito.mock(AssistantSettingsRepository.class);
-        Mockito.when(repository.findById(1)).thenReturn(Optional.of(settings));
+    public static AiSettingsService settingsService(AiSettings settings) {
+        return settingsService(settings, List.of());
+    }
+
+    public static AiSettingsService settingsService(AiSettings settings, List<AiSetting> conversationRows) {
+        AiSettingRepository repository = Mockito.mock(AiSettingRepository.class);
+        ImAccountRepository connections = Mockito.mock(ImAccountRepository.class);
+        Mockito.when(repository.findByPlatformIsNullAndAccountIdIsNullAndConversationIdIsNull())
+                .thenReturn(globalRows(settings));
+        Mockito.when(repository.findByConversationId(Mockito.anyLong())).thenAnswer(inv ->
+                conversationRows.stream()
+                        .filter(row -> inv.getArgument(0).equals(row.getConversationId())).toList());
+        Mockito.when(repository.findByConversationIdIn(Mockito.anyCollection())).thenAnswer(inv ->
+                conversationRows.stream()
+                        .filter(row -> ((Collection<?>) inv.getArgument(0)).contains(row.getConversationId()))
+                        .toList());
+        Mockito.when(repository.findByPlatformAndAccountIdIsNullAndConversationIdIsNull(Mockito.any()))
+                .thenReturn(List.of());
+        Mockito.when(repository.findByAccountIdAndConversationIdIsNull(Mockito.anyLong()))
+                .thenReturn(List.of());
         Mockito.when(repository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
-        return new AssistantSettingsService(repository);
+        Mockito.when(repository.saveAll(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
+        Mockito.when(connections.findById(Mockito.any(Long.class))).thenAnswer(inv ->
+                Optional.of(account(inv.getArgument(0, Long.class), "wechat")));
+        return new AiSettingsService(repository, connections);
+    }
+
+    private static List<AiSetting> globalRows(AiSettings settings) {
+        List<AiSetting> rows = new ArrayList<>();
+        rows.add(AiSetting.globalText("system_prompt", settings.getSystemPrompt()));
+        rows.add(AiSetting.globalInt("history_limit", settings.getHistoryLimit()));
+        rows.add(AiSetting.globalBool("require_group_mention", settings.isRequireGroupMention()));
+        rows.add(AiSetting.globalBool("quiet_hours_enabled", settings.isQuietHoursEnabled()));
+        rows.add(AiSetting.globalText("quiet_hours_start", settings.getQuietHoursStart()));
+        rows.add(AiSetting.globalText("quiet_hours_end", settings.getQuietHoursEnd()));
+        rows.add(AiSetting.globalText("timezone", settings.getTimezone()));
+        rows.add(AiSetting.globalBool("enabled", settings.isEnabled()));
+        textRow(rows, "web_search.base_url", settings.getWebSearchBaseUrl());
+        textRow(rows, "web_search.api_key", settings.getWebSearchApiKey());
+        textRow(rows, "image.base_url", settings.getImageBaseUrl());
+        textRow(rows, "image.api_key", settings.getImageApiKey());
+        textRow(rows, "image.model", settings.getImageModel());
+        textRow(rows, "video.base_url", settings.getVideoBaseUrl());
+        textRow(rows, "video.api_key", settings.getVideoApiKey());
+        textRow(rows, "video.model", settings.getVideoModel());
+        return rows;
+    }
+
+    /** Tool endpoint keys have no code default: an unset value stays an absent row. */
+    private static void textRow(List<AiSetting> rows, String key, String value) {
+        if (value != null) {
+            rows.add(AiSetting.globalText(key, value));
+        }
     }
 
     public static String json(List<String> list) {

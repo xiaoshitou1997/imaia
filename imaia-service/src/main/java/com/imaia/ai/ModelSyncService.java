@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.util.StringUtils;
 import java.util.Set;
@@ -53,12 +54,21 @@ public class ModelSyncService extends AbstractAiHttpClient {
 
     public SyncResult sync(AiProvider provider) {
         JsonNode listing = fetchGatewayModels(provider);
-        Map<String, JsonNode> devModels = modelsDevIndex(provider.getModelsDevId());
+        Map<String, JsonNode> devModels;
+        try {
+            devModels = modelsDevIndex(provider.getModelsDevId());
+        } catch (RuntimeException failure) {
+            // The gateway listing is the source of truth for the catalog; models.dev is
+            // only enrichment. An unavailable/stale enrichment feed must not block sync.
+            log.warn("models.dev enrichment unavailable for provider {}: {}",
+                    provider.getName(), failure.getMessage());
+            devModels = Map.of();
+        }
 
         List<AiModel> existing = aiModels.findByProviderId(provider.getId());
         Map<String, AiModel> byModelId = new LinkedHashMap<>();
         for (AiModel model : existing) {
-            byModelId.put(model.getModelId(), model);
+            byModelId.put(model.getModelKey(), model);
         }
 
         int added = 0;
@@ -72,12 +82,28 @@ public class ModelSyncService extends AbstractAiHttpClient {
             seen.add(modelId);
             AiModel model = byModelId.get(modelId);
             if (model == null) {
-                model = new AiModel(provider.getId(), modelId);
+                Instant now = Instant.now();
+                model = AiModel.builder()
+                        .providerId(provider.getId())
+                        .modelKey(modelId)
+                        .modalitiesIn("[]")
+                        .modalitiesOut("[]")
+                        .supportsToolCalls(true)
+                        .params("{}")
+                        .available(true)
+                        .enabled(true)
+                        .source(ModelSource.SYNC)
+                        .createdAt(now)
+                        .updatedAt(now)
+                        .build();
                 added++;
             } else {
                 updated++;
             }
             JsonNode dev = devModels.get(modelId);
+            if (dev == null) {
+                dev = devModels.get(modelId.toLowerCase(Locale.ROOT));
+            }
             if (dev != null && model.getSource() != ModelSource.MANUAL) {
                 applyDevMetadata(model, dev);
             }
@@ -92,7 +118,7 @@ public class ModelSyncService extends AbstractAiHttpClient {
 
         int retired = 0;
         for (AiModel model : existing) {
-            if (!seen.contains(model.getModelId()) && model.isAvailable()) {
+            if (!seen.contains(model.getModelKey()) && model.isAvailable()) {
                 model.setAvailable(false);
                 aiModels.save(model);
                 retired++;
@@ -117,16 +143,28 @@ public class ModelSyncService extends AbstractAiHttpClient {
         JsonNode root = modelsDev();
         Map<String, JsonNode> index = new HashMap<>();
         if (StringUtils.hasText(providerKey)) {
-            for (var field : root.path(providerKey).path("models").properties()) {
-                index.put(field.getKey(), field.getValue());
+            for (String key : providerKeys(providerKey)) {
+                for (var field : root.path(key).path("models").properties()) {
+                    index.putIfAbsent(field.getKey(), field.getValue());
+                }
             }
         }
         for (var providerEntry : root.properties()) {
             for (var modelEntry : providerEntry.getValue().path("models").properties()) {
                 index.putIfAbsent(modelEntry.getKey(), modelEntry.getValue());
+                index.putIfAbsent(modelEntry.getKey().toLowerCase(Locale.ROOT), modelEntry.getValue());
             }
         }
         return index;
+    }
+
+    /** The models.dev catalog uses different provider ids than some gateways (e.g. zhipu → zhipuai). */
+    private static List<String> providerKeys(String providerKey) {
+        String key = providerKey.toLowerCase(Locale.ROOT);
+        if ("zhipu".equals(key)) {
+            return List.of("zhipuai", "zhipu");
+        }
+        return List.of(providerKey);
     }
 
     /** The models.dev catalog, cached for ten minutes (it is a 6 MB document). */
@@ -165,9 +203,9 @@ public class ModelSyncService extends AbstractAiHttpClient {
         if (modalities.path("output").isArray()) {
             model.setModalitiesOut(modalities.path("output").toString());
         }
-        model.setVision(dev.path("attachment").asBoolean(false));
-        model.setReasoning(dev.path("reasoning").asBoolean(false));
-        model.setToolCall(dev.path("tool_call").asBoolean(true));
+        model.setSupportsVision(dev.path("attachment").asBoolean(false));
+        model.setSupportsReasoning(dev.path("reasoning").asBoolean(false));
+        model.setSupportsToolCalls(dev.path("tool_call").asBoolean(true));
         model.setLimitContext(intOrNull(dev.path("limit").path("context")));
         model.setLimitOutput(intOrNull(dev.path("limit").path("output")));
         model.setCostInput(costOrNull(dev.path("cost").path("input")));

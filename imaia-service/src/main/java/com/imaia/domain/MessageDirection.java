@@ -9,7 +9,8 @@ import java.util.Locale;
 
 /** Message direction in the archive: incoming (peer) or outgoing (owner). */
 public enum MessageDirection {
-    INCOMING, OUTGOING;
+    INCOMING,
+    OUTGOING;
 
     /** The stored/API representation (lowercase). */
     @JsonValue
@@ -26,7 +27,7 @@ public enum MessageDirection {
     @JsonCreator
     public static MessageDirection fromValue(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("MessageDirection 值不能为空。");
+            throw new IllegalArgumentException("MessageDirection 不能为空。");
         }
         try {
             return MessageDirection.valueOf(value.strip().toUpperCase(Locale.ROOT));
@@ -35,7 +36,7 @@ public enum MessageDirection {
         }
     }
 
-    /** JPA converter: enum ↔ lowercase VARCHAR. */
+    /** JPA converter: enum -> lowercase VARCHAR. */
     @jakarta.persistence.Converter
     public static class Converter implements AttributeConverter<MessageDirection, String> {
 

@@ -1,16 +1,16 @@
 package com.imaia.ai;
 
-import com.imaia.domain.TaskKind;
+import com.imaia.domain.ImTask;
 import com.imaia.domain.TaskCreator;
-import com.imaia.domain.ScheduledTask;
-import com.imaia.repository.ScheduledTaskRepository;
+import com.imaia.domain.TaskStatus;
+import com.imaia.repository.ImTaskRepository;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.time.LocalDateTime;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -28,9 +28,9 @@ class ScheduleReminderTool implements ToolCallback {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final long conversationId;
-    private final ScheduledTaskRepository tasks;
+    private final ImTaskRepository tasks;
 
-    ScheduleReminderTool(long conversationId, ScheduledTaskRepository tasks) {
+    ScheduleReminderTool(long conversationId, ImTaskRepository tasks) {
         this.conversationId = conversationId;
         this.tasks = tasks;
     }
@@ -61,9 +61,21 @@ class ScheduleReminderTool implements ToolCallback {
         } catch (DateTimeParseException failure) {
             return "schedule_reminder 失败：时间格式应为 yyyy-MM-dd HH:mm。";
         }
-        Instant fireAt = remindAt.atZone(ZoneId.systemDefault()).toInstant();
-        tasks.save(new ScheduledTask(conversationId, TaskKind.REMINDER, content, null,
-                fireAt, null, TaskCreator.AI, Instant.now()));
+        ZoneId zone = ZoneId.systemDefault();
+        Instant fireAt = remindAt.atZone(zone).toInstant();
+        Instant now = Instant.now();
+        tasks.save(ImTask.builder()
+                .conversationId(conversationId)
+                .content(content)
+                .payload("{}")
+                .runAt(fireAt)
+                .timezone(zone.getId())
+                .nextRunAt(fireAt)
+                .status(TaskStatus.ACTIVE)
+                .createdBy(TaskCreator.AI)
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
         return "提醒已设好：" + time + " 「" + content + "」。";
     }
 }

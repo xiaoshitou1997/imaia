@@ -7,9 +7,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 import java.util.Locale;
 
-/** Who really sent the message: the human owner or the assistant itself. */
+/** Who really sent the message: the human owner, the assistant, or the platform. */
 public enum MessageOrigin {
-    HUMAN, AI;
+    HUMAN,
+    AI,
+    SYSTEM;
 
     /** The stored/API representation (lowercase). */
     @JsonValue
@@ -26,7 +28,7 @@ public enum MessageOrigin {
     @JsonCreator
     public static MessageOrigin fromValue(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("MessageOrigin 值不能为空。");
+            throw new IllegalArgumentException("MessageOrigin 不能为空。");
         }
         try {
             return MessageOrigin.valueOf(value.strip().toUpperCase(Locale.ROOT));
@@ -35,7 +37,7 @@ public enum MessageOrigin {
         }
     }
 
-    /** JPA converter: enum ↔ lowercase VARCHAR. */
+    /** JPA converter: enum -> lowercase VARCHAR. */
     @jakarta.persistence.Converter
     public static class Converter implements AttributeConverter<MessageOrigin, String> {
 

@@ -1,5 +1,7 @@
 package com.imaia.adapter.feishu;
 
+import com.imaia.domain.Platform;
+
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;
 import com.imaia.adapter.PlatformSource;
@@ -39,13 +41,16 @@ public class FeishuPlatformSource implements PlatformSource {
 
     private final FeishuConnection connection;
 
+    /** The receive WS client started by the current subscription; closed on stop(). */
+    private volatile Client active;
+
     public FeishuPlatformSource(FeishuConnection connection) {
         this.connection = connection;
     }
 
     @Override
-    public String platform() {
-        return FeishuAdapter.PLATFORM;
+    public Platform platform() {
+        return Platform.FEISHU;
     }
 
     @Override
@@ -60,10 +65,10 @@ public class FeishuPlatformSource implements PlatformSource {
             throw new IllegalStateException("""
                     feishu 接入缺少应用凭据。在飞书开放平台建好自建应用（机器人能力 + 事件订阅 im.message.receive_v1，
                     权限 im:message.p2p_msg:readonly / im:message.group_at_msg / im:message:send_as_bot / im:resource）后写库：
-                    UPDATE platform_account SET enabled = true,
+                    UPDATE im_account SET enabled = true,
                            config = jsonb_set(config, '{appId}', '"cli_xxx"'::jsonb) ||
                                     jsonb_set(config, '{appSecret}', '"<secret>"'::jsonb)
-                    WHERE platform = 'feishu';""");
+                    WHERE platform_code = 'feishu';""");
         }
     }
 
@@ -88,6 +93,7 @@ public class FeishuPlatformSource implements PlatformSource {
                     .autoReconnect(Boolean.TRUE)
                     .domain(config.domain())
                     .build();
+            active = wsClient;
             wsClient.start();
             log.info("Feishu WS long connection started for app {}.", config.appId());
         })
@@ -101,6 +107,28 @@ public class FeishuPlatformSource implements PlatformSource {
         // gate dedupes replays, so recording nothing here is correct.
     }
 
+    @Override
+    public void reload() {
+        connection.reload();
+    }
+
+    /** The SDK keeps the socket public-close-proof; disconnect is reached reflectively. */
+    @Override
+    public void stop() {
+        Client current = active;
+        active = null;
+        if (current == null) {
+            return;
+        }
+        try {
+            java.lang.reflect.Method disconnect = Client.class.getDeclaredMethod("disconnect");
+            disconnect.setAccessible(true);
+            disconnect.invoke(current);
+            log.info("Feishu WS long connection closed.");
+        } catch (ReflectiveOperationException failure) {
+            log.warn("Could not close the Feishu WS client: {}", failure.getMessage());
+        }
+    }
     @Override
     public void onReset(Consumer<String> hook) {
         // No resume position exists: the SDK reconnects from the live tail and the

@@ -10,6 +10,7 @@ public interface AiProviderRepository extends JpaRepository<AiProvider, Long> {
 
     List<AiProvider> findByEnabledTrue();
 
+
     Optional<AiProvider> findByName(String name);
 
     List<AiProvider> findAllByOrderByIdAsc();

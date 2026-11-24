@@ -1,52 +1,54 @@
 package com.imaia.ai;
 
-import com.imaia.repository.AiProviderRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
-import org.springframework.util.StringUtils;
 import java.time.Duration;
 
+import com.imaia.ai.AiSettingsService;
+
 /**
- * Web search over the Tavily API. The API key lives in the model directory as the
- * provider named {@code tavily} (its base_url is unused by this client); without a
- * configured key the capability reports unavailable and the tool is not offered to
- * the model.
+ * Web search over the Tavily API. Base URL and API key live in the
+ * {@code ai_setting} KV store (web_search.base_url / web_search.api_key);
+ * without both the capability reports unavailable and the tool is not offered
+ * to the model.
  */
 @Component
 public class WebSearchClient extends AbstractAiHttpClient {
-
-    public static final String PROVIDER_NAME = "tavily";
 
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
     private static final int MAX_RESULTS = 5;
     private static final int RESULT_SNIPPET_CHARS = 300;
     private static final int OUTPUT_LIMIT_CHARS = 3_000;
+    private static final String DEFAULT_BASE_URL = "https://api.tavily.com";
 
-    private final AiProviderRepository providers;
+    private final AiSettingsService settings;
 
-    public WebSearchClient(AiProviderRepository providers) {
-        this.providers = providers;
+    public WebSearchClient(AiSettingsService settings) {
+        this.settings = settings;
     }
 
-    /** Whether a tavily provider with a key is configured and enabled. */
+    /** Whether the search endpoint and key are both configured. */
     public boolean available() {
-        return providers.findByName(PROVIDER_NAME)
-                .map(provider -> provider.isEnabled() && StringUtils.hasText(provider.getApiKey()))
-                .orElse(false);
+        var current = settings.current();
+        return StringUtils.hasText(current.getWebSearchBaseUrl())
+                && StringUtils.hasText(current.getWebSearchApiKey());
     }
 
     /** Searches the web for the query; returns a compact digest for the model. */
     public String search(String query) {
-        String apiKey = providers.findByName(PROVIDER_NAME).orElseThrow().getApiKey();
+        var current = settings.current();
+        String baseUrl = current.getWebSearchBaseUrl();
+        String apiKey = current.getWebSearchApiKey();
         ObjectNode body = mapper.createObjectNode();
         body.put("query", query);
         body.put("max_results", MAX_RESULTS);
         body.put("include_answer", true);
-        HttpRequest request = baseRequest(URI.create("https://api.tavily.com/search"), apiKey, TIMEOUT)
+        HttpRequest request = baseRequest(URI.create(baseUrl + "/search"), apiKey, TIMEOUT)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(body)))
                 .build();
@@ -65,7 +67,7 @@ public class WebSearchClient extends AbstractAiHttpClient {
                     ? "(无标题)" : result.path("title").asString())
                     .append("：").append(content)
                     .append(result.path("url").asString("").isBlank() ? "" : "（" + result.path("url").asString() + "）")
-                    .append('\n');
+                    .append("\n");
             if (out.length() > OUTPUT_LIMIT_CHARS) {
                 break;
             }

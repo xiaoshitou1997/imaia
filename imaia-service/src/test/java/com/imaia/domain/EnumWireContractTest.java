@@ -16,23 +16,23 @@ class EnumWireContractTest {
 
     @Test
     void serializesToLowercaseValue() {
-        assertEquals("\"reminder\"", MAPPER.writeValueAsString(TaskKind.REMINDER));
         assertEquals("\"incoming\"", MAPPER.writeValueAsString(MessageDirection.INCOMING));
-        assertEquals("\"delivered\"", MAPPER.writeValueAsString(ArtifactStatus.DELIVERED));
         assertEquals("\"sync\"", MAPPER.writeValueAsString(ModelSource.SYNC));
+        assertEquals("\"wechat\"", MAPPER.writeValueAsString(Platform.WECHAT));
     }
 
     @Test
     void deserializesFromLowercaseValue() {
-        assertEquals(TaskStatus.PENDING, MAPPER.readValue("\"pending\"", TaskStatus.class));
-        assertEquals(ChatRole.ASSISTANT, MAPPER.readValue("\"assistant\"", ChatRole.class));
+        assertEquals(TaskStatus.ACTIVE, MAPPER.readValue("\"active\"", TaskStatus.class));
         assertEquals(ReportPeriod.MONTH, MAPPER.readValue("\"month\"", ReportPeriod.class));
+        assertEquals(DeliveryStatus.SENT, MAPPER.readValue("\"sent\"", DeliveryStatus.class));
+        assertEquals(ModelSlot.VISION, MAPPER.readValue("\"vision\"", ModelSlot.class));
+        assertEquals(Platform.FEISHU, MAPPER.readValue("\"feishu\"", Platform.class));
     }
 
     @Test
     void rejectsUnknownValue() {
         assertThrows(tools.jackson.databind.exc.ValueInstantiationException.class,
                 () -> MAPPER.readValue("\"weekly\"", ReportPeriod.class));
-        assertThrows(IllegalArgumentException.class, () -> TaskKind.fromValue("once"));
     }
 }

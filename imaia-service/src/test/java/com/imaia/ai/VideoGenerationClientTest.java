@@ -1,6 +1,7 @@
 package com.imaia.ai;
 
 import com.imaia.TestProperties;
+import com.imaia.domain.AiSettings;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -47,7 +48,11 @@ class VideoGenerationClientTest {
             }
         });
         server.start();
-        client = new VideoGenerationClient(TestProperties.catalog(server.url("/").toString()));
+        AiSettings settings = TestProperties.settings("p", 20, false, false, "00:00", "07:00");
+        settings.setVideoBaseUrl(server.url("/").toString());
+        settings.setVideoApiKey("key");
+        settings.setVideoModel("vid-m");
+        client = new VideoGenerationClient(TestProperties.settingsService(settings));
     }
 
     @AfterEach

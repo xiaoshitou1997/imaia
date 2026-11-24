@@ -1,6 +1,6 @@
 package com.imaia.adapter.feishu;
 
-import com.imaia.domain.MessageCategory;
+import com.imaia.domain.MessageKind;
 import tools.jackson.databind.JsonNode;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.json.JsonMapper;
@@ -18,16 +18,16 @@ public final class FeishuMessages {
     }
 
     /** The feishu msg_type → normalized category the core logic switches on. */
-    public static MessageCategory categoryOf(String msgType) {
+    public static MessageKind categoryOf(String msgType) {
         return switch (msgType == null ? "" : msgType) {
-            case "text" -> MessageCategory.TEXT;
-            case "image" -> MessageCategory.IMAGE;
-            case "audio" -> MessageCategory.VOICE;
-            case "media" -> MessageCategory.VIDEO;
-            case "sticker" -> MessageCategory.STICKER;
-            case "file" -> MessageCategory.FILE;
-            case "post", "interactive", "share_chat", "share_user" -> MessageCategory.RICH;
-            default -> MessageCategory.OTHER;
+            case "text" -> MessageKind.TEXT;
+            case "image" -> MessageKind.IMAGE;
+            case "audio" -> MessageKind.VOICE;
+            case "media" -> MessageKind.VIDEO;
+            case "sticker" -> MessageKind.STICKER;
+            case "file" -> MessageKind.FILE;
+            case "post", "interactive", "share_chat", "share_user" -> MessageKind.RICH;
+            default -> MessageKind.OTHER;
         };
     }
 
@@ -46,7 +46,7 @@ public final class FeishuMessages {
     }
 
     /** The media key of one category inside the content JSON, or null when absent. */
-    public static String mediaKey(String msgType, String contentJson, MessageCategory category) {
+    public static String mediaKey(String msgType, String contentJson, MessageKind category) {
         JsonNode content = parse(contentJson);
         if (content == null) {
             return null;

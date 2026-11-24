@@ -1,5 +1,7 @@
 package com.imaia.stream;
 
+import com.imaia.domain.Platform;
+
 import com.imaia.adapter.ImEventHandler;
 import com.imaia.adapter.PlatformSource;
 import com.imaia.config.DispatchProperties;
@@ -10,13 +12,16 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Application lifecycle for every platform stream: validates each source, wires its
  * dispatcher and subscribes the normalized events on startup; disposes everything on
- * shutdown. Each source runs the dispatch inside its own reconnect region and off-loads
+ * shutdown. {@link #refreshPlatform(Platform)} applies runtime account edits — it stops,
+ * reloads and re-evaluates one platform's stream so config changes take effect without
+ * a restart. Each source runs the dispatch inside its own reconnect region and off-loads
  * it to a bounded scheduler, because handlers may block. A permanent stream failure is
  * logged and, when the source's exit-on-failure is enabled, ends the process so a
  * supervisor (systemd, container, IDE restart) decides what's next.
@@ -29,7 +34,7 @@ public class StreamOrchestrator implements SmartLifecycle {
     private final List<PlatformSource> sources;
     private final List<ImEventHandler> handlers;
     private final DispatchProperties properties;
-    private final List<Disposable> subscriptions = new ArrayList<>();
+    private final Map<Platform, Disposable> streams = new HashMap<>();
     private volatile boolean running;
 
     public StreamOrchestrator(List<PlatformSource> sources, List<ImEventHandler> handlers,
@@ -40,19 +45,55 @@ public class StreamOrchestrator implements SmartLifecycle {
     }
 
     @Override
-    public void start() {
+    public synchronized void start() {
         for (PlatformSource source : sources) {
             if (!source.enabled()) {
                 log.info("The {} platform has no enabled connection config; stream skipped.", source.platform());
                 continue;
             }
-            source.validate();
-            EventDispatcher dispatcher = new EventDispatcher(source, handlers, properties);
-            source.onReset(dispatcher::onStreamReset);
-            log.info("Starting the {} event stream.", source.platform());
-            subscriptions.add(subscribe(dispatcher, source));
+            startOne(source);
         }
         running = true;
+    }
+
+    /**
+     * Applies one platform's account change: stops its stream (including the live
+     * transport), reloads cached connection state, then restarts when an enabled
+     * row exists — or leaves it retired when not.
+     */
+    public synchronized void refreshPlatform(Platform platform) {
+        if (!running) {
+            return;
+        }
+        PlatformSource source = sources.stream()
+                .filter(s -> s.platform().equals(platform)).findFirst().orElse(null);
+        if (source == null) {
+            return;
+        }
+        stopOne(platform);
+        source.reload();
+        if (source.enabled()) {
+            startOne(source);
+        } else {
+            log.info("The {} platform has no enabled connection config; stream stopped.", platform);
+        }
+    }
+
+    private void startOne(PlatformSource source) {
+        source.validate();
+        EventDispatcher dispatcher = new EventDispatcher(source, handlers, properties);
+        source.onReset(dispatcher::onStreamReset);
+        log.info("Starting the {} event stream.", source.platform());
+        streams.put(source.platform(), subscribe(dispatcher, source));
+    }
+
+    private void stopOne(Platform platform) {
+        Disposable subscription = streams.remove(platform);
+        if (subscription != null) {
+            subscription.dispose();
+        }
+        sources.stream().filter(s -> s.platform().equals(platform)).findFirst()
+                .ifPresent(PlatformSource::stop);
     }
 
     private Disposable subscribe(EventDispatcher dispatcher, PlatformSource source) {
@@ -70,12 +111,11 @@ public class StreamOrchestrator implements SmartLifecycle {
     }
 
     @Override
-    public void stop() {
+    public synchronized void stop() {
         running = false;
-        for (Disposable subscription : subscriptions) {
-            subscription.dispose();
+        for (Platform platform : List.copyOf(streams.keySet())) {
+            stopOne(platform);
         }
-        subscriptions.clear();
     }
 
     @Override

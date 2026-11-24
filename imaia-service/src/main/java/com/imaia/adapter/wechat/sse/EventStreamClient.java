@@ -42,6 +42,9 @@ public class EventStreamClient {
                 })
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .retrieve()
+                .onStatus(status -> status.value() == 410,
+                        response -> reactor.core.publisher.Mono.error(new CursorExpiredException(
+                                "The daemon rejected the resume cursor (HTTP 410); rebuilding from the live tail.")))
                 .bodyToFlux(SSE_FRAMES)
                 .filter(frame -> StringUtils.hasText(frame.data()))
                 .map(decoder::decode);

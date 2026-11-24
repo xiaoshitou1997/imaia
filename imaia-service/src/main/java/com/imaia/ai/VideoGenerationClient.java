@@ -1,22 +1,24 @@
 package com.imaia.ai;
 
-import com.imaia.config.AiModelCatalog;
+import com.imaia.ai.AiSettingsService;
+import com.imaia.domain.AiSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
-import org.springframework.util.StringUtils;
 import java.time.Duration;
 
 /**
  * Video generation over the Agnes task API: create a task (POST /videos), poll
  * its status (GET /agnesapi?video_id=…&model_name=…) until completed, then download
- * the finished MP4 from the task's url field. The model comes from the catalog's
- * video-generation slot; seconds and aspect ratio travel in its params.
+ * the finished MP4 from the task's url field. Endpoint, key and model live in the
+ * {@code ai_setting} KV store (video.base_url / video.api_key / video.model) as a
+ * standalone tool config; seconds and aspect ratio keep code defaults (5s, 16:9, 720P).
  */
 @Component
 public class VideoGenerationClient extends AbstractAiHttpClient {
@@ -26,18 +28,30 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
     private static final long POLL_INTERVAL_MILLIS = 3_000;
     private static final Duration POLL_BUDGET = Duration.ofSeconds(600);
 
-    private final AiModelCatalog catalog;
+    private final AiSettingsService settings;
 
-    public VideoGenerationClient(AiModelCatalog catalog) {
-        this.catalog = catalog;
+    public VideoGenerationClient(AiSettingsService settings) {
+        this.settings = settings;
+    }
+
+    /** Whether endpoint, key and model are all configured. */
+    public boolean available() {
+        var current = settings.current();
+        return StringUtils.hasText(current.getVideoBaseUrl())
+                && StringUtils.hasText(current.getVideoApiKey())
+                && StringUtils.hasText(current.getVideoModel());
     }
 
     /** Generates one video for the prompt and returns the MP4 bytes. */
     public byte[] generate(String prompt) {
-        AiModelCatalog.Resolved video = catalog.videoGeneration();
+        var current = settings.current();
+        if (!StringUtils.hasText(current.getVideoBaseUrl())
+                || !StringUtils.hasText(current.getVideoModel())) {
+            throw new IllegalStateException("video 工具未配置：请在设置页填写 video.base_url / video.api_key / video.model。");
+        }
         long deadline = System.currentTimeMillis() + POLL_BUDGET.toMillis();
-        String taskId = createTask(video, prompt);
-        JsonNode finished = pollUntilDone(video, taskId, deadline);
+        String taskId = createTask(current, prompt);
+        JsonNode finished = pollUntilDone(current, taskId, deadline);
         JsonNode url = finished.get("url");
         if (url == null || !url.isString() || url.asString().isBlank()) {
             throw new IllegalStateException("Video task " + taskId + " completed without a download url.");
@@ -46,17 +60,17 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
         return sendBytes(baseRequest(URI.create(url.asString()), "", Duration.ofSeconds(120)).GET().build());
     }
 
-    private String createTask(AiModelCatalog.Resolved video, String prompt) {
+    private String createTask(AiSettings config, String prompt) {
         ObjectNode body = mapper.createObjectNode();
-        body.put("model", video.id());
+        body.put("model", config.getVideoModel());
         body.put("prompt", prompt);
         body.put("mode", "text");
-        body.put("seconds", orDefault(video.param("seconds"), "5"));
+        body.put("seconds", "5");
         body.put("size", "720P");
-        body.put("aspect_ratio", orDefault(video.param("aspect-ratio"), "16:9"));
+        body.put("aspect_ratio", "16:9");
         HttpRequest request = baseRequest(
-                URI.create(video.baseUrl() + "/videos"),
-                video.apiKey(), Duration.ofSeconds(60))
+                URI.create(base(config.getVideoBaseUrl()) + "/videos"),
+                config.getVideoApiKey(), Duration.ofSeconds(60))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(body)))
                 .build();
@@ -68,9 +82,9 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
         return id.asString();
     }
 
-    private JsonNode pollUntilDone(AiModelCatalog.Resolved video, String taskId, long deadline) {
-        String pollUrl = video.baseUrl().replaceAll("/v1$", "")
-                + "/agnesapi?video_id=" + taskId + "&model_name=" + video.id();
+    private JsonNode pollUntilDone(AiSettings config, String taskId, long deadline) {
+        String pollUrl = base(config.getVideoBaseUrl()).replaceAll("/v1$", "")
+                + "/agnesapi?video_id=" + taskId + "&model_name=" + config.getVideoModel();
         while (System.currentTimeMillis() < deadline) {
             try {
                 Thread.sleep(POLL_INTERVAL_MILLIS);
@@ -79,7 +93,7 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
                 throw new IllegalStateException("Video poll interrupted.", interrupted);
             }
             HttpRequest request = baseRequest(
-                    URI.create(pollUrl), video.apiKey(), Duration.ofSeconds(30))
+                    URI.create(pollUrl), config.getVideoApiKey(), Duration.ofSeconds(30))
                     .GET()
                     .build();
             JsonNode state = sendJson(request);
@@ -97,7 +111,8 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
         throw new IllegalStateException("Video task " + taskId + " did not finish within the wait budget.");
     }
 
-    private static String orDefault(String value, String fallback) {
-        return !StringUtils.hasText(value) ? fallback : value;
+    /** Trims a trailing slash so base URLs paste in with or without one. */
+    private static String base(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 }

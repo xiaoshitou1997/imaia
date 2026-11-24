@@ -2,11 +2,11 @@ package com.imaia.config;
 
 import com.imaia.domain.AiModel;
 import com.imaia.domain.AiProvider;
+import com.imaia.domain.ModelSlot;
 import com.imaia.repository.AiModelRepository;
 import com.imaia.repository.AiProviderRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -14,25 +14,22 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.util.StringUtils;
-import java.util.stream.Collectors;
 
 /**
- * The AI model directory at runtime, loaded from the ai_provider/ai_model tables
- * into a short-lived snapshot. Capability slots derive from data, not columns:
- * chat = enabled + tool_call + text in/out (vision-capable variants preferred for
- * image turns), image generation = image in modalities_out, video = video out.
- * The WebUI saves directory rows and calls invalidate(), so an edit takes effect
- * on the next turn. Several candidates for one slot fail fast — trim the directory.
+ * Resolves the chat/vision slots from the model directory by derivation: enabled
+ * models only, matched by modalities and tool support, lowest id wins. The
+ * directory is LLMs only — image/video generation are standalone tools configured
+ * in the settings KV, not catalog slots. To change who serves a slot, toggle the
+ * model's enabled flag in the directory.
  */
 @Component
 public class AiModelCatalog {
 
     /** One model resolved from the directory together with its provider connection. */
-    public record Resolved(String providerName, String baseUrl, String apiKey,
-            String id, String name, Integer maxOutputTokens, Map<String, String> params) {
+    public record Resolved(Long providerId, Long aiModelId, String providerName, String baseUrl,
+            String apiKey, String id, String name, Integer maxOutputTokens, Map<String, String> params) {
 
-        public String modelId() {
+        public String modelKey() {
             return id;
         }
 
@@ -42,147 +39,87 @@ public class AiModelCatalog {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(AiModelCatalog.class);
-
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
     private final AiProviderRepository providers;
     private final AiModelRepository models;
-    private volatile List<Entry> cache;
 
     public AiModelCatalog(AiProviderRepository providers, AiModelRepository models) {
         this.providers = providers;
         this.models = models;
     }
 
-    /** Drops the cached snapshot; the next resolution reloads from the tables. */
+    /** Kept for callers that invalidate after directory edits; resolution is uncached. */
     public synchronized void invalidate() {
-        cache = null;
+        // no cache: every resolution reads the model/provider rows
     }
 
-    /** 对话模型：enabled + tool_call + 文本进出；带图轮偏好 vision（见附件/图片输入）。 */
+    /** 对话模型：带图轮优先 vision 推导，无则回退 chat。 */
     public Resolved chatFor(boolean withImage) {
-        List<Entry> chats = chatEntries();
-        if (chats.isEmpty()) {
-            throw new IllegalStateException("No chat model in the directory: enable one with "
-                + "modalities in/out containing text and tool_call on.");
+        Entry entry = withImage ? derive(ModelSlot.VISION) : null;
+        if (entry == null) {
+            entry = derive(ModelSlot.CHAT);
         }
-        if (withImage) {
-            List<Entry> capable = chats.stream().filter(e -> in(e).contains("image")).toList();
-            if (capable.size() == 1) {
-                return resolved(capable.get(0));
-            }
-            if (capable.size() > 1) {
-                throw ambiguous(capable, "vision-capable chat models");
-            }
-            log.warn("No enabled chat model declares image input; sending the image to a plain chat model anyway.");
+        if (entry == null) {
+            throw new IllegalStateException("chat 槽位推导不到可用模型：请到模型目录启用 chat"
+                    + (withImage ? " 或 vision" : "") + " 模型。");
         }
-        if (chats.size() == 1) {
-            return resolved(chats.get(0));
+        if (withImage && !declaresImageInput(entry.model())) {
+            throw new IllegalStateException("chat 槽位模型不支持图片输入："
+                    + entry.model().getModelKey());
         }
-        throw ambiguous(chats, "chat models");
+        return resolved(entry);
     }
 
-    /** Whether at least one enabled chat model exists. */
+    /** Whether a usable chat model is enabled. */
     public boolean hasChat() {
-        return !chatEntries().isEmpty();
+        return derive(ModelSlot.CHAT) != null;
     }
 
-    /** Whether the chat slot can see images (vision). */
+    /** Whether image turns have a vision-capable model (vision rule or vision-capable chat). */
     public boolean hasVisionChat() {
-        return chatEntries().stream().anyMatch(e -> in(e).contains("image"));
-    }
-
-    /** Whether image generation is available (a model with image in modalities_out). */
-    public boolean hasImageGeneration() {
-        return !generationEntries("image").isEmpty();
-    }
-
-    /** Whether video generation is available. */
-    public boolean hasVideoGeneration() {
-        return !generationEntries("video").isEmpty();
-    }
-
-    /** The one enabled model generating images. */
-    public Resolved imageGeneration() {
-        return single(generationEntries("image"), "image-generation models");
-    }
-
-    /** The one enabled model generating videos. */
-    public Resolved videoGeneration() {
-        return single(generationEntries("video"), "video-generation models");
-    }
-
-    private List<Entry> chatEntries() {
-        return entries().stream()
-                .filter(e -> e.model().isEnabled() && e.model().isToolCall()
-                        && out(e).contains("text") && in(e).contains("text"))
-                .toList();
-    }
-
-    private List<Entry> generationEntries(String modality) {
-        return entries().stream()
-                .filter(e -> e.model().isEnabled() && out(e).contains(modality))
-                .toList();
-    }
-
-    private Resolved single(List<Entry> matches, String what) {
-        if (matches.isEmpty()) {
-            throw new IllegalStateException("No enabled model for '" + what
-                    + "' in the directory; sync a provider and enable one.");
+        Entry vision = derive(ModelSlot.VISION);
+        if (vision != null) {
+            return declaresImageInput(vision.model());
         }
-        if (matches.size() > 1) {
-            throw ambiguous(matches, what);
+        Entry chat = derive(ModelSlot.CHAT);
+        return chat != null && declaresImageInput(chat.model());
+    }
+
+    private Entry derive(ModelSlot slot) {
+        List<AiModel> enabled = new ArrayList<>(models.findByEnabledTrue());
+        enabled.sort((a, b) -> Long.compare(a.getId(), b.getId()));
+        for (AiModel model : enabled) {
+            if (!matches(model, slot)) {
+                continue;
+            }
+            AiProvider provider = providers.findById(model.getProviderId()).orElse(null);
+            if (provider == null || !provider.isEnabled()) {
+                continue;
+            }
+            return new Entry(provider.getName(), provider, model);
         }
-        return resolved(matches.get(0));
+        return null;
     }
 
-    private IllegalStateException ambiguous(List<Entry> matches, String what) {
-        String found = matches.stream()
-                .map(e -> e.providerName() + "/" + e.model().getModelId())
-                .collect(Collectors.joining(", "));
-        return new IllegalStateException("Expected exactly one " + what + ", found "
-                + matches.size() + ": " + found + ". Trim the directory.");
+    private static boolean matches(AiModel model, ModelSlot slot) {
+        List<String> in = parseList(model.getModalitiesIn());
+        return switch (slot) {
+            case CHAT -> in.contains("text") && model.isSupportsToolCalls();
+            case VISION -> in.contains("image");
+        };
     }
 
-    private static List<String> in(Entry e) {
-        return parseList(e.model().getModalitiesIn());
-    }
-
-    private static List<String> out(Entry e) {
-        return parseList(e.model().getModalitiesOut());
+    private static boolean declaresImageInput(AiModel model) {
+        return parseList(model.getModalitiesIn()).contains("image");
     }
 
     private Resolved resolved(Entry entry) {
         AiModel model = entry.model();
-        return new Resolved(entry.providerName(),
+        return new Resolved(entry.provider().getId(), model.getId(), entry.providerName(),
                 normalize(entry.provider().getBaseUrl()), entry.provider().getApiKey(),
-                model.getModelId(), model.getName(), model.getLimitOutput(),
+                model.getModelKey(), model.getName(), model.getLimitOutput(),
                 parseMap(model.getParams()));
-    }
-
-    private List<Entry> entries() {
-        List<Entry> snapshot = cache;
-        if (snapshot == null) {
-            snapshot = load();
-            cache = snapshot;
-        }
-        return snapshot;
-    }
-
-    private List<Entry> load() {
-        Map<Long, AiProvider> providerById = new LinkedHashMap<>();
-        for (AiProvider provider : providers.findByEnabledTrue()) {
-            providerById.put(provider.getId(), provider);
-        }
-        List<Entry> entries = new ArrayList<>();
-        for (AiModel model : models.findByEnabledTrue()) {
-            AiProvider provider = providerById.get(model.getProviderId());
-            if (provider != null) {
-                entries.add(new Entry(provider.getName(), provider, model));
-            }
-        }
-        return List.copyOf(entries);
     }
 
     private static String normalize(String baseUrl) {

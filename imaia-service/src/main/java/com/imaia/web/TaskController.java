@@ -1,70 +1,95 @@
 package com.imaia.web;
 
+import com.imaia.ai.AiSettingsService;
 import com.imaia.domain.ImConversation;
-import com.imaia.domain.ScheduledTask;
+import com.imaia.domain.ImTask;
+import com.imaia.domain.ImTaskLog;
 import com.imaia.domain.TaskCreator;
-import com.imaia.domain.TaskKind;
 import com.imaia.domain.TaskStatus;
 import com.imaia.repository.ImConversationRepository;
-import com.imaia.repository.ScheduledTaskRepository;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import com.imaia.repository.ImTaskLogRepository;
+import com.imaia.repository.ImTaskRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.scheduling.support.CronExpression;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.List;
-import org.springframework.util.StringUtils;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
-/** 定时任务：三类（reminder/cron/report）的新建、取消、手动触发。 */
+/** 定时任务：run_at 一次性 / cron_expr 周期二选一；prompt 有则 AI 措辞，无则直发 content。 */
 @RestController
 @RequestMapping("/api/tasks")
 public class TaskController {
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final DateTimeFormatter FIRE_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    private final ScheduledTaskRepository tasks;
+    private final ImTaskRepository tasks;
+    private final ImTaskLogRepository runs;
     private final ImConversationRepository conversations;
     private final ConversationLabels labels;
+    private final AiSettingsService settings;
 
-    public TaskController(ScheduledTaskRepository tasks, ImConversationRepository conversations,
-            ConversationLabels labels) {
+    public TaskController(ImTaskRepository tasks, ImTaskLogRepository runs,
+            ImConversationRepository conversations, ConversationLabels labels,
+            AiSettingsService settings) {
         this.tasks = tasks;
+        this.runs = runs;
         this.conversations = conversations;
         this.labels = labels;
+        this.settings = settings;
     }
 
-    public record TaskRow(Long id, Long conversationId, String conversationLabel, TaskKind kind, String content,
-            String prompt, Instant fireAt, String cron, Instant nextFireAt, TaskStatus status, TaskCreator createdBy,
-            Instant lastFiredAt, String lastError, Instant createdAt) {
+    public record TaskRow(Long id, Long conversationId, String conversationLabel,
+            String content, String prompt, String runAt, String cronExpr,
+            String timezone, Instant nextRunAt, String status, String createdBy,
+            Instant lastRunAt, Instant createdAt) {
     }
 
-    public record TaskCreate(Long conversationId, TaskKind kind, String content, String prompt, String fireAt,
-            String cron, tools.jackson.databind.JsonNode params) {
+    public record TaskCreate(Long conversationId, String content, String prompt,
+            String fireAt, String cron, String timezone,
+            tools.jackson.databind.JsonNode params) {
+    }
+
+    public record RunRow(Long id, Instant scheduledFor, Instant startedAt, Instant finishedAt,
+            String status, int attempt, String outputText, Long outboundLedgerId, String error) {
     }
 
     @GetMapping
-    public ApiEnvelope<List<TaskRow>> list() {
+    public ApiEnvelope<PageResult<TaskRow>> list(@RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
         Map<Long, String> labelMap = labels.labels();
-        return ApiEnvelope.ok(tasks.findTop100ByOrderByCreatedAtDesc().stream()
-                .map(task -> new TaskRow(task.getId(), task.getConversationId(),
-                        labelMap.getOrDefault(task.getConversationId(),
-                                String.valueOf(task.getConversationId())),
-                        task.getKind(), task.getContent(), task.getPrompt(), task.getFireAt(),
-                        task.getCron(), task.getNextFireAt(), task.getStatus(), task.getCreatedBy(),
-                        task.getLastFiredAt(), task.getLastError(), task.getCreatedAt()))
-                .toList());
+        TaskStatus filter = StringUtils.hasText(status) ? TaskStatus.fromValue(status) : null;
+        Page<ImTask> rows = (filter == null
+                ? tasks.findAllByOrderByCreatedAtDesc(PageResult.pageable(page, size))
+                : tasks.findByStatusOrderByCreatedAtDesc(filter, PageResult.pageable(page, size)));
+        return ApiEnvelope.ok(PageResult.of(rows.map(task -> toRow(task, labelMap))));
+    }
+
+    private TaskRow toRow(ImTask task, Map<Long, String> labelMap) {
+        String label = labelMap.getOrDefault(task.getConversationId(),
+                String.valueOf(task.getConversationId()));
+        return new TaskRow(task.getId(), task.getConversationId(), label,
+                task.getContent(), task.getPrompt(),
+                task.getRunAt() == null ? null : task.getRunAt().toString(),
+                task.getCronExpr(), task.getTimezone(), task.getNextRunAt(),
+                task.getStatus().value(), task.getCreatedBy().value(), task.getLastRunAt(),
+                task.getCreatedAt());
     }
 
     @PostMapping
@@ -72,48 +97,74 @@ public class TaskController {
         if (body.conversationId() == null) {
             throw new IllegalArgumentException("conversationId 不能为空。");
         }
-        ImConversation conversation = conversations.findById(body.conversationId()).orElseThrow();
-        if (body.kind() == null) {
-            throw new IllegalArgumentException("kind 必须是 reminder/cron/report 之一。");
+        conversations.findById(body.conversationId())
+                .orElseThrow(() -> new NoSuchElementException("会话不存在：" + body.conversationId()));
+        boolean once = StringUtils.hasText(body.fireAt());
+        boolean recurring = StringUtils.hasText(body.cron());
+        if (once == recurring) {
+            throw new IllegalArgumentException("fireAt 与 cron 必须二选一。");
         }
-        Instant fireAt = null;
-        if (body.kind() == TaskKind.REMINDER
-                || (StringUtils.hasText(body.fireAt()))) {
-            if (!StringUtils.hasText(body.fireAt())) {
-                throw new IllegalArgumentException("一次性任务需要 fireAt（yyyy-MM-dd HH:mm）。");
+        String timezone = StringUtils.hasText(body.timezone())
+                ? body.timezone().strip() : settings.current().getTimezone();
+        ZoneId zone;
+        try {
+            zone = ZoneId.of(timezone);
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException("timezone 不是有效的 IANA 时区：" + timezone);
+        }
+        Instant now = Instant.now();
+        Instant runAt = null;
+        String cron = null;
+        Instant nextRunAt;
+        if (once) {
+            runAt = parseFireAt(body.fireAt(), zone);
+            nextRunAt = runAt;
+        } else {
+            cron = body.cron().strip();
+            try {
+                nextRunAt = CronExpression.parse(cron)
+                        .next(ZonedDateTime.now(zone)).toInstant();
+            } catch (RuntimeException failure) {
+                throw new IllegalArgumentException("cron 表达式无效：" + failure.getMessage());
             }
-            fireAt = LocalDateTime.parse(body.fireAt().strip(), FIRE_AT_FORMAT)
-                    .atZone(ZoneId.systemDefault()).toInstant();
         }
-        if (body.kind() != TaskKind.REMINDER) {
-            if (!StringUtils.hasText(body.cron())) {
-                throw new IllegalArgumentException("周期任务需要 cron 表达式。");
-            }
-            CronExpression.parse(body.cron().strip());
-        }
-        if ((!StringUtils.hasText(body.content()))
-                && body.kind() != TaskKind.REPORT
-                && (!StringUtils.hasText(body.prompt()))) {
+        if (!StringUtils.hasText(body.content()) && !StringUtils.hasText(body.prompt())) {
             throw new IllegalArgumentException("任务需要 content 或 prompt。");
         }
-        ScheduledTask task = new ScheduledTask(conversation.getId(), body.kind(),
-                body.content() == null ? null : body.content().strip(),
-                body.prompt() == null ? null : body.prompt().strip(),
-                fireAt, body.cron() == null ? null : body.cron().strip(),
-                TaskCreator.CONSOLE, Instant.now());
-        if (body.params() != null && body.params().isObject()) {
-            task.setParams(MAPPER.writeValueAsString(body.params()));
-        }
+        ImTask task = ImTask.builder()
+                .conversationId(body.conversationId())
+                .content(body.content() == null ? null : body.content().strip())
+                .prompt(body.prompt() == null ? null : body.prompt().strip())
+                .payload(body.params() != null && body.params().isObject()
+                        ? MAPPER.writeValueAsString(body.params()) : "{}")
+                .runAt(runAt)
+                .cronExpr(cron)
+                .timezone(zone.getId())
+                .nextRunAt(nextRunAt)
+                .status(TaskStatus.ACTIVE)
+                .createdBy(TaskCreator.CONSOLE)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
         return ApiEnvelope.ok(tasks.save(task).getId());
+    }
+
+    private static Instant parseFireAt(String value, ZoneId zone) {
+        try {
+            return LocalDateTime.parse(value.strip(), FIRE_AT_FORMAT).atZone(zone).toInstant();
+        } catch (DateTimeParseException failure) {
+            throw new IllegalArgumentException("fireAt 格式应为 yyyy-MM-dd HH:mm。");
+        }
     }
 
     @PostMapping("/{id}/cancel")
     public ApiEnvelope<String> cancel(@PathVariable Long id) {
-        ScheduledTask task = tasks.findById(id).orElseThrow();
-        if (task.getStatus() != TaskStatus.PENDING) {
-            throw new IllegalArgumentException("只有待执行任务可以取消。");
+        ImTask task = tasks.findById(id).orElseThrow();
+        if (task.getStatus() != TaskStatus.ACTIVE && task.getStatus() != TaskStatus.PAUSED) {
+            throw new IllegalArgumentException("只有活动/暂停任务可以取消。");
         }
         task.setStatus(TaskStatus.CANCELLED);
+        task.setUpdatedAt(Instant.now());
         tasks.save(task);
         return ApiEnvelope.ok("已取消");
     }
@@ -121,17 +172,32 @@ public class TaskController {
     /** 强制置为到期，执行器在一轮轮询内（30s）执行。 */
     @PostMapping("/{id}/fire")
     public ApiEnvelope<String> fire(@PathVariable Long id) {
-        ScheduledTask task = tasks.findById(id).orElseThrow();
-        if (task.getStatus() != TaskStatus.PENDING) {
-            throw new IllegalArgumentException("只有待执行任务可以手动触发。");
+        ImTask task = tasks.findById(id).orElseThrow();
+        if (task.getStatus() != TaskStatus.ACTIVE && task.getStatus() != TaskStatus.PAUSED) {
+            throw new IllegalArgumentException("只有活动/暂停任务可以手动触发。");
         }
-        Instant now = Instant.now();
-        if (task.getKind() == TaskKind.REMINDER) {
-            task.setFireAt(now);
-        } else {
-            task.setNextFireAt(now);
+        task.setStatus(TaskStatus.ACTIVE);
+        task.setNextRunAt(Instant.now());
+        if (task.getRunAt() != null) {
+            task.setRunAt(Instant.now());
         }
+        task.setUpdatedAt(Instant.now());
         tasks.save(task);
         return ApiEnvelope.ok("已触发，任务将在 30 秒内执行");
+    }
+
+    @GetMapping("/{id}/runs")
+    public ApiEnvelope<PageResult<RunRow>> runs(@PathVariable Long id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        tasks.findById(id).orElseThrow();
+        Page<ImTaskLog> rows = runs.findByTaskIdOrderByScheduledForDesc(id, PageResult.pageable(page, size));
+        return ApiEnvelope.ok(PageResult.of(rows.map(this::toRunRow)));
+    }
+
+    private RunRow toRunRow(ImTaskLog run) {
+        return new RunRow(run.getId(), run.getScheduledFor(), run.getStartedAt(),
+                run.getFinishedAt(), run.getStatus().value(), run.getAttempt(),
+                run.getOutputText(), run.getOutboundLedgerId(), run.getError());
     }
 }

@@ -1,5 +1,7 @@
 package com.imaia.web;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,6 +14,8 @@ import java.util.NoSuchElementException;
 /** Maps expected failures to the envelope with clear client-facing messages. */
 @RestControllerAdvice(basePackages = "com.imaia.web")
 public class GlobalApiExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalApiExceptionHandler.class);
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiEnvelope<Void>> badRequest(IllegalArgumentException failure) {
@@ -35,11 +39,12 @@ public class GlobalApiExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiEnvelope<Void>> badJson(HttpMessageNotReadableException failure) {
-        return ApiEnvelope.error(400, 400, "请求体不是合法 JSON：" + failure.getMessage());
+        return ApiEnvelope.error(400, 400, "请求体不是合法 JSON。");
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiEnvelope<Void>> internal(Exception failure) {
-        return ApiEnvelope.error(500, 500, failure.getMessage() == null ? failure.toString() : failure.getMessage());
+        log.error("Unhandled API failure", failure);
+        return ApiEnvelope.error(500, 500, "服务器内部错误，详情见服务日志。");
     }
 }

@@ -1,13 +1,10 @@
 package com.imaia.ai;
 
 import com.imaia.config.ChatModelFactory;
-import com.imaia.domain.AiCallLog;
-import com.imaia.repository.AiCallLogRepository;
 import com.imaia.config.AiModelCatalog;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -20,51 +17,37 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.MimeType;
-
-import java.time.Instant;
-import java.util.ArrayList;
 import org.springframework.util.StringUtils;
+
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Chat completions over the OpenAI protocol via Spring AI\u0027s {@link OpenAiChatModel}.
- * The chat model is chosen from the directory per turn — image turns prefer models
- * that declare image input — and the per-provider client comes from the factory.
- * Spring AI 2.x drives no tool loop internally, so this class executes the model\u0027s
- * tool calls through the {@link ToolCallingManager} and re-prompts, recording every
- * exchange for the history store.
+ * Chat completions over the OpenAI protocol via Spring AI's {@link OpenAiChatModel}.
+ * The model comes from the catalog's slot derivation; Spring AI 2.x drives no tool
+ * loop internally, so this class executes the model's tool calls through the
+ * {@link ToolCallingManager} and re-prompts until the final text is produced.
  */
 @Component
 public class OpenAiChatCompletion {
 
-    /** One executed tool call inside the model loop, kept for the history record. */
-    public record ToolExchange(String toolName, String result) {
-    }
-
-    /** The final reply text plus the tool exchanges executed during this turn. */
-    public record ChatResult(String text, List<ToolExchange> toolExchanges) {
+    /** The final reply plus the metering of this completion. */
+    public record ChatResult(String text, Long aiModelId, Integer promptTokens,
+            Integer completionTokens) {
     }
 
     private final ChatModelFactory chatModels;
     private final AiModelCatalog catalog;
-    private final AiCallLogRepository callLogs;
 
     private final ToolCallingManager toolCallingManager = ToolCallingManager.builder().build();
 
-    public OpenAiChatCompletion(ChatModelFactory chatModels, AiModelCatalog catalog,
-            AiCallLogRepository callLogs) {
+    public OpenAiChatCompletion(ChatModelFactory chatModels, AiModelCatalog catalog) {
         this.chatModels = chatModels;
         this.catalog = catalog;
-        this.callLogs = callLogs;
     }
 
     /** One history turn for the completion request. */
     public record Turn(boolean assistant, String text) {
-    }
-
-    public String complete(String systemPrompt, List<Turn> history, String userText,
-            byte[] image, String imageMimeType) {
-        return complete(systemPrompt, history, userText, image, imageMimeType, null).text();
     }
 
     public ChatResult complete(String systemPrompt, List<Turn> history, String userText,
@@ -98,54 +81,27 @@ public class OpenAiChatCompletion {
         }
         OpenAiChatOptions runtimeOptions = optionsBuilder.build();
 
-        long start = System.currentTimeMillis();
-        try {
         ChatResponse response = chatModel.call(new Prompt(messages, runtimeOptions));
-        List<ToolExchange> exchanges = new ArrayList<>();
-        int seen = messages.size();
         for (int loop = 0; response.hasToolCalls() && loop < 5; loop++) {
             ToolExecutionResult result = toolCallingManager.executeToolCalls(
                     new Prompt(messages, runtimeOptions), response);
-            messages = result.conversationHistory();
-            for (int i = seen; i < messages.size(); i++) {
-                if (messages.get(i) instanceof ToolResponseMessage toolMessage) {
-                    for (ToolResponseMessage.ToolResponse toolResponse : toolMessage.getResponses()) {
-                        exchanges.add(new ToolExchange(toolResponse.name(), toolResponse.responseData()));
-                    }
-                }
-            }
-            seen = messages.size();
+            messages = new ArrayList<>(result.conversationHistory());
             response = chatModel.call(new Prompt(messages, runtimeOptions));
         }
         String reply = response.getResult().getOutput().getText();
         if (!StringUtils.hasText(reply)) {
             throw new IllegalStateException("Chat endpoint returned no text content.");
         }
-        logCall(brain, start, response, true, null);
-        return new ChatResult(reply.strip(), List.copyOf(exchanges));
-        } catch (RuntimeException failure) {
-            logCall(brain, start, null, false, failure.getMessage());
-            throw failure;
-        }
+        return new ChatResult(reply.strip(), brain.aiModelId(),
+                tokens(response, true), tokens(response, false));
     }
 
-    /** Best-effort metering: a logging failure must never break the chat flow. */
-    private void logCall(AiModelCatalog.Resolved brain, long start, ChatResponse response,
-            boolean ok, String error) {
-        try {
-            Integer promptTokens = null;
-            Integer completionTokens = null;
-            if (response != null && response.getMetadata() != null
-                    && response.getMetadata().getUsage() != null) {
-                var usage = response.getMetadata().getUsage();
-                promptTokens = usage.getPromptTokens();
-                completionTokens = usage.getCompletionTokens();
-            }
-            callLogs.save(new AiCallLog(null, null, "chat", brain.providerName(), brain.id(),
-                    promptTokens, completionTokens, System.currentTimeMillis() - start, ok,
-                    error, Instant.now()));
-        } catch (RuntimeException loggingFailure) {
-            // ignore
+    private static Integer tokens(ChatResponse response, boolean prompt) {
+        if (response == null || response.getMetadata() == null
+                || response.getMetadata().getUsage() == null) {
+            return null;
         }
+        var usage = response.getMetadata().getUsage();
+        return prompt ? usage.getPromptTokens() : usage.getCompletionTokens();
     }
 }

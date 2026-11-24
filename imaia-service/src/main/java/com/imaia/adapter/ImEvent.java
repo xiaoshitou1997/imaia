@@ -1,5 +1,7 @@
 package com.imaia.adapter;
 
+import com.imaia.domain.Platform;
+
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -9,9 +11,9 @@ import tools.jackson.databind.JsonNode;
  * id) — opaque to the core and only ever handed back to the source's
  * {@link PlatformSource#ack(ImEvent)}.
  *
- * <p>{@code messageId} and {@code conversationId} are filled for the kinds that carry a
+ * <p>{@code platformMessageId} and {@code conversationPlatformId} are filled for the kinds that carry a
  * message (the core handlers only act on those); other kinds may leave them null.
  */
-public record ImEvent(String platform, String kind, String messageId, String conversationId,
+public record ImEvent(Platform platform, String kind, String platformMessageId, String conversationPlatformId,
         String receipt, JsonNode raw) {
 }

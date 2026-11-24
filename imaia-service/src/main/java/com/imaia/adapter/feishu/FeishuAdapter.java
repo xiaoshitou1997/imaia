@@ -1,11 +1,13 @@
 package com.imaia.adapter.feishu;
 
+import com.imaia.domain.Platform;
+
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImContractException;
-import com.imaia.adapter.ProcessedMessageLedger;
-import com.imaia.domain.ImConnection;
+import com.imaia.adapter.IngestLedger;
+import com.imaia.domain.ImAccount;
 import com.imaia.domain.MediaKind;
-import com.imaia.domain.MessageCategory;
+import com.imaia.domain.MessageKind;
 import com.lark.oapi.Client;
 import com.lark.oapi.service.im.v1.model.CreateFileReq;
 import com.lark.oapi.service.im.v1.model.CreateFileReqBody;
@@ -28,6 +30,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,7 +46,6 @@ import java.util.Map;
 @Component
 public class FeishuAdapter implements ImAdapter {
 
-    public static final String PLATFORM = "feishu";
 
     /** Feishu chat ids (group conversations) carry the {@code oc_} prefix. */
     private static final String GROUP_THREAD_PREFIX = "oc_";
@@ -51,22 +53,32 @@ public class FeishuAdapter implements ImAdapter {
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
     private final FeishuConnection connection;
-    private final ProcessedMessageLedger ledger;
+    private final IngestLedger ledger;
     /** AI 发送产生的平台消息 id（有界队列）：归档时精确回标 origin=ai。 */
-    private final Deque<String> recentAiMessageIds = new ArrayDeque<>();
+    private final Deque<String> recentAiContextPlatformMessageIds = new ArrayDeque<>();
 
-    public FeishuAdapter(FeishuConnection connection, ProcessedMessageLedger ledger) {
+    /** 归档与 AI 回复两条链对同一消息各拉一次 SDK；有界 memo 消除重复网络调用（origin 归因在 memo 外）。 */
+    private static final int FETCH_API_MEMO_MAX = 128;
+    private final Map<String, Message> fetchApiMemo = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Message> eldest) {
+                    return size() > FETCH_API_MEMO_MAX;
+                }
+            });
+
+    public FeishuAdapter(FeishuConnection connection, IngestLedger ledger) {
         this.connection = connection;
         this.ledger = ledger;
     }
 
     @Override
-    public String platform() {
-        return PLATFORM;
+    public Platform platform() {
+        return Platform.FEISHU;
     }
 
     @Override
-    public ImConnection connection() {
+    public ImAccount account() {
         return connection.row();
     }
 
@@ -76,92 +88,121 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public FetchedMessage fetchMessage(String messageId) {
-        Message message = fetchApiMessage(messageId);
-        if (!messageId.equals(message.getMessageId()) || blank(message.getChatId())) {
-            throw new ImContractException("Message identity drift: expected " + PLATFORM + "/"
-                    + messageId + " but the fetched message is " + PLATFORM + "/"
+    public FetchedMessage fetchMessage(String platformMessageId) {
+        Message message = memoizedFetchApiMessage(platformMessageId);
+        if (!platformMessageId.equals(message.getMessageId()) || blank(message.getChatId())) {
+            throw new ImContractException("Message identity drift: expected " + Platform.FEISHU + "/"
+                    + platformMessageId + " but the fetched message is " + Platform.FEISHU + "/"
                     + message.getMessageId() + " in chat " + message.getChatId() + ".");
         }
         String msgType = message.getMsgType();
         String content = message.getBody() == null ? null : message.getBody().getContent();
-        MessageCategory category = FeishuMessages.categoryOf(msgType);
+        MessageKind category = FeishuMessages.categoryOf(msgType);
         boolean mentioned = message.getMentions() != null && message.getMentions().length > 0;
-        String senderId = message.getSender() == null ? null : message.getSender().getId();
-        String origin = rememberAiOrigin(messageId);
-        return new FetchedMessage(message.getChatId(), messageId,
-                senderId, null, "incoming", null, category, mentioned, origin,
+        String senderPlatformId = message.getSender() == null ? null : message.getSender().getId();
+        String origin = rememberAiOrigin(platformMessageId);
+        return new FetchedMessage(message.getChatId(), platformMessageId,
+                senderPlatformId, null, "incoming", null, category, mentioned, origin,
                 FeishuMessages.extractBody(msgType, content), rawJson(msgType, content, message.getMentions()),
                 parseMillis(message.getCreateTime()));
     }
 
     /** 发送成功时记录平台消息 id；归档命中即标 origin=ai。 */
-    private String rememberAiOrigin(String messageId) {
-        boolean matched = recentAiMessageIds.remove(messageId);
+    private String rememberAiOrigin(String platformMessageId) {
+        boolean matched = recentAiContextPlatformMessageIds.remove(platformMessageId);
         return matched ? "ai" : "human";
     }
 
     @Override
-    public boolean hasProcessed(String messageId) {
-        return ledger.hasProcessed(connection().getId(), messageId);
+    public boolean hasProcessed(String platformMessageId) {
+        return ledger.hasProcessed(account().getId(), platformMessageId);
     }
 
     @Override
-    public void markProcessed(String messageId) {
-        ledger.markProcessed(connection().getId(), messageId);
+    public void markProcessed(String platformMessageId) {
+        ledger.markProcessed(account().getId(), platformMessageId);
     }
 
     @Override
-    public MediaBytes downloadAsset(String messageId, MessageCategory category) {
-        Message message = fetchApiMessage(messageId);
+    public List<AttachmentRef> attachments(String platformMessageId, MessageKind category) {
+        if (category != MessageKind.IMAGE && category != MessageKind.VOICE
+                && category != MessageKind.VIDEO && category != MessageKind.STICKER
+                && category != MessageKind.FILE) {
+            return List.of();
+        }
+        Message message = fetchApiMessage(platformMessageId);
+        String content = message.getBody() == null ? null : message.getBody().getContent();
+        String fileKey = FeishuMessages.mediaKey(message.getMsgType(), content, category);
+        if (fileKey == null) {
+            return List.of();
+        }
+        return List.of(new AttachmentRef(attachmentKind(category), fileKey,
+                mediaMime(category), null, null));
+    }
+
+    private static com.imaia.domain.AttachmentKind attachmentKind(MessageKind category) {
+        return switch (category) {
+            case IMAGE -> com.imaia.domain.AttachmentKind.IMAGE;
+            case VOICE -> com.imaia.domain.AttachmentKind.VOICE;
+            case VIDEO -> com.imaia.domain.AttachmentKind.VIDEO;
+            case STICKER -> com.imaia.domain.AttachmentKind.STICKER;
+            default -> com.imaia.domain.AttachmentKind.FILE;
+        };
+    }
+
+    @Override
+    public MediaBytes downloadAsset(String platformMessageId, MessageKind category) {
+        Message message = fetchApiMessage(platformMessageId);
         String content = message.getBody() == null ? null : message.getBody().getContent();
         String fileKey = FeishuMessages.mediaKey(message.getMsgType(), content, category);
         if (fileKey == null) {
             return null;
         }
-        return downloadResource(messageId, fileKey, category == MessageCategory.IMAGE ? "image" : "file",
+        return downloadResource(platformMessageId, fileKey, category == MessageKind.IMAGE ? "image" : "file",
                 mediaMime(category));
     }
 
     @Override
-    public MediaBytes downloadPreview(String messageId) {
-        Message message = fetchApiMessage(messageId);
+    public MediaBytes downloadPreview(String platformMessageId) {
+        Message message = fetchApiMessage(platformMessageId);
         String content = message.getBody() == null ? null : message.getBody().getContent();
         String imageKey = FeishuMessages.previewKey(content);
         if (imageKey == null) {
             return null;
         }
-        return downloadResource(messageId, imageKey, "image", "image/jpeg");
+        return downloadResource(platformMessageId, imageKey, "image", "image/jpeg");
     }
 
     @Override
-    public void sendText(String conversationId, String text, String idempotencyKey) {
-        String sentMessageId = createMessage(conversationId, "text", json(Map.of("text", text)), idempotencyKey);
-        recordAiMessageId(sentMessageId);
+    public String sendText(String conversationPlatformId, String text, String idempotencyKey) {
+        String sentMessageId = createMessage(conversationPlatformId, "text", json(Map.of("text", text)), idempotencyKey);
+        recordAiContextMessageId(sentMessageId);
+        return sentMessageId;
     }
 
     @Override
-    public void sendMedia(String conversationId, MediaKind kind, String storageRef, String idempotencyKey) {
+    public String sendMedia(String conversationPlatformId, MediaKind kind, String storageRef, String idempotencyKey) {
         String sentMessageId;
         if (kind == MediaKind.IMAGE) {
-            sentMessageId = createMessage(conversationId, "image", json(Map.of("image_key", storageRef)), idempotencyKey);
+            sentMessageId = createMessage(conversationPlatformId, "image", json(Map.of("image_key", storageRef)), idempotencyKey);
         } else {
             // voice/video ride as file messages on feishu (audio bubbles need opus
             // uploads with duration metadata — a later iteration)
-            sentMessageId = createMessage(conversationId, "file", json(Map.of("file_key", storageRef)), idempotencyKey);
+            sentMessageId = createMessage(conversationPlatformId, "file", json(Map.of("file_key", storageRef)), idempotencyKey);
         }
-        recordAiMessageId(sentMessageId);
+        recordAiContextMessageId(sentMessageId);
+        return sentMessageId;
     }
 
     /** 有界记录：AI 发送产生的平台消息 id，归档时精确回标 origin=ai。 */
-    private void recordAiMessageId(String messageId) {
-        if (messageId == null) {
+    private void recordAiContextMessageId(String platformMessageId) {
+        if (platformMessageId == null) {
             return;
         }
-        if (recentAiMessageIds.size() >= 256) {
-            recentAiMessageIds.pollFirst();
+        if (recentAiContextPlatformMessageIds.size() >= 256) {
+            recentAiContextPlatformMessageIds.pollFirst();
         }
-        recentAiMessageIds.addLast(messageId);
+        recentAiContextPlatformMessageIds.addLast(platformMessageId);
     }
 
     @Override
@@ -210,17 +251,17 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     @Override
-    public boolean isGroupConversation(String conversationId) {
-        return conversationId != null && conversationId.startsWith(GROUP_THREAD_PREFIX);
+    public boolean isGroupConversation(String conversationPlatformId) {
+        return conversationPlatformId != null && conversationPlatformId.startsWith(GROUP_THREAD_PREFIX);
     }
 
     /** Sends one message into a chat; the uuid (idempotency key) dedupes replays server-side.
      * Returns the platform message id of the sent message. */
-    private String createMessage(String conversationId, String msgType, String content, String idempotencyKey) {
+    private String createMessage(String conversationPlatformId, String msgType, String content, String idempotencyKey) {
         CreateMessageReq request = CreateMessageReq.newBuilder()
                 .receiveIdType("chat_id")
                 .createMessageReqBody(CreateMessageReqBody.newBuilder()
-                        .receiveId(conversationId)
+                        .receiveId(conversationPlatformId)
                         .msgType(msgType)
                         .content(content)
                         .uuid(idempotencyKey)
@@ -229,43 +270,54 @@ public class FeishuAdapter implements ImAdapter {
         try {
             var response = client().im().v1().message().create(request);
             requireSuccess(response.success(), response.getCode(), response.getMsg(),
-                    "send " + msgType + " to " + conversationId);
+                    "send " + msgType + " to " + conversationPlatformId);
             return response.getData() == null ? null : response.getData().getMessageId();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new FeishuApiException("Send to " + conversationId + " interrupted.", interrupted);
+            throw new FeishuApiException("Send to " + conversationPlatformId + " interrupted.", interrupted);
         } catch (Exception failure) {
-            throw new FeishuApiException("Send to " + conversationId + " failed: " + failure.getMessage(), failure);
+            throw new FeishuApiException("Send to " + conversationPlatformId + " failed: " + failure.getMessage(), failure);
         }
     }
 
     /** The SDK message of one id, typed and identity-checked. */
-    private Message fetchApiMessage(String messageId) {
+    /** 有界 memo：同一条消息 id 在窗口内复用同一份 SDK 结果；origin 归因等副作用保持在 memo 外。 */
+    private Message memoizedFetchApiMessage(String platformMessageId) {
+        Message cached = fetchApiMemo.get(platformMessageId);
+        if (cached != null) {
+            return cached;
+        }
+        Message message = fetchApiMessage(platformMessageId);
+        fetchApiMemo.put(platformMessageId, message);
+        return message;
+    }
+
+    private Message fetchApiMessage(String platformMessageId) {
         GetMessageResp response;
         try {
             response = client().im().v1().message().get(GetMessageReq.newBuilder()
-                    .messageId(messageId)
+                    .messageId(platformMessageId)
                     .build());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new FeishuApiException("Fetch of message " + messageId + " interrupted.", interrupted);
+            throw new FeishuApiException("Fetch of message " + platformMessageId + " interrupted.", interrupted);
         } catch (Exception failure) {
-            throw new FeishuApiException("Fetch of message " + messageId + " failed: " + failure.getMessage(), failure);
+            throw new FeishuApiException("Fetch of message " + platformMessageId + " failed: " + failure.getMessage(), failure);
         }
-        requireSuccess(response.success(), response.getCode(), response.getMsg(), "get message " + messageId);
+        requireSuccess(response.success(), response.getCode(), response.getMsg(), "get message " + platformMessageId);
         Message[] items = response.getData() == null ? null : response.getData().getItems();
         if (items == null || items.length == 0) {
-            throw new ImContractException("Feishu message " + messageId + " is gone or unreadable.");
+            throw new ImContractException("Feishu message " + platformMessageId + " is gone or unreadable.");
         }
         return items[0];
     }
 
     /** Downloads one message resource (image/file); empty responses yield null. */
-    private MediaBytes downloadResource(String messageId, String fileKey, String type, String mime) {
+    private MediaBytes downloadResource(String platformMessageId, String fileKey, String type, String mime) {
         GetMessageResourceResp response;
         try {
             response = client().im().v1().messageResource().get(GetMessageResourceReq.newBuilder()
-                    .messageId(messageId)
+                    .messageId(platformMessageId)
                     .fileKey(fileKey)
                     .type(type)
                     .build());
@@ -295,7 +347,7 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     /** A conservative mime per category; the platform does not expose the real one. */
-    private static String mediaMime(MessageCategory category) {
+    private static String mediaMime(MessageKind category) {
         return switch (category) {
             case IMAGE -> "image/jpeg";
             case VOICE -> "audio/ogg";

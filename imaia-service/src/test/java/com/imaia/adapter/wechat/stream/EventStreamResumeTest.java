@@ -4,7 +4,7 @@ import com.imaia.TestProperties;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;
-import com.imaia.adapter.ProcessedMessageLedger;
+import com.imaia.adapter.IngestLedger;
 import com.imaia.adapter.WechatAdapter;
 import com.imaia.adapter.wechat.cursor.CursorStore;
 import com.imaia.adapter.wechat.daemon.DaemonClient;
@@ -83,24 +83,27 @@ class EventStreamResumeTest {
                     ackBodies.add(request.getBody().readUtf8());
                     return new MockResponse().setResponseCode(200);
                 }
+                if (path.startsWith("/v1/accounts/acc1/threads")) {
+                    return json("{\"items\":[],\"asOfEventCursor\":\"0\"}");
+                }
                 if (path.startsWith("/v1/accounts/acc1/events/stream")) {
                     streamRequests.add(path);
-                    if (path.contains("after=")) {
+                    if (path.contains("after=0")) {
                         return sse("""
-                                id: 3
-                                event: thread.updated
-                                data: {"kind":"thread.updated","cursor":"3","createdAt":"2026-01-01T00:00:02Z","data":{"threadId":"t1"}}
+                                id: 1
+                                event: message.committed
+                                data: {"kind":"message.committed","cursor":"1","createdAt":"2026-01-01T00:00:00Z","data":{"messageId":"m1","threadId":"t1"}}
+
+                                id: 2
+                                event: message.committed
+                                data: {"kind":"message.committed","cursor":"2","createdAt":"2026-01-01T00:00:01Z","data":{"messageId":"m1","threadId":"t1"}}
 
                                 """);
                     }
                     return sse("""
-                            id: 1
-                            event: message.committed
-                            data: {"kind":"message.committed","cursor":"1","createdAt":"2026-01-01T00:00:00Z","data":{"messageId":"m1","threadId":"t1"}}
-
-                            id: 2
-                            event: message.committed
-                            data: {"kind":"message.committed","cursor":"2","createdAt":"2026-01-01T00:00:01Z","data":{"messageId":"m1","threadId":"t1"}}
+                            id: 3
+                            event: thread.updated
+                            data: {"kind":"thread.updated","cursor":"3","createdAt":"2026-01-01T00:00:02Z","data":{"threadId":"t1"}}
 
                             """);
                 }
@@ -120,7 +123,7 @@ class EventStreamResumeTest {
         WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
         DaemonClient daemonClient = new DaemonClient(connection);
         DaemonEventDecoder decoder = new DaemonEventDecoder(JsonMapper.builder().build());
-        WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(ProcessedMessageLedger.class), connection);
+        WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(IngestLedger.class), connection);
         LoggingMessageHandler loggingHandler = new LoggingMessageHandler(new ImAdapters(List.of(adapter)));
         ImEventHandler recorder = new ImEventHandler() {
             @Override
@@ -144,14 +147,14 @@ class EventStreamResumeTest {
 
         assertThat(handled).extracting(ImEvent::kind)
                 .containsExactly("message.committed", "message.committed", "thread.updated");
-        assertThat(handled).extracting(ImEvent::messageId)
+        assertThat(handled).extracting(ImEvent::platformMessageId)
                 .containsExactly("m1", "m1", null);
         assertThat(handled).extracting(ImEvent::receipt)
                 .containsExactly("1", "2", "3");
         assertThat(cursorStore.load()).isEqualTo("3");
         assertThat(ackBodies).containsExactly(
                 "{\"cursor\":\"1\"}", "{\"cursor\":\"2\"}", "{\"cursor\":\"3\"}");
-        assertThat(streamRequests.poll()).doesNotContain("after=");
+        assertThat(streamRequests.poll()).contains("after=0");
         assertThat(streamRequests.poll()).contains("after=2");
     }
 

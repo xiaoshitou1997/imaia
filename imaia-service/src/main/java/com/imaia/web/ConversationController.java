@@ -1,21 +1,35 @@
 package com.imaia.web;
 
-import com.imaia.domain.ChatRole;
-import com.imaia.ai.MemberAnalyzer;
+import com.imaia.adapter.ImAdapter;
+import com.imaia.adapter.ImAdapters;
+import com.imaia.adapter.wechat.WechatHistoryService;
+import com.imaia.ai.ContactAnalyzer;
+import com.imaia.domain.AttachmentKind;
+import com.imaia.domain.Platform;
+import com.imaia.domain.AttachmentStatus;
 import com.imaia.domain.ConversationKind;
-import com.imaia.domain.ImConnection;
+import com.imaia.domain.ImAttachment;
+import com.imaia.domain.ImAccount;
+import com.imaia.domain.ImContact;
+import com.imaia.domain.ImConversationContactBind;
+import com.imaia.domain.ImConversationContactProfile;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ImMessage;
 import com.imaia.domain.MessageDirection;
 import com.imaia.domain.MessageOrigin;
-import com.imaia.domain.MemberAnalysis;
-import com.imaia.repository.AiMessageRepository;
-import com.imaia.repository.GroupMemberRepository;
+import com.imaia.repository.ImAttachmentRepository;
+import com.imaia.repository.ImContactRepository;
 import com.imaia.repository.ImConversationRepository;
-import com.imaia.repository.ImConnectionRepository;
+import com.imaia.repository.ImAccountRepository;
+import com.imaia.repository.ImConversationContactBindRepository;
 import com.imaia.repository.ImMessageRepository;
-import com.imaia.repository.MemberAnalysisRepository;
-import org.springframework.data.domain.PageRequest;
+import com.imaia.repository.ImConversationContactProfileRepository;
+import com.imaia.storage.S3MediaStorage;
+import com.imaia.ai.AiSettingsService;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,10 +40,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
-import java.util.NoSuchElementException;
-import org.springframework.util.StringUtils;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 /** 统一收件箱：会话目录、归档消息、上下文流、成员快照与画像、跨线检索。 */
 @RestController
@@ -38,140 +52,204 @@ public class ConversationController {
 
     private final ImConversationRepository conversations;
     private final ImMessageRepository messages;
-    private final AiMessageRepository aiMessages;
-    private final GroupMemberRepository members;
-    private final MemberAnalysisRepository memberAnalyses;
-    private final ImConnectionRepository connections;
+    private final ImConversationContactBindRepository binds;
+    private final ImContactRepository contacts;
+    private final ImAttachmentRepository attachments;
+    private final ImConversationContactProfileRepository contactProfiles;
+    private final ImAccountRepository accounts;
     private final ConversationLabels labels;
-    private final MemberAnalyzer memberAnalyzer;
+    private final ContactAnalyzer contactAnalyzer;
+    private final WechatHistoryService wechatHistory;
+    private final ImAdapters adapters;
+    private final S3MediaStorage mediaStorage;
+    private final AiSettingsService settings;
 
     public ConversationController(ImConversationRepository conversations, ImMessageRepository messages,
-            AiMessageRepository aiMessages, GroupMemberRepository members, MemberAnalysisRepository memberAnalyses,
-            ImConnectionRepository connections, ConversationLabels labels, MemberAnalyzer memberAnalyzer) {
+            ImConversationContactBindRepository binds, ImContactRepository contacts, ImAttachmentRepository attachments,
+            ImConversationContactProfileRepository contactProfiles, ImAccountRepository accounts,
+            ConversationLabels labels, ContactAnalyzer contactAnalyzer,
+            WechatHistoryService wechatHistory, ImAdapters adapters, S3MediaStorage mediaStorage,
+            AiSettingsService settings) {
         this.conversations = conversations;
         this.messages = messages;
-        this.aiMessages = aiMessages;
-        this.members = members;
-        this.memberAnalyses = memberAnalyses;
-        this.connections = connections;
+        this.binds = binds;
+        this.contacts = contacts;
+        this.attachments = attachments;
+        this.contactProfiles = contactProfiles;
+        this.accounts = accounts;
         this.labels = labels;
-        this.memberAnalyzer = memberAnalyzer;
+        this.contactAnalyzer = contactAnalyzer;
+        this.wechatHistory = wechatHistory;
+        this.adapters = adapters;
+        this.mediaStorage = mediaStorage;
+        this.settings = settings;
     }
 
-    public record ConversationRow(Long id, String externalId, String displayName, ConversationKind kind, String persona,
-            boolean autoreply, Instant lastSeenAt, Long connectionId, String platform, String connectionName,
+    public record ConversationRow(Long id, String platformId, String title, String remark,
+            ConversationKind kind, String persona, boolean autoreply, Instant lastSeenAt,
+            Instant lastMessageAt, Long accountId, Platform platformCode, String connectionName,
             long messageCount) {
     }
 
-    public record MessageRow(Long id, String messageId, String senderId, String senderName, MessageDirection direction,
-            String category, boolean mentioned, MessageOrigin origin, String body, Instant archivedAt) {
+    public record MessageRow(Long id, String platformId, Long contactId, String senderName,
+            MessageDirection direction, String kind, boolean mentioned, MessageOrigin origin,
+            String body, Instant occurredAt, Instant archivedAt, List<AttachmentRow> attachments) {
     }
 
-    public record AiMessageRow(Long id, ChatRole role, String content, String toolName, Instant createdAt) {
+    public record AttachmentRow(Long id, String kind, String filename, String mimeType,
+            Long sizeBytes, Long durationMs, String status) {
     }
 
-    public record ConversationUpdate(String displayName, String remark, String persona, Boolean autoreply) {
+    public record ConversationUpdate(String title, String remark, String persona, Boolean autoreply) {
     }
 
-    public record MemberRow(Long id, String memberExternalId, String displayName, Instant lastSeenAt,
-            boolean analyzed) {
+    public record ContactBindRow(Long id, Long contactId, String platformId, String displayName,
+            String role, Instant lastSeenAt, boolean analyzed) {
     }
 
-    public record AnalysisRequest(String memberExternalId, String memberName) {
+    public record AnalysisRequest(Long contactId) {
     }
 
-    public record AnalysisRow(Long id, String memberExternalId, String memberName, String profile,
+    public record HistorySyncResult(int scanned, int added, int pages, int failed, boolean hasMore) {
+    }
+
+    public record AnalysisRow(Long id, Long contactId, String contactName, String profile,
             Integer messageCount, Instant generatedAt) {
     }
 
     /** One cross-conversation search hit with its conversation label. */
-    public record SearchHit(Long id, Long conversationId, String conversationLabel, String senderId,
-            String senderName, String category, String body, Instant archivedAt) {
+    public record SearchHit(Long id, Long conversationId, String conversationLabel, Long contactId,
+            String senderName, String kind, String body, Instant archivedAt) {
     }
 
     @GetMapping
-    public ApiEnvelope<List<ConversationRow>> list(@RequestParam(required = false) String query) {
-        List<ImConversation> list = !StringUtils.hasText(query)
-                ? conversations.findTop200ByOrderByLastSeenAtDesc()
-                : conversations.findTop50ByDisplayNameContainingIgnoreCaseOrExternalIdContainingIgnoreCaseOrderByLastSeenAtDesc(
-                        query.strip(), query.strip());
-        Map<Long, ImConnection> connectionById = labels.connectionsById();
+    public ApiEnvelope<PageResult<ConversationRow>> list(@RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Page<ImConversation> list = !StringUtils.hasText(query)
+                ? conversations.findAllByOrderByLastSeenAtDesc(PageResult.pageable(page, size))
+                : conversations
+                        .findByTitleContainingIgnoreCaseOrPlatformIdContainingIgnoreCaseOrderByLastSeenAtDesc(
+                                query.strip(), query.strip(), PageResult.pageable(page, size));
+        Map<Long, ImAccount> accountById = labels.accountsById();
         Map<Long, Long> counts = labels.messageCounts();
-        return ApiEnvelope.ok(list.stream().map(conversation -> {
-            ImConnection connection = connectionById.get(conversation.getConnectionId());
-            return new ConversationRow(conversation.getId(), conversation.getExternalId(),
-                    conversation.getDisplayName(), conversation.getKind(), conversation.getPersona(),
-                    conversation.isAutoreply(), conversation.getLastSeenAt(), conversation.getConnectionId(),
-                    connection == null ? null : connection.getPlatform(),
-                    connection == null ? null : connection.getName(),
+        List<Long> lineIds = list.getContent().stream().map(ImConversation::getId).toList();
+        Map<Long, AiSettingsService.LineCaps> caps = settings.lineSettings(lineIds);
+        Page<ConversationRow> rows = list.map(conversation -> {
+            ImAccount account = accountById.get(conversation.getAccountId());
+            AiSettingsService.LineCaps line = caps.getOrDefault(conversation.getId(),
+                    AiSettingsService.LineCaps.DEFAULT);
+            return new ConversationRow(conversation.getId(), conversation.getPlatformId(),
+                    conversation.getTitle(), conversation.getRemark(), conversation.getKind(),
+                    line.persona(), line.autoreply(), conversation.getLastSeenAt(),
+                    conversation.getLastMessageAt(), conversation.getAccountId(),
+                    account == null ? null : account.getPlatform(),
+                    account == null ? null : account.getName(),
                     counts.getOrDefault(conversation.getId(), 0L));
-        }).toList());
+        });
+        return ApiEnvelope.ok(PageResult.of(rows));
     }
 
     @PutMapping("/{id}")
     public ApiEnvelope<Long> update(@PathVariable Long id, @RequestBody ConversationUpdate body) {
         ImConversation conversation = requireConversation(id);
-        if (body.displayName() != null) {
-            conversation.setDisplayName(body.displayName().isBlank() ? null : body.displayName().strip());
+        if (body.title() != null) {
+            conversation.setTitle(body.title().isBlank() ? null : body.title().strip());
         }
         if (body.remark() != null) {
             conversation.setRemark(body.remark().isBlank() ? null : body.remark().strip());
         }
         if (body.persona() != null) {
-            conversation.setPersona(body.persona().isBlank() ? null : body.persona().strip());
+            settings.saveConversationPersona(conversation.getId(), body.persona());
         }
         if (body.autoreply() != null) {
-            conversation.setAutoreply(body.autoreply());
+            settings.saveConversationAutoreply(conversation.getId(), body.autoreply());
         }
+        conversation.setUpdatedAt(Instant.now());
         conversations.save(conversation);
         return ApiEnvelope.ok(conversation.getId());
+    }
+
+    /** 从 daemon 拉取该会话更早的归档消息；只归档，不触发 AI 回复。 */
+    @PostMapping("/{id}/sync-history")
+    public ApiEnvelope<HistorySyncResult> syncHistory(@PathVariable Long id,
+            @RequestParam(defaultValue = "5") int pages,
+            @RequestParam(defaultValue = "100") int limit) {
+        ImConversation conversation = requireConversation(id);
+        ImAccount account = accounts.findById(conversation.getAccountId()).orElseThrow();
+        if (account.getPlatform() != Platform.WECHAT) {
+            throw new IllegalArgumentException("只有微信连接支持拉取历史消息。");
+        }
+        long before = messages.countByConversationId(id);
+        WechatHistoryService.Result result = wechatHistory.pull(conversation.getPlatformId(), pages, limit);
+        long after = messages.countByConversationId(id);
+        return ApiEnvelope.ok(new HistorySyncResult(result.scanned(), (int) (after - before),
+                result.pages(), result.failed(), result.hasMore()));
     }
 
     @GetMapping("/{id}/messages")
     public ApiEnvelope<List<MessageRow>> messages(@PathVariable Long id,
             @RequestParam(required = false) String keyword) {
         requireConversation(id);
-        List<ImMessage> recent = messages.findTop200ByConversationIdOrderByArchivedAtDesc(id);
+        List<ImMessage> recent = messages.findTop200ByConversationIdOrderByOccurredAtDescIdDesc(id);
         if (StringUtils.hasText(keyword)) {
             String needle = keyword.strip();
             recent = recent.stream().filter(message -> message.getBody() != null
                     && message.getBody().contains(needle)).toList();
         }
+        Map<Long, ImContact> contactById = contactMap(recent);
+        Map<Long, List<AttachmentRow>> attachmentsByMessage = new HashMap<>();
+        if (!recent.isEmpty()) {
+            List<Long> messageIds = recent.stream().map(ImMessage::getId).toList();
+            for (ImAttachment attachment : attachments.findByMessageIdInOrderByIdAsc(messageIds)) {
+                attachmentsByMessage.computeIfAbsent(attachment.getMessageId(), key -> new java.util.ArrayList<>())
+                        .add(new AttachmentRow(attachment.getId(), attachment.getKind().value(),
+                                attachment.getFilename(), attachment.getMimeType(),
+                                attachment.getSizeBytes(), attachment.getDurationMs(),
+                                attachment.getStatus().value()));
+            }
+        }
         return ApiEnvelope.ok(recent.stream().map(message -> new MessageRow(message.getId(),
-                message.getMessageId(), message.getSenderId(), message.getSenderName(),
-                message.getDirection(), message.getCategory().value(), message.isMentioned(),
-                message.getOrigin(), message.getBody(), message.getArchivedAt())).toList());
+                message.getPlatformId(), message.getContactId(),
+                contactName(contactById.get(message.getContactId())),
+                message.getDirection(), message.getKind().value(), message.isMentioned(),
+                message.getOrigin(), message.getBody(), message.getOccurredAt(), message.getArchivedAt(),
+                attachmentsByMessage.getOrDefault(message.getId(), List.of()))).toList());
     }
 
-    @GetMapping("/{id}/ai-messages")
-    public ApiEnvelope<List<AiMessageRow>> aiMessages(@PathVariable Long id) {
+    @GetMapping("/{id}/contacts")
+    public ApiEnvelope<List<ContactBindRow>> contacts(@PathVariable Long id) {
         requireConversation(id);
-        return ApiEnvelope.ok(aiMessages.findByConversationIdInOrderByCreatedAtDesc(List.of(id)).stream()
-                .map(message -> new AiMessageRow(message.getId(), message.getRole(), message.getContent(),
-                        message.getToolName(), message.getCreatedAt()))
-                .toList());
-    }
-
-    @GetMapping("/{id}/members")
-    public ApiEnvelope<List<MemberRow>> members(@PathVariable Long id) {
-        requireConversation(id);
-        List<String> analyzedIds = memberAnalyses.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
-                .map(MemberAnalysis::getMemberExternalId).toList();
-        return ApiEnvelope.ok(members.findTop200ByConversationIdOrderByLastSeenAtDesc(id).stream()
-                .map(member -> new MemberRow(member.getId(), member.getMemberExternalId(),
-                        member.getDisplayName(), member.getLastSeenAt(),
-                        analyzedIds.contains(member.getMemberExternalId())))
+        Map<Long, ImContact> contactById = new HashMap<>();
+        for (ImContact contact : contacts.findAllById(binds
+                .findByConversationIdOrderByJoinedAtAsc(id).stream()
+                .map(ImConversationContactBind::getContactId).distinct().toList())) {
+            contactById.put(contact.getId(), contact);
+        }
+        List<Long> analyzedContactIds = contactProfiles
+                .findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
+                .map(ImConversationContactProfile::getContactId).toList();
+        return ApiEnvelope.ok(binds
+                .findTop200ByConversationIdAndLeftAtIsNullOrderByLastSeenAtDesc(id).stream()
+                .map(bind -> {
+                    ImContact contact = contactById.get(bind.getContactId());
+                    return new ContactBindRow(bind.getId(), bind.getContactId(),
+                            contact == null ? null : contact.getPlatformId(),
+                            bind.getDisplayName() != null ? bind.getDisplayName()
+                                    : contactName(contact),
+                            bind.getRole().value(), bind.getLastSeenAt(),
+                            analyzedContactIds.contains(bind.getContactId()));
+                })
                 .toList());
     }
 
     @PostMapping("/{id}/analysis")
     public ApiEnvelope<AnalysisRow> runAnalysis(@PathVariable Long id, @RequestBody AnalysisRequest body) {
         ImConversation conversation = requireConversation(id);
-        if (!StringUtils.hasText(body.memberExternalId())) {
-            throw new IllegalArgumentException("memberExternalId 不能为空。");
+        if (body.contactId() == null) {
+            throw new IllegalArgumentException("contactId 不能为空。");
         }
-        MemberAnalysis analysis = memberAnalyzer.analyzeMember(conversation,
-                body.memberExternalId().strip(), body.memberName());
+        ImConversationContactProfile analysis = contactAnalyzer.analyzeContact(conversation, body.contactId());
         if (analysis == null) {
             throw new NoSuchElementException("归档里没有该成员的消息，无法分析。");
         }
@@ -181,8 +259,60 @@ public class ConversationController {
     @GetMapping("/{id}/analysis")
     public ApiEnvelope<List<AnalysisRow>> analysis(@PathVariable Long id) {
         requireConversation(id);
-        return ApiEnvelope.ok(memberAnalyses.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
+        return ApiEnvelope.ok(contactProfiles.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
                 .map(this::toAnalysisRow).toList());
+    }
+
+    /** 附件内容下发：已落盘的直接回字节；只有平台引用的懒拉取一次并归档到本地媒体仓库。 */
+    @GetMapping("/{id}/attachments/{attachmentId}/content")
+    public ResponseEntity<Resource> attachmentContent(@PathVariable Long id,
+            @PathVariable Long attachmentId) {
+        ImConversation conversation = requireConversation(id);
+        ImAttachment attachment = attachments.findById(attachmentId)
+                .orElseThrow(() -> new NoSuchElementException("附件不存在：" + attachmentId + "。"));
+        ImMessage message = messages.findById(attachment.getMessageId())
+                .filter(stored -> stored.getConversationId().equals(conversation.getId()))
+                .orElseThrow(() -> new NoSuchElementException("附件不属于会话：" + id + "。"));
+        ImAttachment stored = StringUtils.hasText(attachment.getStorageRef())
+                ? attachment
+                : downloadToLocal(attachment, message, conversation);
+        byte[] data = mediaStorage.read(stored.getStorageRef())
+                .orElseThrow(() -> new NoSuchElementException(
+                        "附件内容不存在（引用失效或未落仓库）：" + stored.getStorageRef() + "。"));
+        return MediaContentResponses.inline(data, stored.getMimeType(), stored.getFilename());
+    }
+
+    /** 未落盘附件的一次性懒拉取：平台下载 → 本地媒体仓库 → 回填 storage_ref 与状态。 */
+    private ImAttachment downloadToLocal(ImAttachment attachment, ImMessage message,
+            ImConversation conversation) {
+        if (!StringUtils.hasText(attachment.getPlatformRef())) {
+            throw new NoSuchElementException("附件既没有本地文件也没有平台引用，无法拉取内容。");
+        }
+        ImAccount account = accounts.findById(conversation.getAccountId())
+                .orElseThrow(() -> new NoSuchElementException("会话连接不存在，无法拉取附件内容。"));
+        ImAdapter adapter = adapters.forPlatform(account.getPlatform());
+        if (!adapter.configured()) {
+            throw new IllegalArgumentException(
+                    "平台连接未启用（" + account.getPlatform() + "），无法拉取附件内容。");
+        }
+        ImAdapter.MediaBytes media = attachment.getKind() == AttachmentKind.PREVIEW
+                ? adapter.downloadPreview(message.getPlatformId())
+                : adapter.downloadAsset(message.getPlatformId(), message.getKind());
+        if (media == null || media.data() == null || media.data().length == 0) {
+            throw new NoSuchElementException("平台侧没有该附件的内容：" + attachment.getPlatformRef() + "。");
+        }
+        String storageRef = mediaStorage.store("attachments", attachment.getFilename(), media.data());
+        attachment.setStorageRef(storageRef);
+        if (!StringUtils.hasText(attachment.getMimeType()) && StringUtils.hasText(media.contentType())) {
+            attachment.setMimeType(media.contentType());
+        }
+        if (attachment.getSizeBytes() == null) {
+            attachment.setSizeBytes((long) media.data().length);
+        }
+        attachment.setStatus(AttachmentStatus.DOWNLOADED);
+        attachment.setDownloadedAt(Instant.now());
+        attachment.setError(null);
+        return attachments.save(attachment);
     }
 
     @GetMapping("/search")
@@ -191,13 +321,38 @@ public class ConversationController {
             throw new IllegalArgumentException("keyword 不能为空。");
         }
         Map<Long, String> conversationLabels = labels.labels();
-        return ApiEnvelope.ok(messages.searchByBody(keyword.strip(), PageRequest.of(0, 50)).stream()
+        List<ImMessage> found = messages.searchByBody(keyword.strip(),
+                org.springframework.data.domain.PageRequest.of(0, 50));
+        Map<Long, ImContact> contactById = contactMap(found);
+        return ApiEnvelope.ok(found.stream()
                 .map(message -> new SearchHit(message.getId(), message.getConversationId(),
                         conversationLabels.getOrDefault(message.getConversationId(),
                                 String.valueOf(message.getConversationId())),
-                        message.getSenderId(), message.getSenderName(), message.getCategory().value(),
-                        message.getBody(), message.getArchivedAt()))
+                        message.getContactId(),
+                        contactName(contactById.get(message.getContactId())),
+                        message.getKind().value(), message.getBody(), message.getArchivedAt()))
                 .toList());
+    }
+
+    private Map<Long, ImContact> contactMap(List<ImMessage> list) {
+        List<Long> ids = list.stream().map(ImMessage::getContactId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, ImContact> byId = new HashMap<>();
+        for (ImContact contact : contacts.findAllById(ids)) {
+            byId.put(contact.getId(), contact);
+        }
+        return byId;
+    }
+
+    private static String contactName(ImContact contact) {
+        if (contact == null) {
+            return null;
+        }
+        if (StringUtils.hasText(contact.getAlias())) {
+            return contact.getAlias();
+        }
+        return StringUtils.hasText(contact.getDisplayName())
+                ? contact.getDisplayName() : contact.getPlatformId();
     }
 
     private ImConversation requireConversation(Long id) {
@@ -207,8 +362,10 @@ public class ConversationController {
         return conversations.findById(id).orElseThrow();
     }
 
-    private AnalysisRow toAnalysisRow(MemberAnalysis analysis) {
-        return new AnalysisRow(analysis.getId(), analysis.getMemberExternalId(), analysis.getMemberName(),
+    private AnalysisRow toAnalysisRow(ImConversationContactProfile analysis) {
+        ImContact contact = contacts.findById(analysis.getContactId()).orElse(null);
+        return new AnalysisRow(analysis.getId(), analysis.getContactId(),
+                contactName(contact),
                 analysis.getProfile(), analysis.getMessageCount(), analysis.getGeneratedAt());
     }
 }

@@ -37,19 +37,19 @@ public class LoggingMessageHandler implements ImEventHandler {
     @Override
     public void handle(ImEvent event) {
         ImAdapter adapter = adapters.forPlatform(event.platform());
-        ImAdapter.FetchedMessage message = adapter.fetchMessage(event.messageId());
-        if (!event.messageId().equals(message.messageId())
-                || !event.conversationId().equals(message.conversationExternalId())) {
+        ImAdapter.FetchedMessage message = adapter.fetchMessage(event.platformMessageId());
+        if (!event.platformMessageId().equals(message.platformMessageId())
+                || !event.conversationPlatformId().equals(message.conversationPlatformId())) {
             throw new ImContractException("Committed message identity mismatch: the event points at "
-                    + event.platform() + "/" + event.conversationId() + "/" + event.messageId()
-                    + " but the fetched message is " + message.conversationExternalId()
-                    + "/" + message.messageId() + ".");
+                    + event.platform() + "/" + event.conversationPlatformId() + "/" + event.platformMessageId()
+                    + " but the fetched message is " + message.conversationPlatformId()
+                    + "/" + message.platformMessageId() + ".");
         }
         log.info("message platform={} conversation={} from={} category={} body={}",
                 event.platform(),
-                message.conversationExternalId(),
-                message.senderId() == null ? "unknown" : message.senderId(),
-                message.category(),
+                message.conversationPlatformId(),
+                message.senderPlatformId() == null ? "unknown" : message.senderPlatformId(),
+                message.kind(),
                 preview(message.body()));
     }
 

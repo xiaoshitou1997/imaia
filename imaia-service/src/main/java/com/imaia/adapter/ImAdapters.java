@@ -1,5 +1,7 @@
 package com.imaia.adapter;
 
+import com.imaia.domain.Platform;
+
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
@@ -16,7 +18,7 @@ import java.util.stream.Collectors;
 @Component
 public class ImAdapters {
 
-    private final Map<String, ImAdapter> byPlatform;
+    private final Map<Platform, ImAdapter> byPlatform;
 
     public ImAdapters(List<ImAdapter> adapters) {
         this.byPlatform = adapters.stream()
@@ -24,7 +26,7 @@ public class ImAdapters {
     }
 
     /** The adapter of one platform; failing fast on an unknown platform. */
-    public ImAdapter forPlatform(String platform) {
+    public ImAdapter forPlatform(Platform platform) {
         ImAdapter adapter = byPlatform.get(platform);
         if (adapter == null) {
             throw new IllegalStateException("No IM adapter registered for platform '" + platform + "'.");

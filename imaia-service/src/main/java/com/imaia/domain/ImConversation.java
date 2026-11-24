@@ -7,8 +7,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -16,50 +17,44 @@ import lombok.Setter;
 import java.time.Instant;
 
 /**
- * One conversation line (微信私聊/群、飞书会话): the long-lived channel messages flow
- * through, owned by an {@link ImConnection}. {@code id} is the hub's unified
- * conversation identity — every child table hangs off it; {@code externalId} keeps
- * the platform-native chat id and is only ever translated at the adapter boundary.
- * {@code persona} is the line-level persona (empty = the global default prompt);
- * {@code autoreply} is the line-level AI reply switch, default off, the global
- * master switch in assistant_settings is the second safety.
+ * One conversation line (wechat direct/group, feishu chat, future channel): the
+ * long-lived channel messages flow through, owned by an {@link ImAccount}.
+ * {@code id} is the hub's unified conversation identity; {@code platformId} keeps
+ * the platform-native chat id and is only translated at the adapter boundary.
+ * {@code title} is the display name; line-level capability settings (persona,
+ * autoreply) live in the scoped {@code ai_setting} KV table instead.
  */
 @Entity
-@Table(name = "im_conversation", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"connection_id", "external_id"})})
+@Table(name = "im_conversation")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class ImConversation {
-
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "connection_id", nullable = false)
-    private Long connectionId;
+    @Column(name = "account_id", nullable = false)
+    private Long accountId;
 
-    @Column(name = "external_id", nullable = false)
-    private String externalId;
+    @Column(name = "platform_id", nullable = false)
+    private String platformId;
 
-    @Column(name = "display_name")
-    private String displayName;
-
-    /** direct | group. */
-    @Column(nullable = false)
     @Convert(converter = ConversationKind.Converter.class)
+    @Column(nullable = false)
     private ConversationKind kind;
+
+    @Column(name = "title")
+    private String title;
 
     @Column
     private String remark;
 
-    /** Line-level persona; null/blank = assistant_settings.system_prompt default. */
-    @Column
-    private String persona;
-
-    @Column(nullable = false)
-    private boolean autoreply;
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 
     @Column(name = "first_seen_at")
     private Instant firstSeenAt;
@@ -67,17 +62,12 @@ public class ImConversation {
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
 
+    @Column(name = "last_message_at")
+    private Instant lastMessageAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    public ImConversation(Long connectionId, String externalId, String displayName, ConversationKind kind,
-            Instant firstSeenAt, Instant lastSeenAt, Instant createdAt) {
-        this.connectionId = connectionId;
-        this.externalId = externalId;
-        this.displayName = displayName;
-        this.kind = kind;
-        this.firstSeenAt = firstSeenAt;
-        this.lastSeenAt = lastSeenAt;
-        this.createdAt = createdAt;
-    }
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 }

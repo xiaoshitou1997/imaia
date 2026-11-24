@@ -9,7 +9,8 @@ import java.util.Locale;
 
 /** Who created the scheduled task. */
 public enum TaskCreator {
-    AI, CONSOLE;
+    AI,
+    CONSOLE;
 
     /** The stored/API representation (lowercase). */
     @JsonValue
@@ -26,7 +27,7 @@ public enum TaskCreator {
     @JsonCreator
     public static TaskCreator fromValue(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("TaskCreator 值不能为空。");
+            throw new IllegalArgumentException("TaskCreator 不能为空。");
         }
         try {
             return TaskCreator.valueOf(value.strip().toUpperCase(Locale.ROOT));
@@ -35,13 +36,13 @@ public enum TaskCreator {
         }
     }
 
-    /** JPA converter: enum ↔ lowercase VARCHAR. */
+    /** JPA converter: enum -> lowercase VARCHAR. */
     @jakarta.persistence.Converter
     public static class Converter implements AttributeConverter<TaskCreator, String> {
 
         @Override
         public String convertToDatabaseColumn(TaskCreator attribute) {
-            return attribute == null ? AI.value() : attribute.value();
+            return attribute == null ? CONSOLE.value() : attribute.value();
         }
 
         @Override

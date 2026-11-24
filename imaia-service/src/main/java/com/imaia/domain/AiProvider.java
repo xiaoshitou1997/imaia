@@ -1,38 +1,41 @@
 package com.imaia.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
 /**
- * One AI provider connection (OpenAI-protocol family with a /v1 root); its models
- * live in {@link AiModel} and are synced from the provider's /v1/models listing.
- * The provider named {@code tavily} is reserved for web search. api_key is masked
- * in every API response.
+ * AI provider (OpenAI-protocol gateway, Tavily search, ...). Only
+ * {@code kind = openai} providers participate in /v1 model sync.
  */
 @Entity
 @Table(name = "ai_provider")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class AiProvider {
-
-    public static final String PROVIDER_TAVILY = "tavily";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String name;
 
     @Column(name = "base_url", nullable = false)
@@ -41,25 +44,19 @@ public class AiProvider {
     @Column(name = "api_key")
     private String apiKey;
 
-    @Column(nullable = false)
-    private boolean enabled;
-
-    /** models.dev provider key for metadata enrichment; null = match by model id only. */
     @Column(name = "models_dev_id")
     private String modelsDevId;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column
+    private String config;
+
+    @Column(nullable = false)
+    private boolean enabled;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    public AiProvider(String name, String baseUrl, String apiKey, Instant createdAt) {
-        this.name = name;
-        this.baseUrl = baseUrl;
-        this.apiKey = apiKey;
-        this.enabled = true;
-        this.createdAt = createdAt;
-        this.updatedAt = createdAt;
-    }
 }

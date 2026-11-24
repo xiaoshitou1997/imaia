@@ -1,6 +1,6 @@
 # imaia — 智能聚合中枢 IM（PRD v0.2）
-# 平台接入配置（daemon 地址/token、飞书 app 凭据等）统一存数据库 platform_account
-# 表 im_connection（config JSONB），不在环境变量/yml 里；本文件只承载启动前置与基础设施。
+# 平台接入配置（daemon 地址/token、飞书 app 凭据等）统一存数据库
+# 表 im_account（config JSONB），不在环境变量/yml 里；本文件只承载启动前置与基础设施。
 server:
   # WebUI and control API bind to loopback only.
   address: ${IMAIA_WEB_ADDRESS:127.0.0.1}
@@ -39,11 +39,24 @@ logging:
     com.imaia.ai: DEBUG
 
 imaia:
+  admin:
+    # 控制台登录凭据：只从环境变量注入，不落库不落盘；密码未配置时登录端点整体禁用。
+    username: ${IMAIA_ADMIN_USERNAME:admin}
+    password: ${IMAIA_ADMIN_PASSWORD:}
   dispatch:
     # Consecutive failures on the same event before the stream stops (poison guard).
     handler-failure-threshold: 5
+  actions:
+    # 定时任务执行器开关（TaskRunner bean 是否存在；每日粒度控制在 ai_setting.enabled）。
+    enabled: ${IMAIA_ACTIONS_ENABLED:true}
+  storage:
+    # 媒体二进制仓库（AI 产物与消息附件）：S3 兼容端点（rustfs/MinIO），无本地盘后端。
+    # storageRef 即 object key（category/yyyy/mm/uuid.ext）；凭据只经环境变量注入。
+    endpoint: ${IMAIA_S3_ENDPOINT:http://127.0.0.1:19000}
+    bucket: ${IMAIA_S3_BUCKET:imaia-media}
+    access-key: ${IMAIA_S3_ACCESS_KEY:}
+    secret-key: ${IMAIA_S3_SECRET_KEY:}
   ai:
-    # Master switch for the AI reply chain (the DB guardrails in assistant_settings
-    # are the second layer). Settings and the model directory live in the database
-    # (assistant_settings / provider+model) and are edited in the WebUI.
-    enabled: false
+    # Deploy-time kill switch for the AI reply chain (bean existence). The daily
+    # control is the DB master switch in ai_setting (WebUI 设置页), edited live.
+    enabled: ${IMAIA_AI_ENABLED:true}

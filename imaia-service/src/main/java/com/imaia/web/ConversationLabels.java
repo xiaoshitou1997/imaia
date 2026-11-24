@@ -1,7 +1,7 @@
 package com.imaia.web;
 
-import com.imaia.domain.ImConnection;
-import com.imaia.repository.ImConnectionRepository;
+import com.imaia.domain.ImAccount;
+import com.imaia.repository.ImAccountRepository;
 import com.imaia.repository.ImConversationRepository;
 import com.imaia.repository.ImMessageRepository;
 import org.springframework.stereotype.Component;
@@ -10,38 +10,38 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Shared conversation/connection lookups for list views (batch reads, no N+1). */
+/** Shared conversation/account lookups for list views (batch reads, no N+1). */
 @Component
 public class ConversationLabels {
 
-    private final ImConnectionRepository connections;
+    private final ImAccountRepository accounts;
     private final ImConversationRepository conversations;
     private final ImMessageRepository messages;
 
-    public ConversationLabels(ImConnectionRepository connections, ImConversationRepository conversations,
+    public ConversationLabels(ImAccountRepository accounts, ImConversationRepository conversations,
             ImMessageRepository messages) {
-        this.connections = connections;
+        this.accounts = accounts;
         this.conversations = conversations;
         this.messages = messages;
     }
 
-    public Map<Long, ImConnection> connectionsById() {
-        Map<Long, ImConnection> map = new LinkedHashMap<>();
-        for (ImConnection connection : connections.findAllByOrderByIdAsc()) {
-            map.put(connection.getId(), connection);
+    public Map<Long, ImAccount> accountsById() {
+        Map<Long, ImAccount> map = new LinkedHashMap<>();
+        for (ImAccount account : accounts.findAllByOrderByIdAsc()) {
+            map.put(account.getId(), account);
         }
         return map;
     }
 
     /** platform · display-name (fallback external id) per conversation id. */
     public Map<Long, String> labels() {
-        Map<Long, ImConnection> connectionById = connectionsById();
+        Map<Long, ImAccount> accountById = accountsById();
         Map<Long, String> labels = new LinkedHashMap<>();
         for (var conversation : conversations.findTop200ByOrderByLastSeenAtDesc()) {
-            ImConnection connection = connectionById.get(conversation.getConnectionId());
-            String prefix = connection == null ? "" : connection.getPlatform() + " · ";
-            labels.put(conversation.getId(), prefix + (conversation.getDisplayName() == null
-                    ? conversation.getExternalId() : conversation.getDisplayName()));
+            ImAccount account = accountById.get(conversation.getAccountId());
+            String prefix = account == null ? "" : account.getPlatform() + " · ";
+            labels.put(conversation.getId(), prefix + (conversation.getTitle() == null
+                    ? conversation.getPlatformId() : conversation.getTitle()));
         }
         return labels;
     }
@@ -54,7 +54,7 @@ public class ConversationLabels {
         return counts;
     }
 
-    public List<ImConnection> allConnections() {
-        return connections.findAllByOrderByIdAsc();
+    public List<ImAccount> allAccounts() {
+        return accounts.findAllByOrderByIdAsc();
     }
 }

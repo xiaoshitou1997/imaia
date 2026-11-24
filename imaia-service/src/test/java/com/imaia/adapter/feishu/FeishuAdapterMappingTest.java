@@ -1,6 +1,6 @@
 package com.imaia.adapter.feishu;
 
-import com.imaia.domain.MessageCategory;
+import com.imaia.domain.MessageKind;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -33,16 +33,16 @@ class FeishuAdapterMappingTest {
 
     @Test
     void msgTypeMapsToNormalizedCategories() {
-        assertThat(FeishuMessages.categoryOf("text")).isEqualTo(MessageCategory.TEXT);
-        assertThat(FeishuMessages.categoryOf("image")).isEqualTo(MessageCategory.IMAGE);
-        assertThat(FeishuMessages.categoryOf("audio")).isEqualTo(MessageCategory.VOICE);
-        assertThat(FeishuMessages.categoryOf("media")).isEqualTo(MessageCategory.VIDEO);
-        assertThat(FeishuMessages.categoryOf("sticker")).isEqualTo(MessageCategory.STICKER);
-        assertThat(FeishuMessages.categoryOf("file")).isEqualTo(MessageCategory.FILE);
-        assertThat(FeishuMessages.categoryOf("post")).isEqualTo(MessageCategory.RICH);
-        assertThat(FeishuMessages.categoryOf("interactive")).isEqualTo(MessageCategory.RICH);
-        assertThat(FeishuMessages.categoryOf("unknown_kind")).isEqualTo(MessageCategory.OTHER);
-        assertThat(FeishuMessages.categoryOf(null)).isEqualTo(MessageCategory.OTHER);
+        assertThat(FeishuMessages.categoryOf("text")).isEqualTo(MessageKind.TEXT);
+        assertThat(FeishuMessages.categoryOf("image")).isEqualTo(MessageKind.IMAGE);
+        assertThat(FeishuMessages.categoryOf("audio")).isEqualTo(MessageKind.VOICE);
+        assertThat(FeishuMessages.categoryOf("media")).isEqualTo(MessageKind.VIDEO);
+        assertThat(FeishuMessages.categoryOf("sticker")).isEqualTo(MessageKind.STICKER);
+        assertThat(FeishuMessages.categoryOf("file")).isEqualTo(MessageKind.FILE);
+        assertThat(FeishuMessages.categoryOf("post")).isEqualTo(MessageKind.RICH);
+        assertThat(FeishuMessages.categoryOf("interactive")).isEqualTo(MessageKind.RICH);
+        assertThat(FeishuMessages.categoryOf("unknown_kind")).isEqualTo(MessageKind.OTHER);
+        assertThat(FeishuMessages.categoryOf(null)).isEqualTo(MessageKind.OTHER);
     }
 
     @Test
@@ -57,13 +57,13 @@ class FeishuAdapterMappingTest {
     @Test
     void mediaKeysAreReadPerCategory() {
         String media = "{\"file_key\":\"vid_k\",\"image_key\":\"cover_k\",\"duration\":5200}";
-        assertThat(FeishuMessages.mediaKey("media", media, MessageCategory.VIDEO)).isEqualTo("vid_k");
+        assertThat(FeishuMessages.mediaKey("media", media, MessageKind.VIDEO)).isEqualTo("vid_k");
         assertThat(FeishuMessages.previewKey(media)).isEqualTo("cover_k");
         String audio = "{\"file_key\":\"aud_k\",\"duration\":1300}";
-        assertThat(FeishuMessages.mediaKey("audio", audio, MessageCategory.VOICE)).isEqualTo("aud_k");
+        assertThat(FeishuMessages.mediaKey("audio", audio, MessageKind.VOICE)).isEqualTo("aud_k");
         String image = "{\"image_key\":\"img_k\"}";
-        assertThat(FeishuMessages.mediaKey("image", image, MessageCategory.IMAGE)).isEqualTo("img_k");
-        assertThat(FeishuMessages.mediaKey("image", image, MessageCategory.VOICE)).isNull();
+        assertThat(FeishuMessages.mediaKey("image", image, MessageKind.IMAGE)).isEqualTo("img_k");
+        assertThat(FeishuMessages.mediaKey("image", image, MessageKind.VOICE)).isNull();
         assertThat(FeishuMessages.previewKey("{\"file_key\":\"only_file\"}")).isNull();
     }
 }
