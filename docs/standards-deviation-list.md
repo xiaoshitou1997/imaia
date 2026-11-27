@@ -72,6 +72,26 @@
 
 复核脚本：`imaia-tmp/review/check-method-budget.js`（按花括号配平统计，可重跑）。
 
+## 一点六、node_modules 密文修复（本轮）
+
+**问题**：`node_modules` 中 4076 个文件（约 150 个包）是 TSD 密文，导致 `vitest`、`vite build`、`knip` 全部无法启动，前端「能构建、测试通过」长期处于未验证状态。
+
+**处理**：按 rt-dlp-manager 用 Node 通道诊断逐个包，删除含密文的包目录后由 npm 重新拉取公开包。密文从 **4076 → 0**。
+
+**随之暴露并修复的真实缺陷**（此前被环境阻塞掩盖）：
+
+| 缺陷 | 说明 |
+| --- | --- |
+| `vi.mock` 未提升 | 5 个测试用顶层 `vi.fn()` 在工厂内引用，vitest 4 直接拒绝；改为 `vi.hoisted` |
+| 命令面板英文残留 | `Type a command or search...`、`No results found.`、`Theme`/`Light`/`Dark`/`System` 未中文化（违反 frontend-guide 条款 6） |
+| 主题菜单英文残留 | `theme-switch.tsx` 的 Light/Dark/System 同上 |
+| 测试断言与真实 UI 脱节 | `search-provider.test.tsx` 仍断言 `Dashboard`/`Tasks`/`Settings Account`/`/settings/account`，实际是 `概览`/`定时任务`/`设置`/`/settings` |
+| 双 lockfile | `pnpm-lock.yaml` 与 `package-lock.json` 并存，实际用 npm；删除 pnpm 的 |
+| 测试重复挂载 | `user-auth-form` 的 redirectTo 用例二次渲染导致 label 命中多元素 |
+
+**环境适配**：Playwright 浏览器下载被网络重置，改用系统 Chrome（`playwright({ launchOptions: { channel: 'chrome' } })`）。
+
+
 ## 二、未处理项（需你决策或提供资源）
 
 | 条款 | 偏离内容 | 阻塞原因 |
@@ -94,7 +114,8 @@
 | 后端测试 | `mvn -o -q test`（多模块） | exit 0，145 用例，0 失败 0 错误 |
 | 前端类型 | `node node_modules/typescript/bin/tsc -b` | exit 0 |
 | 前端 lint | `node node_modules/eslint/bin/eslint.js src` | 2 error / 6 warning，**均为 HEAD 既有**（`accounts-dialogs.tsx:22`、`providers-dialogs.tsx:23` 的 setState-in-effect；删除该 effect 会造成真实功能回归，已回滚尝试） |
-| 前端测试 | `node node_modules/vitest/vitest.mjs run` | **未执行**：`node_modules/pathe` 与 `vitest/vitest.mjs` 是 TSD 密文（`%TSD-Header-###%`），Node 启动即报 `SyntaxError`。已写的 `error-copy.test.ts`、`handle-server-error.test.ts` 等**未经运行验证** |
+| 前端测试 | `node node_modules/vitest/vitest.mjs run --browser.headless` | **exit 0，15 文件 91 用例全通过**（node_modules 密文已修复） |
+| 前端构建 | `node node_modules/vite/bin/vite.js build` | **exit 0**，产物 `dist/` 已生成 |
 | 可访问性实测 | Lighthouse / DevTools | **未执行**：需启动 dev server 与浏览器环境 |
 
 ## 五、审计脚本可复现
