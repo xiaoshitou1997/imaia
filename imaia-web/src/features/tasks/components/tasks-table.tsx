@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-table'
 import { cn } from '@/lib/utils'
 import { api, type TaskRow } from '@/lib/api'
+import { t } from '@/lib/copy'
 import {
   Table,
   TableBody,
@@ -72,7 +73,16 @@ export function TasksTable({ status }: TasksTableProps) {
             ))}
           </TableHeader>
           <TableBody>
-            {query.isLoading ? (
+            {query.isError ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className='h-24 text-center text-muted-foreground'
+                >
+                  {t('state.loadFailed')}
+                </TableCell>
+              </TableRow>
+            ) : query.isLoading ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length}

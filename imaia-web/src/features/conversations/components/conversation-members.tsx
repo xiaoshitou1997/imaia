@@ -5,6 +5,7 @@ import { zhCN } from 'date-fns/locale'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
+import { t } from '@/lib/copy'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -46,6 +47,17 @@ export function ConversationMembers({ convoId }: { convoId: number }) {
   }
 
   const rows = contacts.data ?? []
+  // 加载失败与「成员快照未建立」是两回事，不能共用同一个空态文案。
+  if (contacts.isError) {
+    return (
+      <div className='flex flex-col items-start gap-2 py-6'>
+        <p className='text-sm text-muted-foreground'>{t('state.loadFailed')}</p>
+        <Button variant='outline' size='sm' onClick={() => void contacts.refetch()}>
+          {t('action.retry')}
+        </Button>
+      </div>
+    )
+  }
   if (contacts.isLoading) {
     return <p className='py-6 text-sm text-muted-foreground'>加载中…</p>
   }

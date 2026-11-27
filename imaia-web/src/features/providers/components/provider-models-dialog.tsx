@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, ApiError, type ModelRow } from '@/lib/api'
+import { t } from '@/lib/copy'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -122,7 +123,20 @@ export function ProviderModelsDialog({
         </div>
 
         <div className='min-h-0 flex-1 overflow-y-auto rounded-md border'>
-          {providers.isLoading ? (
+          {providers.isError ? (
+            <div className='flex flex-col items-center gap-2 py-8'>
+              <p className='text-sm text-muted-foreground'>
+                {t('state.loadFailed')}
+              </p>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => void providers.refetch()}
+              >
+                {t('action.retry')}
+              </Button>
+            </div>
+          ) : providers.isLoading ? (
             <p className='py-8 text-center text-sm text-muted-foreground'>
               加载中…
             </p>

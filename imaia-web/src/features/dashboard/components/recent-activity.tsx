@@ -2,14 +2,32 @@ import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { api } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { t } from '@/lib/copy'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
 export function RecentActivity() {
-  const { data } = useQuery({
+  const recent = useQuery({
     queryKey: ['recent-messages'],
     queryFn: api.recentMessages,
   })
-  const items = data ?? []
+  const items = recent.data ?? []
+
+  // 请求失败不能被当成「还没有消息」：两者对用户的含义完全不同。
+  if (recent.isError) {
+    return (
+      <div className='flex flex-col items-start gap-2'>
+        <p className='text-sm text-muted-foreground'>{t('state.loadFailed')}</p>
+        <Button variant='outline' size='sm' onClick={() => void recent.refetch()}>
+          {t('action.retry')}
+        </Button>
+      </div>
+    )
+  }
+
+  if (recent.isLoading) {
+    return <p className='text-sm text-muted-foreground'>{t('state.loading')}</p>
+  }
 
   if (!items.length) {
     return (

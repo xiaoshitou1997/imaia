@@ -20,6 +20,8 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { api } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { t } from '@/lib/copy'
 import { RecentActivity } from './components/recent-activity'
 
 function StatCard({
@@ -72,6 +74,26 @@ export function Dashboard() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+        {overview.isError || runtime.isError ? (
+          <div
+            role='alert'
+            className='flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3'
+          >
+            <span className='text-sm text-muted-foreground'>
+              {t('state.loadFailed')}
+            </span>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => {
+                void overview.refetch()
+                void runtime.refetch()
+              }}
+            >
+              {t('action.retry')}
+            </Button>
+          </div>
+        ) : null}
         <div>
           <h2 className='text-2xl font-bold tracking-tight'>概览</h2>
           <p className='text-muted-foreground'>

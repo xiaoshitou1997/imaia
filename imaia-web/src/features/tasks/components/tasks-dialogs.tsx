@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDateTime, localInputToIso } from '@/lib/datetime'
 import { api, ApiError, type TaskRun, type TaskRow } from '@/lib/api'
+import { t } from '@/lib/copy'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -218,6 +219,11 @@ function CreateTaskDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      {conversations.isError ? (
+                        <SelectItem value='__load_failed__' disabled>
+                          {t('state.loadFailed')}
+                        </SelectItem>
+                      ) : null}
                       {(conversations.data?.items ?? []).map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>
                           {c.displayName}（#{c.id}）
@@ -406,7 +412,11 @@ function RunsDialog({
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} className='h-20 text-center text-muted-foreground'>
-                    {runs.isLoading ? '加载中…' : '还没有运行记录。'}
+                    {runs.isError
+                      ? t('state.loadFailed')
+                      : runs.isLoading
+                        ? t('state.loading')
+                        : '还没有运行记录。'}
                   </TableCell>
                 </TableRow>
               )}
