@@ -6,6 +6,8 @@ import com.imaia.domain.AiProvider;
 import com.imaia.domain.ModelSlot;
 import com.imaia.repository.AiModelRepository;
 import com.imaia.repository.AiProviderRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.JsonNode;
@@ -25,6 +27,8 @@ import java.util.Map;
  */
 @Component
 public class AiModelCatalog {
+
+    private static final Logger log = LoggerFactory.getLogger(AiModelCatalog.class);
 
     /** One model resolved from the directory together with its provider connection. */
     public record Resolved(Long providerId, Long aiModelId, String providerName, String baseUrl,
@@ -130,29 +134,45 @@ public class AiModelCatalog {
         return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
     }
 
+    /**
+     * 解析 JSON 字符串数组。
+     *
+     * <p>字段为空是合法状态（返回空列表）；但「有内容却解析不了」是数据损坏，
+     * 必须留痕——静默返回空列表会让模型被判定为「不支持该模态」，
+     * 表现成用户发图没反应，而日志里什么线索都没有。
+     */
     private static List<String> parseList(String json) {
+        if (!StringUtils.hasText(json)) {
+            return List.of();
+        }
         try {
             List<String> out = new ArrayList<>();
-            for (JsonNode node : JsonSupport.mapper().readTree(!StringUtils.hasText(json) ? "[]" : json)) {
+            for (JsonNode node : JsonSupport.mapper().readTree(json)) {
                 if (node.isString()) {
                     out.add(node.asString());
                 }
             }
             return out;
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException malformed) {
+            log.warn("模型 modalities 字段不是合法 JSON 数组，按空处理: {}", json, malformed);
             return List.of();
         }
     }
 
+    /** 解析 JSON 字符串映射；空值与非字符串值的行为同 {@link #parseList(String)}。 */
     private static Map<String, String> parseMap(String json) {
+        if (!StringUtils.hasText(json)) {
+            return Map.of();
+        }
         try {
             Map<String, String> out = new LinkedHashMap<>();
-            for (var field : JsonSupport.mapper().readTree(!StringUtils.hasText(json) ? "{}" : json).properties()) {
+            for (var field : JsonSupport.mapper().readTree(json).properties()) {
                 out.put(field.getKey(), field.getValue().isString()
                         ? field.getValue().asString() : field.getValue().toString());
             }
             return out;
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException malformed) {
+            log.warn("模型 params 字段不是合法 JSON 对象，按空处理: {}", json, malformed);
             return Map.of();
         }
     }
