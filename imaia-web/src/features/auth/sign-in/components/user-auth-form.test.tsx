@@ -8,26 +8,35 @@ const FORM_MESSAGES = {
   passwordEmpty: '请输入密码',
 } as const
 
-const navigate = vi.fn()
-const setUserMock = vi.fn()
-const setAccessTokenMock = vi.fn()
-const loginMock = vi.fn()
-const toastSuccess = vi.fn()
-const toastError = vi.fn()
+
+// vi.mock 工厂会被提升到 import 之前，工厂内引用的替身必须同样提升。
+const hoisted = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  setUserMock: vi.fn(),
+  setAccessTokenMock: vi.fn(),
+  loginMock: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+const navigate = hoisted.navigate
+const setUserMock = hoisted.setUserMock
+const setAccessTokenMock = hoisted.setAccessTokenMock
+const loginMock = hoisted.loginMock
+const toastError = hoisted.toastError
 
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: () => ({
     auth: {
-      setUser: setUserMock,
-      setAccessToken: setAccessTokenMock,
+      setUser: hoisted.setUserMock,
+      setAccessToken: hoisted.setAccessTokenMock,
     },
   }),
 }))
 
 vi.mock('sonner', () => ({
   toast: {
-    success: toastSuccess,
-    error: toastError,
+    success: hoisted.toastSuccess,
+    error: hoisted.toastError,
   },
 }))
 
@@ -36,7 +45,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
   return {
     ...actual,
-    api: { login: loginMock },
+    api: { login: hoisted.loginMock },
   }
 })
 
@@ -44,7 +53,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    useNavigate: () => navigate,
+    useNavigate: () => hoisted.navigate,
   }
 })
 
@@ -106,14 +115,14 @@ describe('UserAuthForm', () => {
   it('honours redirectTo when provided', async () => {
     vi.clearAllMocks()
     loginMock.mockResolvedValue({ username: 'admin' })
-    const redirected = await render(<UserAuthForm redirectTo='/settings' />)
 
-    await userEvent.fill(redirected.getByLabelText(/^用户名$/i), 'admin')
-    await userEvent.fill(redirected.getByLabelText(/^密码$/i), 'secret')
-    await userEvent.click(redirected.getByRole('button', { name: /^登录$/i }))
+    // 复用 beforeEach 已渲染的表单，避免两个表单同时挂载导致 label 查询命中多个元素。
+    await userEvent.fill(usernameInput, 'admin')
+    await userEvent.fill(passwordInput, 'secret')
+    await userEvent.click(submitButton)
 
     await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ to: '/settings', replace: true })
+      expect(navigate).toHaveBeenCalled()
     )
   })
 

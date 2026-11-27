@@ -32,7 +32,9 @@ export default defineConfig({
     unstubEnvs: true,
     browser: {
       enabled: true,
-      provider: playwright(),
+      // 用系统已安装的 Chrome，避免在受限网络下下载 Playwright 自带浏览器。
+      // 若需固定版本，改回 playwright() 裸调用并执行 test:browser:install。
+      provider: playwright({ launchOptions: { channel: 'chrome' } }),
       instances: [{ browser: 'chromium' }],
     },
     coverage: {

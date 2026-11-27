@@ -3,11 +3,16 @@ import { render, type RenderResult } from 'vitest-browser-react'
 import { userEvent, type Locator } from 'vitest/browser'
 import { ForgotPasswordForm } from './forgot-password-form'
 
-const navigateMock = vi.fn()
+
+// vi.mock 工厂会被提升到 import 之前，工厂内引用的替身必须同样提升。
+const hoisted = vi.hoisted(() => ({
+  navigateMock: vi.fn(),
+}))
+const navigateMock = hoisted.navigateMock
 
 vi.mock('@tanstack/react-router', async (orig) => {
   const actual = await orig<typeof import('@tanstack/react-router')>()
-  return { ...actual, useNavigate: () => navigateMock }
+  return { ...actual, useNavigate: () => hoisted.navigateMock }
 })
 
 vi.mock('@/lib/utils', async (orig) => ({

@@ -4,11 +4,15 @@ import { type Locator, userEvent } from 'vitest/browser'
 import { showSubmittedData } from '@/lib/show-submitted-data'
 import { OtpForm } from './otp-form'
 
-const navigate = vi.fn()
+
+// vi.mock 工厂会被提升到 import 之前，工厂内引用的替身必须同样提升。
+const hoisted = vi.hoisted(() => ({
+  navigate: vi.fn(),
+}))
 
 vi.mock('@tanstack/react-router', async (orig) => {
   const actual = await orig<typeof import('@tanstack/react-router')>()
-  return { ...actual, useNavigate: () => navigate }
+  return { ...actual, useNavigate: () => hoisted.navigate }
 })
 
 vi.mock('@/lib/show-submitted-data', () => ({ showSubmittedData: vi.fn() }))
@@ -50,6 +54,6 @@ describe('OtpForm', () => {
     expect(showSubmittedData).toHaveBeenCalledWith({ otp: '123456' })
 
     await vi.advanceTimersByTimeAsync(1000)
-    expect(navigate).toHaveBeenCalledWith({ to: '/' })
+    expect(hoisted.navigate).toHaveBeenCalledWith({ to: '/' })
   })
 })
