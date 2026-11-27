@@ -39,12 +39,16 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<Result<LoginResponse>> login(@Valid @RequestBody LoginRequest body) {
         if (!StringUtils.hasText(admin.password())) {
-            return Result.error(503, 503, "IMAIA_ADMIN_PASSWORD 未配置，控制台登录已禁用。");
+            return Result.error(ErrorCode.AUTH_NOT_CONFIGURED.httpStatus(),
+                    ErrorCode.AUTH_NOT_CONFIGURED.code(),
+                    ErrorCode.AUTH_NOT_CONFIGURED.defaultMessage());
         }
         boolean userOk = constantTimeEquals(body.username(), admin.username());
         boolean passOk = constantTimeEquals(body.password(), admin.password());
         if (!userOk || !passOk) {
-            return Result.error(401, 401, "用户名或密码不正确。");
+            return Result.error(ErrorCode.AUTH_INVALID_CREDENTIALS.httpStatus(),
+                    ErrorCode.AUTH_INVALID_CREDENTIALS.code(),
+                    ErrorCode.AUTH_INVALID_CREDENTIALS.defaultMessage());
         }
         return ResponseEntity.ok(Result.ok(new LoginResponse(admin.username())));
     }
