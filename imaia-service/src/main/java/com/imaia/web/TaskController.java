@@ -70,7 +70,7 @@ public class TaskController {
     }
 
     @GetMapping
-    public ApiEnvelope<PageResult<TaskRow>> list(@RequestParam(required = false) String status,
+    public Result<PageResult<TaskRow>> list(@RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         Map<Long, String> labelMap = labels.labels();
@@ -78,7 +78,7 @@ public class TaskController {
         Page<ImTask> rows = (filter == null
                 ? tasks.findAllByOrderByCreatedAtDesc(PageResult.pageable(page, size))
                 : tasks.findByStatusOrderByCreatedAtDesc(filter, PageResult.pageable(page, size)));
-        return ApiEnvelope.ok(PageResult.of(rows.map(task -> toRow(task, labelMap))));
+        return Result.ok(PageResult.of(rows.map(task -> toRow(task, labelMap))));
     }
 
     private TaskRow toRow(ImTask task, Map<Long, String> labelMap) {
@@ -93,7 +93,7 @@ public class TaskController {
     }
 
     @PostMapping
-    public ApiEnvelope<Long> create(@RequestBody TaskCreate body) {
+    public Result<Long> create(@RequestBody TaskCreate body) {
         if (body.conversationId() == null) {
             throw new IllegalArgumentException("conversationId 不能为空。");
         }
@@ -146,7 +146,7 @@ public class TaskController {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
-        return ApiEnvelope.ok(tasks.save(task).getId());
+        return Result.ok(tasks.save(task).getId());
     }
 
     private static Instant parseFireAt(String value, ZoneId zone) {
@@ -158,7 +158,7 @@ public class TaskController {
     }
 
     @PostMapping("/{id}/cancel")
-    public ApiEnvelope<String> cancel(@PathVariable Long id) {
+    public Result<String> cancel(@PathVariable Long id) {
         ImTask task = tasks.findById(id).orElseThrow();
         if (task.getStatus() != TaskStatus.ACTIVE && task.getStatus() != TaskStatus.PAUSED) {
             throw new IllegalArgumentException("只有活动/暂停任务可以取消。");
@@ -166,12 +166,12 @@ public class TaskController {
         task.setStatus(TaskStatus.CANCELLED);
         task.setUpdatedAt(Instant.now());
         tasks.save(task);
-        return ApiEnvelope.ok("已取消");
+        return Result.ok("已取消");
     }
 
     /** 强制置为到期，执行器在一轮轮询内（30s）执行。 */
     @PostMapping("/{id}/fire")
-    public ApiEnvelope<String> fire(@PathVariable Long id) {
+    public Result<String> fire(@PathVariable Long id) {
         ImTask task = tasks.findById(id).orElseThrow();
         if (task.getStatus() != TaskStatus.ACTIVE && task.getStatus() != TaskStatus.PAUSED) {
             throw new IllegalArgumentException("只有活动/暂停任务可以手动触发。");
@@ -183,16 +183,16 @@ public class TaskController {
         }
         task.setUpdatedAt(Instant.now());
         tasks.save(task);
-        return ApiEnvelope.ok("已触发，任务将在 30 秒内执行");
+        return Result.ok("已触发，任务将在 30 秒内执行");
     }
 
     @GetMapping("/{id}/runs")
-    public ApiEnvelope<PageResult<RunRow>> runs(@PathVariable Long id,
+    public Result<PageResult<RunRow>> runs(@PathVariable Long id,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
         tasks.findById(id).orElseThrow();
         Page<ImTaskLog> rows = runs.findByTaskIdOrderByScheduledForDesc(id, PageResult.pageable(page, size));
-        return ApiEnvelope.ok(PageResult.of(rows.map(this::toRunRow)));
+        return Result.ok(PageResult.of(rows.map(this::toRunRow)));
     }
 
     private RunRow toRunRow(ImTaskLog run) {

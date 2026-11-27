@@ -18,33 +18,33 @@ public class GlobalApiExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalApiExceptionHandler.class);
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiEnvelope<Void>> badRequest(IllegalArgumentException failure) {
-        return ApiEnvelope.error(400, 400, failure.getMessage());
+    public ResponseEntity<Result<Void>> badRequest(IllegalArgumentException failure) {
+        return Result.error(400, 400, failure.getMessage());
     }
 
     @ExceptionHandler(NoSuchElementException.class)
-    public ResponseEntity<ApiEnvelope<Void>> notFound(NoSuchElementException failure) {
-        return ApiEnvelope.error(404, 404, failure.getMessage() == null ? "资源不存在。" : failure.getMessage());
+    public ResponseEntity<Result<Void>> notFound(NoSuchElementException failure) {
+        return Result.error(404, 404, failure.getMessage() == null ? "资源不存在。" : failure.getMessage());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiEnvelope<Void>> conflict(DataIntegrityViolationException failure) {
-        return ApiEnvelope.error(409, 409, "数据冲突：唯一键重复或外键约束不满足。");
+    public ResponseEntity<Result<Void>> conflict(DataIntegrityViolationException failure) {
+        return Result.error(409, 409, "数据冲突：唯一键重复或外键约束不满足。");
     }
 
     @ExceptionHandler(DateTimeParseException.class)
-    public ResponseEntity<ApiEnvelope<Void>> badTime(DateTimeParseException failure) {
-        return ApiEnvelope.error(400, 400, "时间格式应为 yyyy-MM-dd HH:mm。");
+    public ResponseEntity<Result<Void>> badTime(DateTimeParseException failure) {
+        return Result.error(400, 400, "时间格式应为 yyyy-MM-dd HH:mm。");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiEnvelope<Void>> badJson(HttpMessageNotReadableException failure) {
-        return ApiEnvelope.error(400, 400, "请求体不是合法 JSON。");
+    public ResponseEntity<Result<Void>> badJson(HttpMessageNotReadableException failure) {
+        return Result.error(400, 400, "请求体不是合法 JSON。");
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiEnvelope<Void>> internal(Exception failure) {
+    public ResponseEntity<Result<Void>> internal(Exception failure) {
         log.error("Unhandled API failure", failure);
-        return ApiEnvelope.error(500, 500, "服务器内部错误，详情见服务日志。");
+        return Result.error(500, 500, "服务器内部错误，详情见服务日志。");
     }
 }

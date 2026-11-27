@@ -125,7 +125,7 @@ public class ConversationController {
     }
 
     @GetMapping
-    public ApiEnvelope<PageResult<ConversationRow>> list(@RequestParam(required = false) String query,
+    public Result<PageResult<ConversationRow>> list(@RequestParam(required = false) String query,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<ImConversation> list = !StringUtils.hasText(query)
@@ -150,7 +150,7 @@ public class ConversationController {
                     account == null ? null : account.getName(),
                     counts.getOrDefault(conversation.getId(), 0L));
         });
-        return ApiEnvelope.ok(PageResult.of(rows));
+        return Result.ok(PageResult.of(rows));
     }
 
     /**
@@ -161,7 +161,7 @@ public class ConversationController {
      */
     @PutMapping("/{id}")
     @Transactional
-    public ApiEnvelope<Long> update(@PathVariable Long id, @RequestBody ConversationUpdate body) {
+    public Result<Long> update(@PathVariable Long id, @RequestBody ConversationUpdate body) {
         ImConversation conversation = requireConversation(id);
         String alias = validateSelfCommandAlias(body.selfCommandAlias());
         if (body.title() != null) {
@@ -184,7 +184,7 @@ public class ConversationController {
         }
         conversation.setUpdatedAt(Instant.now());
         conversations.save(conversation);
-        return ApiEnvelope.ok(conversation.getId());
+        return Result.ok(conversation.getId());
     }
 
     /** Null passthrough (field absent) is distinct from a present but blank value (clears). */
@@ -202,7 +202,7 @@ public class ConversationController {
 
     /** 从 daemon 拉取该会话更早的归档消息；只归档，不触发 AI 回复。 */
     @PostMapping("/{id}/sync-history")
-    public ApiEnvelope<HistorySyncResult> syncHistory(@PathVariable Long id,
+    public Result<HistorySyncResult> syncHistory(@PathVariable Long id,
             @RequestParam(defaultValue = "5") int pages,
             @RequestParam(defaultValue = "100") int limit) {
         ImConversation conversation = requireConversation(id);
@@ -213,12 +213,12 @@ public class ConversationController {
         long before = messages.countByConversationId(id);
         WechatHistoryService.Result result = wechatHistory.pull(conversation.getPlatformId(), pages, limit);
         long after = messages.countByConversationId(id);
-        return ApiEnvelope.ok(new HistorySyncResult(result.scanned(), (int) (after - before),
+        return Result.ok(new HistorySyncResult(result.scanned(), (int) (after - before),
                 result.pages(), result.failed(), result.hasMore()));
     }
 
     @GetMapping("/{id}/messages")
-    public ApiEnvelope<List<MessageRow>> messages(@PathVariable Long id,
+    public Result<List<MessageRow>> messages(@PathVariable Long id,
             @RequestParam(required = false) String keyword) {
         requireConversation(id);
         List<ImMessage> recent = messages.findTop200ByConversationIdOrderByOccurredAtDescIdDesc(id);
@@ -239,7 +239,7 @@ public class ConversationController {
                                 attachment.getStatus().value()));
             }
         }
-        return ApiEnvelope.ok(recent.stream().map(message -> new MessageRow(message.getId(),
+        return Result.ok(recent.stream().map(message -> new MessageRow(message.getId(),
                 message.getPlatformId(), message.getContactId(),
                 contactName(contactById.get(message.getContactId())),
                 message.getDirection(), message.getKind().value(), message.isMentioned(),
@@ -248,7 +248,7 @@ public class ConversationController {
     }
 
     @GetMapping("/{id}/contacts")
-    public ApiEnvelope<List<ContactBindRow>> contacts(@PathVariable Long id) {
+    public Result<List<ContactBindRow>> contacts(@PathVariable Long id) {
         requireConversation(id);
         Map<Long, ImContact> contactById = new HashMap<>();
         for (ImContact contact : contacts.findAllById(binds
@@ -259,7 +259,7 @@ public class ConversationController {
         List<Long> analyzedContactIds = contactProfiles
                 .findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
                 .map(ImConversationContactProfile::getContactId).toList();
-        return ApiEnvelope.ok(binds
+        return Result.ok(binds
                 .findTop200ByConversationIdAndLeftAtIsNullOrderByLastSeenAtDesc(id).stream()
                 .map(bind -> {
                     ImContact contact = contactById.get(bind.getContactId());
@@ -274,7 +274,7 @@ public class ConversationController {
     }
 
     @PostMapping("/{id}/analysis")
-    public ApiEnvelope<AnalysisRow> runAnalysis(@PathVariable Long id, @RequestBody AnalysisRequest body) {
+    public Result<AnalysisRow> runAnalysis(@PathVariable Long id, @RequestBody AnalysisRequest body) {
         ImConversation conversation = requireConversation(id);
         if (body.contactId() == null) {
             throw new IllegalArgumentException("contactId 不能为空。");
@@ -283,13 +283,13 @@ public class ConversationController {
         if (analysis == null) {
             throw new NoSuchElementException("归档里没有该成员的消息，无法分析。");
         }
-        return ApiEnvelope.ok(toAnalysisRow(analysis));
+        return Result.ok(toAnalysisRow(analysis));
     }
 
     @GetMapping("/{id}/analysis")
-    public ApiEnvelope<List<AnalysisRow>> analysis(@PathVariable Long id) {
+    public Result<List<AnalysisRow>> analysis(@PathVariable Long id) {
         requireConversation(id);
-        return ApiEnvelope.ok(contactProfiles.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
+        return Result.ok(contactProfiles.findTop100ByConversationIdOrderByGeneratedAtDesc(id).stream()
                 .map(this::toAnalysisRow).toList());
     }
 
@@ -346,7 +346,7 @@ public class ConversationController {
     }
 
     @GetMapping("/search")
-    public ApiEnvelope<List<SearchHit>> searchMessages(@RequestParam String keyword) {
+    public Result<List<SearchHit>> searchMessages(@RequestParam String keyword) {
         if (!StringUtils.hasText(keyword)) {
             throw new IllegalArgumentException("keyword 不能为空。");
         }
@@ -354,7 +354,7 @@ public class ConversationController {
         List<ImMessage> found = messages.searchByBody(keyword.strip(),
                 org.springframework.data.domain.PageRequest.of(0, 50));
         Map<Long, ImContact> contactById = contactMap(found);
-        return ApiEnvelope.ok(found.stream()
+        return Result.ok(found.stream()
                 .map(message -> new SearchHit(message.getId(), message.getConversationId(),
                         conversationLabels.getOrDefault(message.getConversationId(),
                                 String.valueOf(message.getConversationId())),

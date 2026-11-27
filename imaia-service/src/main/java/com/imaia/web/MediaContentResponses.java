@@ -14,7 +14,7 @@ import java.time.Duration;
 
 /**
  * 内容下发端点的公共响应组装：inline 的 Content-Disposition、内容类型兜底与私有缓存。
- * 错误一律走 GlobalApiExceptionHandler 的 ApiEnvelope，成功才回字节流。
+ * 错误一律走 GlobalApiExceptionHandler 的 Result，成功才回字节流。
  */
 final class MediaContentResponses {
 

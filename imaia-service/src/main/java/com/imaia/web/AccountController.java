@@ -55,13 +55,13 @@ public class AccountController {
     }
 
     @GetMapping
-    public ApiEnvelope<List<AccountRow>> list() {
-        return ApiEnvelope.ok(accounts.findAllByOrderByIdAsc().stream()
+    public Result<List<AccountRow>> list() {
+        return Result.ok(accounts.findAllByOrderByIdAsc().stream()
                 .map(this::toRow).toList());
     }
 
     @PostMapping
-    public ApiEnvelope<AccountRow> create(@RequestBody AccountCreate body) {
+    public Result<AccountRow> create(@RequestBody AccountCreate body) {
         Platform platform = Platform.fromValue(body.platformCode());
         if (!StringUtils.hasText(body.name())) {
             throw new IllegalArgumentException("name 不能为空。");
@@ -77,11 +77,11 @@ public class AccountController {
                 .build();
         ImAccount saved = accounts.save(created);
         streams.refreshPlatform(saved.getPlatform());
-        return ApiEnvelope.ok(toRow(saved));
+        return Result.ok(toRow(saved));
     }
 
     @PutMapping("/{id}")
-    public ApiEnvelope<AccountRow> update(@PathVariable Long id, @RequestBody AccountUpdate body) {
+    public Result<AccountRow> update(@PathVariable Long id, @RequestBody AccountUpdate body) {
         ImAccount account = accounts.findById(id).orElseThrow();
         if (StringUtils.hasText(body.name())) {
             account.setName(body.name().strip());
@@ -94,18 +94,18 @@ public class AccountController {
         }
         ImAccount saved = accounts.save(account);
         streams.refreshPlatform(saved.getPlatform());
-        return ApiEnvelope.ok(toRow(saved));
+        return Result.ok(toRow(saved));
     }
 
     @DeleteMapping("/{id}")
-    public ApiEnvelope<String> delete(@PathVariable Long id) {
+    public Result<String> delete(@PathVariable Long id) {
         ImAccount account = accounts.findById(id).orElseThrow();
         if (conversations.existsByAccountId(id)) {
-            return ApiEnvelope.<String>error(409, 409, "该账号已有会话数据，禁止删除；可改为停用。").getBody();
+            return Result.<String>error(409, 409, "该账号已有会话数据，禁止删除；可改为停用。").getBody();
         }
         accounts.deleteById(account.getId());
         streams.refreshPlatform(account.getPlatform());
-        return ApiEnvelope.ok("已删除");
+        return Result.ok("已删除");
     }
 
     private AccountRow toRow(ImAccount account) {

@@ -84,7 +84,7 @@ public class AiProviderController {
 
 
     @GetMapping
-    public ApiEnvelope<List<ProviderRow>> list() {
+    public Result<List<ProviderRow>> list() {
         List<AiProvider> all = providers.findAllByOrderByIdAsc();
         Map<Long, List<ModelRow>> modelsByProvider = new HashMap<>();
         for (AiModel model : aiModels.findByProviderIdIn(all.stream().map(AiProvider::getId).toList())) {
@@ -97,11 +97,11 @@ public class AiProviderController {
                         provider.getModelsDevId(),
                         modelsByProvider.getOrDefault(provider.getId(), List.of()), null))
                 .toList();
-        return ApiEnvelope.ok(rows);
+        return Result.ok(rows);
     }
 
     @PostMapping
-    public ApiEnvelope<CreatedProvider> create(@RequestBody ProviderCreate body) {
+    public Result<CreatedProvider> create(@RequestBody ProviderCreate body) {
         requireText(body.name(), "name");
         requireText(body.baseUrl(), "baseUrl");
         Instant now = Clock.now();
@@ -126,12 +126,12 @@ public class AiProviderController {
             syncNote = "保存成功，但同步失败：" + failure.getMessage();
         }
         catalog.invalidate();
-        return ApiEnvelope.ok(new CreatedProvider(
+        return Result.ok(new CreatedProvider(
                 toRow(providers.findById(saved.getId()).orElseThrow(), syncNote), syncNote));
     }
 
     @PutMapping("/{id}")
-    public ApiEnvelope<ProviderRow> update(@PathVariable Long id, @RequestBody ProviderUpdate body) {
+    public Result<ProviderRow> update(@PathVariable Long id, @RequestBody ProviderUpdate body) {
         AiProvider provider = providers.findById(id).orElseThrow();
         String oldBaseUrl = provider.getBaseUrl();
         String oldApiKey = provider.getApiKey();
@@ -167,32 +167,32 @@ public class AiProviderController {
             }
         }
         catalog.invalidate();
-        return ApiEnvelope.ok(toRow(saved, syncNote));
+        return Result.ok(toRow(saved, syncNote));
     }
 
     @DeleteMapping("/{id}")
     @Transactional
-    public ApiEnvelope<String> delete(@PathVariable Long id) {
+    public Result<String> delete(@PathVariable Long id) {
         providers.findById(id).orElseThrow();
         List<AiModel> models = aiModels.findByProviderIdOrderByModelKeyAsc(id);
         List<Long> modelIds = models.stream().map(AiModel::getId).toList();
         aiModels.deleteAll(models);
         providers.deleteById(id);
         catalog.invalidate();
-        return ApiEnvelope.ok("已删除接入商，并移除 " + models.size() + " 个模型");
+        return Result.ok("已删除接入商，并移除 " + models.size() + " 个模型");
     }
 
     /** 拉取 /v1/models 并同步目录；可用性以网关为准，本地标注不覆盖。 */
     @PostMapping("/{id}/sync-models")
-    public ApiEnvelope<ModelSyncService.SyncResult> syncModels(@PathVariable Long id) {
+    public Result<ModelSyncService.SyncResult> syncModels(@PathVariable Long id) {
         AiProvider provider = providers.findById(id).orElseThrow();
         ModelSyncService.SyncResult result = syncService.sync(provider);
         catalog.invalidate();
-        return ApiEnvelope.ok(result);
+        return Result.ok(result);
     }
 
     @PutMapping("/ai-models/{id}")
-    public ApiEnvelope<ModelRow> updateModel(@PathVariable Long id, @RequestBody ModelUpdate body) {
+    public Result<ModelRow> updateModel(@PathVariable Long id, @RequestBody ModelUpdate body) {
         AiModel model = aiModels.findById(id).orElseThrow();
         applyModelUpdate(model, body);
         if (body.enabled() != null) {
@@ -201,7 +201,7 @@ public class AiProviderController {
         model.setUpdatedAt(Instant.now());
         AiModel saved = aiModels.save(model);
         catalog.invalidate();
-        return ApiEnvelope.ok(toModelRow(saved));
+        return Result.ok(toModelRow(saved));
     }
 
     private void applyModelUpdate(AiModel model, ModelUpdate body) {

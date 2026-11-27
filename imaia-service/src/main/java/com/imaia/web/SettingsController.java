@@ -44,12 +44,12 @@ public class SettingsController {
     }
 
     @GetMapping
-    public ApiEnvelope<SettingsRow> get() {
-        return ApiEnvelope.ok(toRow(settings.current()));
+    public Result<SettingsRow> get() {
+        return Result.ok(toRow(settings.current()));
     }
 
     @PutMapping
-    public ApiEnvelope<SettingsRow> update(@RequestBody SettingsUpdate body) {
+    public Result<SettingsRow> update(@RequestBody SettingsUpdate body) {
         AiSettings current = settings.current();
         if (StringUtils.hasText(body.systemPrompt())) {
             current.setSystemPrompt(body.systemPrompt());
@@ -102,7 +102,7 @@ public class SettingsController {
         applyToolKey(body.videoBaseUrl(), current::setVideoBaseUrl);
         applyToolKey(body.videoApiKey(), current::setVideoApiKey);
         applyToolKey(body.videoModel(), current::setVideoModel);
-        return ApiEnvelope.ok(toRow(settings.save(current)));
+        return Result.ok(toRow(settings.save(current)));
     }
 
     /** Tool endpoint keys apply when present; the mask round-trip means unchanged, "" clears. */

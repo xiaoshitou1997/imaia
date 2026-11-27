@@ -34,16 +34,16 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiEnvelope<LoginResponse>> login(@RequestBody LoginRequest body) {
+    public ResponseEntity<Result<LoginResponse>> login(@RequestBody LoginRequest body) {
         if (!StringUtils.hasText(admin.password())) {
-            return ApiEnvelope.error(503, 503, "IMAIA_ADMIN_PASSWORD 未配置，控制台登录已禁用。");
+            return Result.error(503, 503, "IMAIA_ADMIN_PASSWORD 未配置，控制台登录已禁用。");
         }
         boolean userOk = constantTimeEquals(body.username(), admin.username());
         boolean passOk = constantTimeEquals(body.password(), admin.password());
         if (!userOk || !passOk) {
-            return ApiEnvelope.error(401, 401, "用户名或密码不正确。");
+            return Result.error(401, 401, "用户名或密码不正确。");
         }
-        return ResponseEntity.ok(ApiEnvelope.ok(new LoginResponse(admin.username())));
+        return ResponseEntity.ok(Result.ok(new LoginResponse(admin.username())));
     }
 
     /** 长度无关的常量时间比较。 */

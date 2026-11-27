@@ -73,11 +73,11 @@ public class OverviewController {
     }
 
     @GetMapping("/overview")
-    public ApiEnvelope<OverviewRow> overview() {
+    public Result<OverviewRow> overview() {
         var config = settings.current();
         ZoneId zone = ZoneId.of(config.getTimezone());
         Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
-        return ApiEnvelope.ok(new OverviewRow(
+        return Result.ok(new OverviewRow(
                 accounts.count(),
                 conversations.count(),
                 messages.count(),
@@ -97,11 +97,11 @@ public class OverviewController {
     }
 
     @GetMapping("/runtime")
-    public ApiEnvelope<RuntimeRow> runtime() {
+    public Result<RuntimeRow> runtime() {
         List<PlatformState> platforms = adapters.all().stream()
                 .map(adapter -> new PlatformState(adapter.platform(), adapter.configured()))
                 .toList();
-        return ApiEnvelope.ok(new RuntimeRow(catalog.hasChat(), imageClient.available(),
+        return Result.ok(new RuntimeRow(catalog.hasChat(), imageClient.available(),
                 videoClient.available(), webSearch.available(), platforms));
     }
 
@@ -111,10 +111,10 @@ public class OverviewController {
     }
 
     @GetMapping("/messages/recent")
-    public ApiEnvelope<List<RecentMessageRow>> recentMessages() {
+    public Result<List<RecentMessageRow>> recentMessages() {
         Map<Long, String> labelMap = labels.labels();
         Map<Long, String> contactNames = new java.util.HashMap<>();
-        return ApiEnvelope.ok(messages.findTop8ByOrderByIdDesc().stream()
+        return Result.ok(messages.findTop8ByOrderByIdDesc().stream()
                 .map((m) -> {
                     String sender;
                     if (m.getOrigin() == com.imaia.domain.MessageOrigin.AI) {
