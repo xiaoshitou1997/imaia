@@ -15,9 +15,12 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.util.StringUtils;
@@ -39,8 +42,22 @@ public class WechatAdapter implements ImAdapter {
     private final DaemonClient daemonClient;
     private final IngestLedger ledger;
     private final WechatConnection connection;
-    /** 微信同号：每条会话线最近一次 AI 发送时间，outgoing 消息据此归因 origin。 */
-    private final Map<String, Instant> lastAiSendByConversation = new ConcurrentHashMap<>();
+
+    /** 回声归因窗口：outgoing 消息按「本方刚发出的那条」精确比对，而不是按会话笼统计时。 */
+    private static final Duration ECHO_WINDOW = Duration.ofSeconds(60);
+
+    /** 每条会话线最近几次本方发送（新→旧有界队列），用于 outgoing 回声的 origin 归因。 */
+    private static final int RECENT_SEND_MAX = 8;
+
+    private final Map<String, Deque<RecentSend>> recentSendsByConversation = new ConcurrentHashMap<>();
+
+    /**
+     * 一次本方发送的回执形态：平台消息 id（daemon 回执有则用）、正文与非文本标记。
+     * 归因时先比 id，id 对不上再在同窗口内比正文，避免把主人自己手打的消息
+     * 也当成 AI 回声吞掉。
+     */
+    private record RecentSend(String platformMessageId, String body, boolean media, Instant at) {
+    }
 
     /** 归档与 AI 回复两条链对同一消息各拉一次 daemon；有界 memo 消除重复网络调用。 */
     private static final int FETCH_MEMO_MAX = 128;
@@ -100,18 +117,51 @@ public class WechatAdapter implements ImAdapter {
                 parseTime(message.createdAt()));
     }
 
-    /** 微信同号：AI 刚经本实例发送过的会话，其 outgoing 消息标记为 ai（60 秒时间窗近似）。 */
+    /**
+     * 微信同号：只有「本方刚发出的那条」才归因为 ai。按会话线保留最近若干次发送，
+     * 先按平台消息 id 精确命中，id 缺失时（daemon 回执没带 id）才在时间窗内比正文。
+     * 早先的实现只看「该会话 60 秒内有过发送」，会把主人自己手打的消息也判成 AI
+     * 回声，导致自指令在 AI 回复后 60 秒内全部静默失效。
+     */
     private String resolveOrigin(Message message) {
         if (!"outgoing".equals(message.direction())) {
             return "human";
         }
-        Instant lastAiSend = lastAiSendByConversation.get(message.threadId());
-        return lastAiSend != null && Instant.now().minusSeconds(60).isBefore(lastAiSend)
-                ? "ai" : "human";
+        Deque<RecentSend> recent = recentSendsByConversation.get(message.threadId());
+        if (recent == null) {
+            return "human";
+        }
+        Instant cutoff = Instant.now().minus(ECHO_WINDOW);
+        String body = message.body();
+        synchronized (recent) {
+            for (RecentSend sent : recent) {
+                if (sent.at().isBefore(cutoff)) {
+                    continue;
+                }
+                if (StringUtils.hasText(sent.platformMessageId())
+                        && sent.platformMessageId().equals(message.id())) {
+                    return "ai";
+                }
+                // id 缺失或不同的兜底：同一条文本、时间窗内，视为本方发出后的回声。
+                if (!sent.media() && StringUtils.hasText(sent.body()) && sent.body().equals(body)) {
+                    return "ai";
+                }
+            }
+        }
+        return "human";
     }
 
-    private void markAiSend(String conversationPlatformId) {
-        lastAiSendByConversation.put(conversationPlatformId, Instant.now());
+    /** 记录一次本方发送（有界，按会话线），供 outgoing 回声归因比对。 */
+    private void markAiSend(String conversationPlatformId, String platformMessageId, String body,
+            boolean media) {
+        Deque<RecentSend> recent = recentSendsByConversation.computeIfAbsent(
+                conversationPlatformId, key -> new ArrayDeque<>());
+        synchronized (recent) {
+            recent.addFirst(new RecentSend(platformMessageId, body, media, Instant.now()));
+            while (recent.size() > RECENT_SEND_MAX) {
+                recent.removeLast();
+            }
+        }
     }
 
     /** The original daemon payload snapshot, re-serialized from the typed DTO. */
@@ -230,8 +280,9 @@ public class WechatAdapter implements ImAdapter {
     public String sendText(String conversationPlatformId, String text, String idempotencyKey) {
         try {
             var receipt = daemonClient.sendText(conversationPlatformId, text, idempotencyKey);
-            markAiSend(conversationPlatformId);
-            return receipt == null ? null : receipt.sendId();
+            String sentId = receipt == null ? null : receipt.sendId();
+            markAiSend(conversationPlatformId, sentId, text, false);
+            return sentId;
         } catch (WebClientResponseException failure) {
             throw translateConflict(failure, idempotencyKey);
         }
@@ -241,8 +292,9 @@ public class WechatAdapter implements ImAdapter {
     public String sendMedia(String conversationPlatformId, MediaKind kind, String storageRef, String idempotencyKey) {
         try {
             var receipt = daemonClient.sendMedia(conversationPlatformId, kind.value(), storageRef, idempotencyKey);
-            markAiSend(conversationPlatformId);
-            return receipt == null ? null : receipt.sendId();
+            String sentId = receipt == null ? null : receipt.sendId();
+            markAiSend(conversationPlatformId, sentId, null, true);
+            return sentId;
         } catch (WebClientResponseException failure) {
             throw translateConflict(failure, idempotencyKey);
         }

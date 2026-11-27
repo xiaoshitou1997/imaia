@@ -6,3 +6,5 @@ data/
 .idea/
 .DS_Store
 imaia-web-legacy/
+# 本地编辑器/Agent 启动配置，可能带本机凭据
+.claude/

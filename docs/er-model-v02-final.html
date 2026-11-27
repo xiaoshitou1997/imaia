@@ -104,7 +104,7 @@ erDiagram
         bigint id PK
         bigint conversation_id FK
         text idempotency_key UK "全局唯一防重发"
-        varchar source "ai_reply|task|manual|api"
+        varchar source "ai_reply|self_command|task|manual|api"
         text body
         bigint artifact_id FK
         bigint message_id FK "归档回流回填"

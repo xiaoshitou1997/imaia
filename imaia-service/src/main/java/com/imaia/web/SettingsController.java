@@ -23,7 +23,7 @@ public class SettingsController {
 
     public record SettingsRow(String systemPrompt, int historyLimit, boolean requireGroupMention,
             boolean quietHoursEnabled, String quietHoursStart, String quietHoursEnd,
-            String timezone, boolean enabled,
+            String timezone, boolean enabled, String selfCommandAlias, boolean selfCommandEnabled,
             String webSearchBaseUrl, String webSearchApiKey,
             String imageBaseUrl, String imageApiKey, String imageModel,
             String videoBaseUrl, String videoApiKey, String videoModel) {
@@ -31,7 +31,7 @@ public class SettingsController {
 
     public record SettingsUpdate(String systemPrompt, Integer historyLimit, Boolean requireGroupMention,
             Boolean quietHoursEnabled, String quietHoursStart, String quietHoursEnd,
-            String timezone, Boolean enabled,
+            String timezone, Boolean enabled, String selfCommandAlias, Boolean selfCommandEnabled,
             String webSearchBaseUrl, String webSearchApiKey,
             String imageBaseUrl, String imageApiKey, String imageModel,
             String videoBaseUrl, String videoApiKey, String videoModel) {
@@ -83,6 +83,17 @@ public class SettingsController {
         if (body.enabled() != null) {
             current.setEnabled(body.enabled());
         }
+        if (body.selfCommandAlias() != null) {
+            String alias = body.selfCommandAlias().strip();
+            if (alias.length() > AiSettingsService.SELF_COMMAND_ALIAS_MAX) {
+                throw new IllegalArgumentException(
+                        "selfCommandAlias 最长 " + AiSettingsService.SELF_COMMAND_ALIAS_MAX + " 字符。");
+            }
+            current.setSelfCommandAlias(alias);
+        }
+        if (body.selfCommandEnabled() != null) {
+            current.setSelfCommandEnabled(body.selfCommandEnabled());
+        }
         applyToolKey(body.webSearchBaseUrl(), current::setWebSearchBaseUrl);
         applyToolKey(body.webSearchApiKey(), current::setWebSearchApiKey);
         applyToolKey(body.imageBaseUrl(), current::setImageBaseUrl);
@@ -113,7 +124,8 @@ public class SettingsController {
         return new SettingsRow(settings.getSystemPrompt(), settings.getHistoryLimit(),
                 settings.isRequireGroupMention(), settings.isQuietHoursEnabled(),
                 settings.getQuietHoursStart(), settings.getQuietHoursEnd(),
-                settings.getTimezone(), settings.isEnabled(),
+                settings.getTimezone(), settings.isEnabled(), settings.getSelfCommandAlias(),
+                settings.isSelfCommandEnabled(),
                 settings.getWebSearchBaseUrl(), maskKey(settings.getWebSearchApiKey()),
                 settings.getImageBaseUrl(), maskKey(settings.getImageApiKey()), settings.getImageModel(),
                 settings.getVideoBaseUrl(), maskKey(settings.getVideoApiKey()), settings.getVideoModel());

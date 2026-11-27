@@ -34,6 +34,8 @@ const formSchema = z.object({
   quietHoursStart: z.string(),
   quietHoursEnd: z.string(),
   timezone: z.string().min(1, '时区不能为空'),
+  selfCommandAlias: z.string().max(50, '别名过长'),
+  selfCommandEnabled: z.boolean(),
 })
 
 type AssistantForm = z.infer<typeof formSchema>
@@ -68,6 +70,8 @@ function AssistantForm() {
       quietHoursStart: '23:00',
       quietHoursEnd: '08:00',
       timezone: 'Asia/Shanghai',
+      selfCommandAlias: '',
+      selfCommandEnabled: true,
     },
   })
 
@@ -83,6 +87,8 @@ function AssistantForm() {
       quietHoursStart: s.quietHoursStart,
       quietHoursEnd: s.quietHoursEnd,
       timezone: s.timezone,
+      selfCommandAlias: s.selfCommandAlias ?? '',
+      selfCommandEnabled: s.selfCommandEnabled,
     })
   }, [settings.data, form])
 
@@ -96,6 +102,8 @@ function AssistantForm() {
       quietHoursStart: values.quietHoursStart,
       quietHoursEnd: values.quietHoursEnd,
       timezone: values.timezone,
+      selfCommandAlias: values.selfCommandAlias,
+      selfCommandEnabled: values.selfCommandEnabled,
     }
     return api
       .updateSettings(body)
@@ -199,6 +207,41 @@ function AssistantForm() {
               <FormControl>
                 <Switch checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name='selfCommandEnabled'
+          render={({ field }) => (
+            <FormItem className='flex items-center justify-between rounded-md border p-4'>
+              <div className='space-y-0.5'>
+                <FormLabel className='text-base'>自指令（全局）</FormLabel>
+                <FormDescription>
+                  关闭后任何会话都不响应「@别名 内容」；单个会话仍可再单独关闭。
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name='selfCommandAlias'
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>自指令别名（全局默认）</FormLabel>
+              <FormControl>
+                <Input placeholder='如：小艾（你在微信里的常用称呼）' {...field} />
+              </FormControl>
+              <FormDescription>
+                你自己手打「@别名 内容」即让 AI 在会话内回复（微信同号专属，
+                无需真实 @）。留空表示不配全局别名；各会话可在会话编辑里单独
+                覆盖别名或关闭自指令。
+              </FormDescription>
+              <FormMessage />
             </FormItem>
           )}
         />

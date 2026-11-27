@@ -104,6 +104,8 @@ export interface Conversation {
   kind: string
   persona: string | null
   autoreply: boolean
+  selfCommandAlias: string | null
+  selfCommandEnabled: boolean
   lastSeenAt: string | null
   lastMessageAt: string | null
   accountId: number
@@ -252,6 +254,8 @@ export interface Settings {
   quietHoursEnd: string
   timezone: string
   enabled: boolean
+  selfCommandAlias: string
+  selfCommandEnabled: boolean
   webSearchBaseUrl: string
   webSearchApiKey: string
   imageBaseUrl: string
@@ -309,7 +313,14 @@ export const api = {
   },
   updateConversation: (
     id: number,
-    body: { title?: string; remark?: string; persona?: string; autoreply?: boolean }
+    body: {
+      title?: string
+      remark?: string
+      persona?: string
+      autoreply?: boolean
+      selfCommandAlias?: string
+      selfCommandEnabled?: boolean
+    }
   ) =>
     request<number>('/conversations/' + id, {
       method: 'PUT',

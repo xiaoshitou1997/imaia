@@ -22,12 +22,15 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Capability settings over the {@code ai_setting} KV table. Each row carries
  * nullable scope identifiers — platform_code, account_id, conversation_id; all
- * three NULL is global. Scoped keys (persona, autoreply) resolve
- * conversation &gt; connection &gt; platform &gt; global &gt; code default;
+ * three NULL is global. Scoped keys (persona, autoreply, self_command_alias,
+ * self_command_enabled)
+ * resolve conversation &gt; connection &gt; platform &gt; global &gt; code default;
  * global-only keys read global rows and ignore scoped rows by design. The reply
  * pipeline reads resolved views per event, the WebUI saves through here, and a
  * save takes effect on the very next turn.
@@ -49,6 +52,8 @@ public class AiSettingsService {
     private enum Key {
         PERSONA("persona", false, Kind.STRING, null),
         AUTOREPLY("autoreply", false, Kind.BOOL, Boolean.FALSE),
+        SELF_COMMAND_ALIAS("self_command_alias", false, Kind.STRING, null),
+        SELF_COMMAND_ENABLED("self_command_enabled", false, Kind.BOOL, Boolean.TRUE),
         SYSTEM_PROMPT("system_prompt", true, Kind.STRING, DEFAULT_SYSTEM_PROMPT),
         HISTORY_LIMIT("history_limit", true, Kind.INT, 20),
         REQUIRE_GROUP_MENTION("require_group_mention", true, Kind.BOOL, Boolean.TRUE),
@@ -87,9 +92,18 @@ public class AiSettingsService {
         }
     }
 
-    /** One conversation line's resolved capability caps, for the directory listing. */
-    public record LineCaps(String persona, boolean autoreply) {
-        public static final LineCaps DEFAULT = new LineCaps(null, false);
+    /** 自指令别名长度上限（前后端同源：前端 zod 校验与本节注释引用同一数值）。 */
+    public static final int SELF_COMMAND_ALIAS_MAX = 50;
+
+    /**
+     * One conversation line's resolved capability caps, for the directory listing.
+     * {@code selfCommandAlias} is the effective alias after scope resolution (null =
+     * no alias configured anywhere); {@code selfCommandEnabled} is the effective
+     * switch, so the WebUI can show "configured but switched off on this line".
+     */
+    public record LineCaps(String persona, boolean autoreply, String selfCommandAlias,
+            boolean selfCommandEnabled) {
+        public static final LineCaps DEFAULT = new LineCaps(null, false, null, true);
     }
 
     private final AiSettingRepository repository;
@@ -138,6 +152,8 @@ public class AiSettingsService {
         upsert(rows, out, Key.SYSTEM_PROMPT, StringNode.valueOf(settings.getSystemPrompt()), now);
         upsert(rows, out, Key.HISTORY_LIMIT, IntNode.valueOf(settings.getHistoryLimit()), now);
         upsert(rows, out, Key.REQUIRE_GROUP_MENTION, BooleanNode.valueOf(settings.isRequireGroupMention()), now);
+        upsert(rows, out, Key.SELF_COMMAND_ALIAS, StringNode.valueOf(orEmpty(settings.getSelfCommandAlias())), now);
+        upsert(rows, out, Key.SELF_COMMAND_ENABLED, BooleanNode.valueOf(settings.isSelfCommandEnabled()), now);
         upsert(rows, out, Key.QUIET_HOURS_ENABLED, BooleanNode.valueOf(settings.isQuietHoursEnabled()), now);
         upsert(rows, out, Key.QUIET_HOURS_START, StringNode.valueOf(settings.getQuietHoursStart()), now);
         upsert(rows, out, Key.QUIET_HOURS_END, StringNode.valueOf(settings.getQuietHoursEnd()), now);
@@ -179,22 +195,87 @@ public class AiSettingsService {
                 BooleanNode.valueOf(autoreply).toString());
     }
 
-    /** Resolved (persona, autoreply) per conversation id, for the directory listing. */
-    public Map<Long, LineCaps> lineSettings(Collection<Long> conversationIds) {
-        if (conversationIds.isEmpty()) {
+    /** Upsert the line-level self-command alias; null/blank clears the row (falls back outward). */
+    public void saveConversationSelfCommandAlias(Long conversationId, String alias) {
+        AiSetting existing = rowOf(conversationId, Key.SELF_COMMAND_ALIAS);
+        if (!StringUtils.hasText(alias)) {
+            if (existing != null) {
+                repository.delete(existing);
+            }
+            return;
+        }
+        writeLine(existing, Key.SELF_COMMAND_ALIAS, conversationId,
+                StringNode.valueOf(alias.strip()).toString());
+    }
+
+    /**
+     * Upsert the line-level self-command switch. Unlike the alias this writes an
+     * explicit row for both values: {@code false} must be able to override an alias
+     * inherited from a wider scope, which a deleted row can never express.
+     */
+    public void saveConversationSelfCommandEnabled(Long conversationId, boolean enabled) {
+        writeLine(rowOf(conversationId, Key.SELF_COMMAND_ENABLED), Key.SELF_COMMAND_ENABLED,
+                conversationId, BooleanNode.valueOf(enabled).toString());
+    }
+
+    /**
+     * Resolved line caps per conversation, for the directory listing. Layers the same
+     * scopes as {@link #forConversation} but in bulk: global rows once, platform rows
+     * once per distinct platform, connection rows once per distinct account, and all
+     * conversation rows in one query — a page of N lines stays O(scopes), not O(N).
+     * Without the inheriting layers the WebUI would show an empty alias on every line
+     * that merely inherits a global default, which makes "leave it blank to disable"
+     * misleading rather than merely unimplemented.
+     */
+    public Map<Long, LineCaps> lineSettings(Collection<ImConversation> conversations) {
+        if (conversations.isEmpty()) {
             return Map.of();
         }
-        Map<Long, LineCaps> out = new HashMap<>();
-        for (AiSetting row : repository.findByConversationIdIn(conversationIds)) {
-            LineCaps caps = out.getOrDefault(row.getConversationId(), LineCaps.DEFAULT);
-            if (Key.AUTOREPLY.name.equals(row.getKey())) {
-                caps = new LineCaps(caps.persona(), readBool(row));
-            } else if (Key.PERSONA.name.equals(row.getKey())) {
-                caps = new LineCaps(readText(row), caps.autoreply());
+        Map<String, String> globals = globalValues();
+        Map<Long, ImAccount> accountById = accounts.findAllById(conversations.stream()
+                        .map(ImConversation::getAccountId).filter(Objects::nonNull).distinct().toList())
+                .stream().collect(Collectors.toMap(ImAccount::getId, account -> account));
+
+        Map<Platform, Map<String, String>> byPlatform = new HashMap<>();
+        Map<Long, Map<String, String>> byAccount = new HashMap<>();
+        Map<Long, Map<String, String>> perLine = new HashMap<>();
+        for (ImConversation conversation : conversations) {
+            Map<String, String> values = new LinkedHashMap<>(globals);
+            ImAccount account = accountById.get(conversation.getAccountId());
+            if (account != null && account.getPlatform() != null) {
+                values.putAll(byPlatform.computeIfAbsent(account.getPlatform(), platform -> scopedValues(
+                        repository.findByPlatformAndAccountIdIsNullAndConversationIdIsNull(platform))));
             }
-            out.put(row.getConversationId(), caps);
+            if (conversation.getAccountId() != null) {
+                values.putAll(byAccount.computeIfAbsent(conversation.getAccountId(), accountId -> scopedValues(
+                        repository.findByAccountIdAndConversationIdIsNull(accountId))));
+            }
+            perLine.put(conversation.getId(), values);
         }
+        for (AiSetting row : repository.findByConversationIdIn(perLine.keySet())) {
+            Key key = Key.BY_NAME.get(row.getKey());
+            if (key != null && !key.globalOnly) {
+                perLine.get(row.getConversationId()).put(key.name, decode(row));
+            }
+        }
+        Map<Long, LineCaps> out = new HashMap<>();
+        perLine.forEach((conversationId, values) -> out.put(conversationId, new LineCaps(
+                values.get(Key.PERSONA.name),
+                booleanOf(values, Key.AUTOREPLY),
+                blankToNull(values.get(Key.SELF_COMMAND_ALIAS.name)),
+                booleanOf(values, Key.SELF_COMMAND_ENABLED))));
         return out;
+    }
+
+    /** Scoped rows → key/value map, skipping global-only keys misplaced at a scoped level. */
+    private static Map<String, String> scopedValues(List<AiSetting> rows) {
+        Map<String, String> values = new LinkedHashMap<>();
+        collect(rows, values, false);
+        return values;
+    }
+
+    private static String blankToNull(String value) {
+        return StringUtils.hasText(value) ? value : null;
     }
 
     private Map<String, String> globalValues() {
@@ -218,6 +299,8 @@ public class AiSettingsService {
         return AiSettings.builder()
                 .persona(values.get(Key.PERSONA.name))
                 .autoreply(booleanOf(values, Key.AUTOREPLY))
+                .selfCommandAlias(stringOf(values, Key.SELF_COMMAND_ALIAS))
+                .selfCommandEnabled(booleanOf(values, Key.SELF_COMMAND_ENABLED))
                 .systemPrompt(stringOf(values, Key.SYSTEM_PROMPT))
                 .historyLimit(intOf(values, Key.HISTORY_LIMIT))
                 .requireGroupMention(booleanOf(values, Key.REQUIRE_GROUP_MENTION))
@@ -298,15 +381,5 @@ public class AiSettingsService {
         } catch (Exception malformed) {
             return null;
         }
-    }
-
-    private static String readText(AiSetting row) {
-        String value = decode(row);
-        return StringUtils.hasText(value) ? value : null;
-    }
-
-    private static boolean readBool(AiSetting row) {
-        String value = decode(row);
-        return value != null && Boolean.parseBoolean(value);
     }
 }

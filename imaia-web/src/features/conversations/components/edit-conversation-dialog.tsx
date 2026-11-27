@@ -33,6 +33,8 @@ const formSchema = z.object({
   remark: z.string().max(200, '备注过长'),
   persona: z.string().max(2000, '人设过长'),
   autoreply: z.boolean(),
+  selfCommandAlias: z.string().max(50, '别名过长'),
+  selfCommandEnabled: z.boolean(),
 })
 
 interface EditConversationDialogProps {
@@ -50,7 +52,14 @@ export function EditConversationDialog({
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { title: '', remark: '', persona: '', autoreply: false },
+    defaultValues: {
+      title: '',
+      remark: '',
+      persona: '',
+      autoreply: false,
+      selfCommandAlias: '',
+      selfCommandEnabled: true,
+    },
   })
 
   useEffect(() => {
@@ -60,6 +69,8 @@ export function EditConversationDialog({
         remark: convo.remark ?? '',
         persona: convo.persona ?? '',
         autoreply: convo.autoreply,
+        selfCommandAlias: convo.selfCommandAlias ?? '',
+        selfCommandEnabled: convo.selfCommandEnabled,
       })
     }
   }, [open, convo, form])
@@ -72,6 +83,8 @@ export function EditConversationDialog({
         remark: values.remark.trim(),
         persona: values.persona.trim(),
         autoreply: values.autoreply,
+        selfCommandAlias: values.selfCommandAlias.trim(),
+        selfCommandEnabled: values.selfCommandEnabled,
       })
       .then(() => {
         toast.success('会话已保存')
@@ -91,7 +104,7 @@ export function EditConversationDialog({
           <DialogDescription>
             {convo
               ? (convo.title || convo.platformId) +
-                ' · 修改展示名、备注、AI 人设与自动回复。'
+                ' · 修改展示名、备注、AI 人设、自动回复与自指令。'
               : ''}
           </DialogDescription>
         </DialogHeader>
@@ -161,6 +174,44 @@ export function EditConversationDialog({
                         onCheckedChange={field.onChange}
                       />
                     </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='selfCommandEnabled'
+                render={({ field }) => (
+                  <FormItem className='flex items-center justify-between rounded-md border p-3'>
+                    <div className='space-y-0.5'>
+                      <FormLabel>自指令</FormLabel>
+                      <FormDescription>
+                        关闭后本会话不响应「@别名 内容」，即使上层配了别名。
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='selfCommandAlias'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>自指令别名（会话级）</FormLabel>
+                    <FormControl>
+                      <Input placeholder='你在本群的昵称，如：小艾' {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      你自己手打「@别名 内容」即让 AI 在此会话回复（无需真实
+                      @，手机端可用）。留空则沿用全局默认别名；要彻底关掉本会话，
+                      请用上面的「自指令」开关。建议只对群聊开启。
+                    </FormDescription>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

@@ -275,7 +275,8 @@ CREATE TABLE im_outbound_ledger (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     sent_at             TIMESTAMPTZ,
     CONSTRAINT uq_im_outbound_ledger_key UNIQUE (idempotency_key),
-    CONSTRAINT chk_im_outbound_ledger_source CHECK (source IN ('ai_reply', 'task', 'manual', 'api')),
+    -- 自指令链（V2 迁移）新增 self_command 来源
+    CONSTRAINT chk_im_outbound_ledger_source CHECK (source IN ('ai_reply', 'self_command', 'task', 'manual', 'api')),
     CONSTRAINT chk_im_outbound_ledger_status CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
     CONSTRAINT chk_im_outbound_ledger_attempts CHECK (attempts >= 0)
 );

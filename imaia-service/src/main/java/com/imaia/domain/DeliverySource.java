@@ -10,6 +10,7 @@ import java.util.Locale;
 /** What triggered an outbound delivery. */
 public enum DeliverySource {
     AI_REPLY,
+    SELF_COMMAND,
     TASK,
     MANUAL,
     API;

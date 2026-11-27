@@ -28,6 +28,7 @@ import com.imaia.storage.S3MediaStorage;
 import com.imaia.ai.AiSettingsService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -86,9 +87,9 @@ public class ConversationController {
     }
 
     public record ConversationRow(Long id, String platformId, String title, String remark,
-            ConversationKind kind, String persona, boolean autoreply, Instant lastSeenAt,
-            Instant lastMessageAt, Long accountId, Platform platformCode, String connectionName,
-            long messageCount) {
+            ConversationKind kind, String persona, boolean autoreply, String selfCommandAlias,
+            boolean selfCommandEnabled, Instant lastSeenAt, Instant lastMessageAt, Long accountId,
+            Platform platformCode, String connectionName, long messageCount) {
     }
 
     public record MessageRow(Long id, String platformId, Long contactId, String senderName,
@@ -100,7 +101,8 @@ public class ConversationController {
             Long sizeBytes, Long durationMs, String status) {
     }
 
-    public record ConversationUpdate(String title, String remark, String persona, Boolean autoreply) {
+    public record ConversationUpdate(String title, String remark, String persona, Boolean autoreply,
+            String selfCommandAlias, Boolean selfCommandEnabled) {
     }
 
     public record ContactBindRow(Long id, Long contactId, String platformId, String displayName,
@@ -133,16 +135,17 @@ public class ConversationController {
                                 query.strip(), query.strip(), PageResult.pageable(page, size));
         Map<Long, ImAccount> accountById = labels.accountsById();
         Map<Long, Long> counts = labels.messageCounts();
-        List<Long> lineIds = list.getContent().stream().map(ImConversation::getId).toList();
-        Map<Long, AiSettingsService.LineCaps> caps = settings.lineSettings(lineIds);
+        Map<Long, AiSettingsService.LineCaps> caps = settings.lineSettings(list.getContent());
         Page<ConversationRow> rows = list.map(conversation -> {
             ImAccount account = accountById.get(conversation.getAccountId());
             AiSettingsService.LineCaps line = caps.getOrDefault(conversation.getId(),
                     AiSettingsService.LineCaps.DEFAULT);
             return new ConversationRow(conversation.getId(), conversation.getPlatformId(),
                     conversation.getTitle(), conversation.getRemark(), conversation.getKind(),
-                    line.persona(), line.autoreply(), conversation.getLastSeenAt(),
-                    conversation.getLastMessageAt(), conversation.getAccountId(),
+                    line.persona(), line.autoreply(), line.selfCommandAlias(),
+                    line.selfCommandEnabled(),
+                    conversation.getLastSeenAt(), conversation.getLastMessageAt(),
+                    conversation.getAccountId(),
                     account == null ? null : account.getPlatform(),
                     account == null ? null : account.getName(),
                     counts.getOrDefault(conversation.getId(), 0L));
@@ -150,9 +153,17 @@ public class ConversationController {
         return ApiEnvelope.ok(PageResult.of(rows));
     }
 
+    /**
+     * Updates the line. Validation runs to completion before the first write: the
+     * fields land in separate tables (conversation row vs ai_setting rows) and a
+     * late failure must not leave the earlier ones applied while the client is told
+     * the save failed. {@code @Transactional} keeps the whole batch atomic.
+     */
     @PutMapping("/{id}")
+    @Transactional
     public ApiEnvelope<Long> update(@PathVariable Long id, @RequestBody ConversationUpdate body) {
         ImConversation conversation = requireConversation(id);
+        String alias = validateSelfCommandAlias(body.selfCommandAlias());
         if (body.title() != null) {
             conversation.setTitle(body.title().isBlank() ? null : body.title().strip());
         }
@@ -165,9 +176,28 @@ public class ConversationController {
         if (body.autoreply() != null) {
             settings.saveConversationAutoreply(conversation.getId(), body.autoreply());
         }
+        if (alias != null) {
+            settings.saveConversationSelfCommandAlias(conversation.getId(), alias);
+        }
+        if (body.selfCommandEnabled() != null) {
+            settings.saveConversationSelfCommandEnabled(conversation.getId(), body.selfCommandEnabled());
+        }
         conversation.setUpdatedAt(Instant.now());
         conversations.save(conversation);
         return ApiEnvelope.ok(conversation.getId());
+    }
+
+    /** Null passthrough (field absent) is distinct from a present but blank value (clears). */
+    private static String validateSelfCommandAlias(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String alias = raw.strip();
+        if (alias.length() > AiSettingsService.SELF_COMMAND_ALIAS_MAX) {
+            throw new IllegalArgumentException(
+                    "selfCommandAlias 最长 " + AiSettingsService.SELF_COMMAND_ALIAS_MAX + " 字符。");
+        }
+        return alias;
     }
 
     /** 从 daemon 拉取该会话更早的归档消息；只归档，不触发 AI 回复。 */

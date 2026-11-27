@@ -47,6 +47,8 @@ class AiReplyHandlerTest {
     private ImMessageRepository archivedMessages;
     private DeliveryService deliveries;
     private com.imaia.repository.ImConversationRepository conversations;
+    private GroupContextBuilder groupContext;
+    private OutboundSender outboundSender;
     private AiReplyHandler handler;
     private SettingsFixture settingsFixture;
 
@@ -112,8 +114,10 @@ class AiReplyHandlerTest {
     private void rebuild() {
         settings = com.imaia.TestProperties.settingsService(
                 settingsFixture.current, settingsFixture.conversationRows);
+        groupContext = new GroupContextBuilder(archivedMessages, mock(ImContactRepository.class));
+        outboundSender = new OutboundSender(deliveries);
         handler = new AiReplyHandler(adapters, chatService, settings, catalog, insightService,
-                archivedMessages, mock(ImContactRepository.class), deliveries);
+                groupContext, outboundSender);
     }
 
     private static ImEvent event() {

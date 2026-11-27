@@ -13,7 +13,8 @@ import java.time.Instant;
  * Resolved view over the {@code ai_setting} KV table for one scope: global-only
  * keys (default prompt, context window, @-gate, quiet hours, timezone, master
  * switch) come from the global rows and ignore scoped rows; scoped keys
- * ({@code persona}, {@code autoreply}) resolve
+ * ({@code persona}, {@code autoreply}, {@code self_command_alias},
+ * {@code self_command_enabled}) resolve
  * conversation &gt; connection &gt; platform &gt; global &gt; code default.
  * Persistence lives in {@link AiSetting}; this plain value object is what the
  * reply pipeline and the WebUI read and write.
@@ -30,6 +31,20 @@ public class AiSettings {
 
     /** Line-level AI reply switch (default off). */
     private boolean autoreply;
+
+    /**
+     * 自指令别名（scoped）：本人 outgoing 消息手打「@别名 内容」即触发 AI 在该线
+     * 回复；null/空 = 该线未配置别名（不继承，见 {@link #selfCommandEnabled}）。
+     * 与 mention 元数据无关，判据是发送者方向。
+     */
+    private String selfCommandAlias;
+
+    /**
+     * 自指令开关（scoped，默认开）：与别名分开承载，才能表达「在别的层配了别名、
+     * 但本会话要关掉」——只靠清空别名只能回落到外层，无法关闭。别名与开关同时
+     * 就绪才生效。
+     */
+    private boolean selfCommandEnabled;
 
     private String systemPrompt;
 

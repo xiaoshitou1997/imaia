@@ -1,23 +1,14 @@
 package com.imaia.ai;
 
-import com.imaia.adapter.DuplicateSendException;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.ImEvent;
 import com.imaia.adapter.ImEventHandler;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.AiSettings;
-import com.imaia.domain.DeliveryStatus;
 import com.imaia.domain.DeliverySource;
-import com.imaia.domain.ImContact;
 import com.imaia.domain.ImConversation;
-import com.imaia.domain.ImOutboundLedger;
-import com.imaia.domain.ImMessage;
-import com.imaia.domain.MediaKind;
 import com.imaia.domain.MessageKind;
-import com.imaia.domain.MessageDirection;
-import com.imaia.repository.ImContactRepository;
-import com.imaia.repository.ImMessageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -25,14 +16,11 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Answers incoming messages of conversations whose line switch is on: text goes to
@@ -42,6 +30,8 @@ import java.util.Map;
  * delivery ledger and keeps replays silent through the idempotency gate.
  * Guardrails: global master switch + line switch + group @-mention gate + quiet
  * hours in the configured timezone (no rate limiting by design — PRD v0.2).
+ * Group context and outbound delivery go through the shared GroupContextBuilder
+ * and OutboundSender (also used by the self-command chain).
  */
 @Component
 @Order(10)
@@ -49,31 +39,26 @@ import java.util.Map;
 public class AiReplyHandler implements ImEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AiReplyHandler.class);
-    private static final int GROUP_CONTEXT_MESSAGES = 12;
-    private static final int GROUP_CONTEXT_MAX_CHARS = 4_000;
 
     private final ImAdapters adapters;
     private final AiChatService chatService;
     private final AiSettingsService settings;
     private final AiModelCatalog catalog;
     private final InsightService insightService;
-    private final ImMessageRepository archivedMessages;
-    private final ImContactRepository contacts;
-    private final DeliveryService deliveries;
+    private final GroupContextBuilder groupContext;
+    private final OutboundSender outboundSender;
 
     public AiReplyHandler(ImAdapters adapters, AiChatService chatService,
             AiSettingsService settings, AiModelCatalog catalog,
-            InsightService insightService, ImMessageRepository archivedMessages,
-            ImContactRepository contacts, 
-            DeliveryService deliveries) {
+            InsightService insightService, GroupContextBuilder groupContext,
+            OutboundSender outboundSender) {
         this.adapters = adapters;
         this.chatService = chatService;
         this.settings = settings;
         this.catalog = catalog;
         this.insightService = insightService;
-        this.archivedMessages = archivedMessages;
-        this.contacts = contacts;
-        this.deliveries = deliveries;
+        this.groupContext = groupContext;
+        this.outboundSender = outboundSender;
     }
 
     @Override
@@ -123,7 +108,8 @@ public class AiReplyHandler implements ImEventHandler {
         if (groupChat && message.body() != null) {
             String reportReply = insightService.handleCommand(conversation, message.body());
             if (reportReply != null) {
-                sendText(adapter, conversation, keyPrefix, reportReply);
+                outboundSender.sendText(adapter, conversation, keyPrefix,
+                        DeliverySource.AI_REPLY, reportReply);
                 adapter.markProcessed(platformMessageId);
                 log.info("Insight report sent on platform={} conversation={} for message={}.",
                         event.platform(), conversationPlatformId, platformMessageId);
@@ -134,13 +120,14 @@ public class AiReplyHandler implements ImEventHandler {
         if (content == null) {
             return;
         }
-        String groupContext = groupChat ? recentGroupContext(conversation.getId(), platformMessageId) : null;
+        String context = groupChat
+                ? groupContext.build(conversation.getId(), platformMessageId) : null;
         List<GeneratedMedia> generated = new ArrayList<>();
         AiChatService.ChatReply reply = content.image() == null
-                ? chatService.complete(conversation, content.userText(), null, null, groupContext,
+                ? chatService.complete(conversation, content.userText(), null, null, context,
                         generated)
                 : chatService.complete(conversation, content.userText(),
-                        content.image().data(), content.image().contentType(), groupContext,
+                        content.image().data(), content.image().contentType(), context,
                         generated);
         sendReply(adapter, conversation, reply, keyPrefix);
         adapter.markProcessed(platformMessageId);
@@ -153,53 +140,13 @@ public class AiReplyHandler implements ImEventHandler {
             AiChatService.ChatReply reply, String keyPrefix) {
         String text = reply.text();
         if (StringUtils.hasText(text)) {
-            sendText(adapter, conversation, keyPrefix, text);
+            outboundSender.sendText(adapter, conversation, keyPrefix, DeliverySource.AI_REPLY, text);
         }
         int index = 0;
         for (GeneratedMedia media : reply.generated()) {
             index++;
-            sendMedia(adapter, conversation, keyPrefix + "-gen" + index, media);
-        }
-    }
-
-    /** One text delivery: ledger row first, platform receipt after. */
-    private void sendText(ImAdapter adapter, ImConversation conversation, String key,
-            String text) {
-        ImOutboundLedger delivery = deliveries.begin(conversation.getId(), key,
-                DeliverySource.AI_REPLY, text);
-        if (delivery.getStatus() == DeliveryStatus.SENT) {
-            log.debug("Delivery {} already sent; skipping.", key);
-            return;
-        }
-        try {
-            String sentMessageId = adapter.sendText(conversation.getPlatformId(), text, key);
-            deliveries.markSent(delivery, sentMessageId);
-        } catch (DuplicateSendException conflict) {
-            deliveries.markSkipped(delivery, "platform reports the key was already delivered");
-        } catch (RuntimeException failure) {
-            deliveries.markFailed(delivery, failure.getMessage());
-            throw failure;
-        }
-    }
-
-    /** One generated-media delivery: ledger row first, upload, send, mark sent. */
-    private void sendMedia(ImAdapter adapter, ImConversation conversation, String key,
-            GeneratedMedia media) {
-        ImOutboundLedger delivery = deliveries.begin(conversation.getId(), key,
-                DeliverySource.AI_REPLY, media.filename());
-        if (delivery.getStatus() == DeliveryStatus.SENT) {
-            log.debug("Delivery {} already sent; skipping.", key);
-            return;
-        }
-        try {
-            String storageRef = adapter.uploadMedia(media.data(), media.filename(), media.mimeType());
-            String sentMessageId = adapter.sendMedia(conversation.getPlatformId(), media.kind(), storageRef, key);
-            deliveries.markSent(delivery, sentMessageId);
-        } catch (DuplicateSendException conflict) {
-            deliveries.markSkipped(delivery, "platform reports the key was already delivered");
-        } catch (RuntimeException failure) {
-            deliveries.markFailed(delivery, failure.getMessage());
-            log.warn("Delivery of generated {} failed: {}", media.kind(), failure.getMessage());
+            outboundSender.sendMedia(adapter, conversation, keyPrefix + "-gen" + index,
+                    DeliverySource.AI_REPLY, media);
         }
     }
 
@@ -259,51 +206,6 @@ public class AiReplyHandler implements ImEventHandler {
                     platformMessageId, failure.getMessage());
             return null;
         }
-    }
-
-    /** Recent archived lines of the group, as a context block for the model. */
-    private String recentGroupContext(Long conversationId, String excludePlatformMessageId) {
-        try {
-            var recent = archivedMessages
-                    .findTop200ByConversationIdOrderByOccurredAtDescIdDesc(conversationId);
-            Map<Long, String> names = contactNames(recent);
-            StringBuilder context = new StringBuilder();
-            int collected = 0;
-            for (ImMessage message : recent) {
-                if (message.getPlatformId().equals(excludePlatformMessageId)
-                        || !StringUtils.hasText(message.getBody())) {
-                    continue;
-                }
-                String who = message.getDirection() == MessageDirection.OUTGOING
-                        ? "我" : names.getOrDefault(message.getContactId(), "成员");
-                String line = who + "：" + message.getBody();
-                if (context.length() + line.length() > GROUP_CONTEXT_MAX_CHARS) {
-                    break;
-                }
-                context.insert(0, line + '\n');
-                if (++collected >= GROUP_CONTEXT_MESSAGES) {
-                    break;
-                }
-            }
-            return context.isEmpty() ? null : "【近期群聊记录】\n" + context;
-        } catch (RuntimeException failure) {
-            log.debug("Group context unavailable: {}", failure.getMessage());
-            return null;
-        }
-    }
-
-    private Map<Long, String> contactNames(List<ImMessage> messages) {
-        List<Long> ids = messages.stream().map(ImMessage::getContactId)
-                .filter(java.util.Objects::nonNull).distinct().toList();
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        Map<Long, String> names = new HashMap<>();
-        for (ImContact contact : contacts.findAllById(ids)) {
-            names.put(contact.getId(), StringUtils.hasText(contact.getAlias())
-                    ? contact.getAlias() : contact.getDisplayName());
-        }
-        return names;
     }
 
     /** Whether the given local time falls inside the settings' quiet window. */

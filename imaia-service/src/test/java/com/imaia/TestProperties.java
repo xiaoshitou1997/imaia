@@ -141,6 +141,7 @@ public final class TestProperties {
                 .quietHoursEnd(quietHoursEnd)
                 .timezone("Asia/Shanghai")
                 .enabled(true)
+                .selfCommandEnabled(true)
                 .updatedAt(Instant.now())
                 .build();
     }
@@ -169,6 +170,16 @@ public final class TestProperties {
         Mockito.when(repository.saveAll(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
         Mockito.when(connections.findById(Mockito.any(Long.class))).thenAnswer(inv ->
                 Optional.of(account(inv.getArgument(0, Long.class), "wechat")));
+        Mockito.when(connections.findAllById(Mockito.anyCollection())).thenAnswer(inv -> {
+            Collection<?> ids = inv.getArgument(0);
+            List<ImAccount> found = new ArrayList<>();
+            for (Object id : ids) {
+                if (id instanceof Long value) {
+                    found.add(account(value, "wechat"));
+                }
+            }
+            return found;
+        });
         return new AiSettingsService(repository, connections);
     }
 
@@ -182,6 +193,8 @@ public final class TestProperties {
         rows.add(AiSetting.globalText("quiet_hours_end", settings.getQuietHoursEnd()));
         rows.add(AiSetting.globalText("timezone", settings.getTimezone()));
         rows.add(AiSetting.globalBool("enabled", settings.isEnabled()));
+        textRow(rows, "self_command_alias", settings.getSelfCommandAlias());
+        rows.add(AiSetting.globalBool("self_command_enabled", settings.isSelfCommandEnabled()));
         textRow(rows, "web_search.base_url", settings.getWebSearchBaseUrl());
         textRow(rows, "web_search.api_key", settings.getWebSearchApiKey());
         textRow(rows, "image.base_url", settings.getImageBaseUrl());
