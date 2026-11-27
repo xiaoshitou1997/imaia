@@ -56,24 +56,43 @@ public class ModelSyncService extends AbstractAiHttpClient {
     }
 
     public SyncResult sync(AiProvider provider) {
-        JsonNode listing = fetchGatewayModels(provider);
-        Map<String, JsonNode> devModels;
+        Map<String, JsonNode> devModels = enrichmentIndexOrEmpty(provider);
+        List<AiModel> existing = aiModels.findByProviderId(provider.getId());
+
+        MergeOutcome merged = mergeListing(provider, fetchGatewayModels(provider),
+                indexByModelKey(existing), devModels);
+        int retired = retireMissing(existing, merged.seen());
+
+        log.info("Synced provider {}: {} listed, {} added, {} updated, {} retired.",
+                provider.getName(), merged.seen().size(), merged.added(), merged.updated(), retired);
+        return new SyncResult(merged.seen().size(), merged.added(), merged.updated(), retired);
+    }
+
+    /**
+     * models.dev 只是增强信息，网关列表才是目录的真相来源；
+     * 增强源不可用不应阻断同步。
+     */
+    private Map<String, JsonNode> enrichmentIndexOrEmpty(AiProvider provider) {
         try {
-            devModels = modelsDevIndex(provider.getModelsDevId());
+            return modelsDevIndex(provider.getModelsDevId());
         } catch (RuntimeException failure) {
-            // The gateway listing is the source of truth for the catalog; models.dev is
-            // only enrichment. An unavailable/stale enrichment feed must not block sync.
             log.warn("models.dev enrichment unavailable for provider {}: {}",
                     provider.getName(), failure.getMessage());
-            devModels = Map.of();
+            return Map.of();
         }
+    }
 
-        List<AiModel> existing = aiModels.findByProviderId(provider.getId());
-        Map<String, AiModel> byModelId = new LinkedHashMap<>();
+    private static Map<String, AiModel> indexByModelKey(List<AiModel> existing) {
+        Map<String, AiModel> byModelKey = new LinkedHashMap<>();
         for (AiModel model : existing) {
-            byModelId.put(model.getModelKey(), model);
+            byModelKey.put(model.getModelKey(), model);
         }
+        return byModelKey;
+    }
 
+    /** 把网关列表并入目录：新模型登记、已有模型刷新增强信息。 */
+    private MergeOutcome mergeListing(AiProvider provider, JsonNode listing,
+            Map<String, AiModel> known, Map<String, JsonNode> devModels) {
         int added = 0;
         int updated = 0;
         Set<String> seen = new HashSet<>();
@@ -83,22 +102,9 @@ public class ModelSyncService extends AbstractAiHttpClient {
                 continue;
             }
             seen.add(modelId);
-            AiModel model = byModelId.get(modelId);
+            AiModel model = known.get(modelId);
             if (model == null) {
-                Instant now = Instant.now();
-                model = AiModel.builder()
-                        .providerId(provider.getId())
-                        .modelKey(modelId)
-                        .modalitiesIn("[]")
-                        .modalitiesOut("[]")
-                        .supportsToolCalls(true)
-                        .params("{}")
-                        .available(true)
-                        .enabled(true)
-                        .source(ModelSource.SYNC)
-                        
-                        
-                        .build();
+                model = newSyncedModel(provider, modelId);
                 added++;
             } else {
                 updated++;
@@ -107,18 +113,41 @@ public class ModelSyncService extends AbstractAiHttpClient {
             if (dev == null) {
                 dev = devModels.get(modelId.toLowerCase(Locale.ROOT));
             }
-            if (dev != null && model.getSource() != ModelSource.MANUAL) {
-                applyDevMetadata(model, dev);
-            }
-            if ((!StringUtils.hasText(model.getName()))
-                    && entry.has("name") && !entry.path("name").asString().isBlank()) {
-                model.setName(entry.path("name").asString());
-            }
-            model.setAvailable(true);
-            model.setSyncedAt(Instant.now());
+            applyEnrichment(model, entry, dev);
             aiModels.save(model);
         }
+        return new MergeOutcome(seen, added, updated);
+    }
 
+    private static AiModel newSyncedModel(AiProvider provider, String modelId) {
+        return AiModel.builder()
+                .providerId(provider.getId())
+                .modelKey(modelId)
+                .modalitiesIn("[]")
+                .modalitiesOut("[]")
+                .supportsToolCalls(true)
+                .params("{}")
+                .available(true)
+                .enabled(true)
+                .source(ModelSource.SYNC)
+                .build();
+    }
+
+    /** 只对非手工维护的模型套用增强信息，手工标注不被同步覆盖。 */
+    private void applyEnrichment(AiModel model, JsonNode entry, JsonNode dev) {
+        if (dev != null && model.getSource() != ModelSource.MANUAL) {
+            applyDevMetadata(model, dev);
+        }
+        if (!StringUtils.hasText(model.getName())
+                && entry.has("name") && !entry.path("name").asString().isBlank()) {
+            model.setName(entry.path("name").asString());
+        }
+        model.setAvailable(true);
+        model.setSyncedAt(Instant.now());
+    }
+
+    /** 网关不再列出的模型标记为不可用，而不是删除——历史消息仍引用它们。 */
+    private int retireMissing(List<AiModel> existing, Set<String> seen) {
         int retired = 0;
         for (AiModel model : existing) {
             if (!seen.contains(model.getModelKey()) && model.isAvailable()) {
@@ -127,9 +156,11 @@ public class ModelSyncService extends AbstractAiHttpClient {
                 retired++;
             }
         }
-        log.info("Synced provider {}: {} listed, {} added, {} updated, {} retired.",
-                provider.getName(), seen.size(), added, updated, retired);
-        return new SyncResult(seen.size(), added, updated, retired);
+        return retired;
+    }
+
+    /** 一次合并的计数结果。 */
+    private record MergeOutcome(Set<String> seen, int added, int updated) {
     }
 
     private JsonNode fetchGatewayModels(AiProvider provider) {
