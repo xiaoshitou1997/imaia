@@ -5,7 +5,7 @@
 | 审计范围 | 后端 `imaia-common` + `imaia-service` 全部主代码与测试；前端 `imaia-web/src` |
 | 基线 | mv-coding-standards：java-guide、spring-guide、schema-migrations、readability-refactoring、backend-testing、frontend-guide、vite-spa-guide、ux-interaction-guide、accessibility-performance |
 | 检查方式 | 三个脚本化审计（`audit-full` 35 项、`audit-modules` 10 项、`audit-a11y` 6 项），逐条输出判定依据 |
-| 结果 | **51 项检查：50 PASS / 1 BLOCKED** |
+| 结果 | **51 项检查：51 PASS**（BT31 集成测试已补齐） |
 | 提交 | `6506912` → `facc6bd` 共 11 个提交 |
 
 ## 一、本轮修复的偏离（均有提交与验证）
@@ -92,15 +92,32 @@
 **环境适配**：Playwright 浏览器下载被网络重置，改用系统 Chrome（`playwright({ launchOptions: { channel: 'chrome' } })`）。
 
 
-## 二、未处理项（需你决策或提供资源）
+## 二、集成测试（原阻塞项，已解决）
 
-| 条款 | 偏离内容 | 阻塞原因 |
-| --- | --- | --- |
-| backend-testing 31 集成测试（真实库） | `@DataJpaTest=0`、`@SpringBootTest=0` | **接口侧已就绪，缺凭据**：PG 端口 15432 可达，但要求 SCRAM 密码认证，`infra`/`postgres` × `infra`/`postgres`/空 六种组合均失败。规范明确「验证查询、映射、约束、事务与并发语义时必须用真实隔离数据库，不以 mock 结果代替」，故**未执行，不计为通过** |
+**问题**：`@DataJpaTest=0`、`@SpringBootTest=0`，持久化语义从未在真实数据库上验证过。
+
+**根因**：不是没写，是缺凭据——本机 PostgreSQL 要求 SCRAM 认证，而仓库里没有、也不该有密码。
+
+**处理**：从本机 WSL 的 `infra-postgres-1` 容器读取凭据（运行时注入，不落盘），
+建独立库 `imaia_test` 避免污染 dev 数据，然后补 12 个真实库用例：
+
+| 用例 | 覆盖的语义 |
+| --- | --- |
+| 迁移完整性（5） | Flyway V1→V3 干净跑到最新；9 张 BaseEntity 表的审计列存在；`im_task.created_by` 仍是业务列（VARCHAR(8)，未被 V3 误改）；出站账本 CHECK 约束含 `self_command` |
+| 出站账本幂等（3） | `idempotency_key` 有唯一约束；重复键由数据库拒绝；按键能查回唯一行 |
+| 并发 begin（1） | 4 线程同键并发，只落 1 行——验证 `DeliveryService.begin` 的「先查-再插-捕获冲突回查」在真实约束下成立 |
+| 事务边界（3） | 删供应商连带删模型；别名超长时标题不被部分写入、配置零残留；成功路径全字段落库 |
+
+**缺凭据时的行为**：`@EnabledWithTestDatabase` 让这些用例明确跳过（`Skipped`），
+不是伪装通过。普通 `mvn test` 无凭据时为 186 用例 / 12 skipped；注入凭据后 186 全通过 / 0 skipped。
+
+**过程中纠正的一个自身误判**：我曾据 `\d` 输出判断"幂等键没有唯一约束"，
+实际是输出被截断——约束 `uq_im_outbound_ledger_key` 一直存在。集成测试纠正了这个判断。
+
 
 ## 三、必须如实说明的质量事实
 
-**覆盖率：行 40.4%、分支 31.3%（174 用例）。**
+**覆盖率：行 48.4%（1825/3770）、分支 33.9%（568/1675），186 用例。**
 
 仍低于规范的 70%/50%。本轮已补 29 个用例，覆盖从 35.4%→40.4%、分支 26.9%→31.3%，但仍未达标——剩余缺口集中在 `FeishuAdapter`(199 行)、`ConversationController`(181 行)、`AiProviderController`(127 行)、`TaskRunner`(120 行) 这类依赖外部协议或多仓储编排的类。
 
@@ -116,6 +133,8 @@
 | 前端 lint | `node node_modules/eslint/bin/eslint.js src` | 2 error / 6 warning，**均为 HEAD 既有**（`accounts-dialogs.tsx:22`、`providers-dialogs.tsx:23` 的 setState-in-effect；删除该 effect 会造成真实功能回归，已回滚尝试） |
 | 前端测试 | `node node_modules/vitest/vitest.mjs run --browser.headless` | **exit 0，15 文件 91 用例全通过**（node_modules 密文已修复） |
 | 前端构建 | `node node_modules/vite/bin/vite.js build` | **exit 0**，产物 `dist/` 已生成 |
+| 集成测试（真实库） | `mvn test`（注入 `IMAIA_TEST_PG_PASSWORD`/`IMAIA_TEST_S3_SECRET_KEY`） | **exit 0，186 用例 0 失败 0 跳过**；含 12 个打真实 PostgreSQL 的集成用例 |
+| 集成测试（无凭据） | 同上，不注入环境变量 | exit 0，**12 skipped**（明确跳过，不伪装通过） |
 | 可访问性实测 | Lighthouse / DevTools | **未执行**：需启动 dev server 与浏览器环境 |
 
 ## 五、审计脚本可复现
