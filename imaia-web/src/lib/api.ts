@@ -1,14 +1,19 @@
 /**
  * imaia 控制台 API 客户端。
- * 后端统一包络 { code, message, data }；code 非 0 或 HTTP 非 2xx 一律抛 ApiError。
+ * 后端统一包络 { code, message, data }；code 是字符串契约（成功为 'ok'），
+ * 非 'ok' 或 HTTP 非 2xx 一律抛 ApiError。
  * 全局副作用（401 跳登录、mutation toast）挂在 main.tsx 的 QueryClient 上。
  */
 
+/** 成功码：与后端 Result.SUCCESS_CODE 保持同一字面量。 */
+export const SUCCESS_CODE = 'ok'
+
 export class ApiError extends Error {
   status: number
-  code: number
+  /** 后端契约错误码；非本地生成，前端只按码映射文案，不解析语义。 */
+  code: string
 
-  constructor(message: string, status: number, code: number) {
+  constructor(message: string, status: number, code: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
@@ -17,7 +22,7 @@ export class ApiError extends Error {
 }
 
 interface Envelope<T> {
-  code: number
+  code: string
   message: string
   data: T | null
 }
@@ -35,12 +40,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // 非 JSON 响应体（网关/代理层错误页）
   }
 
-  if (!res.ok || !body || typeof body.code !== 'number' || body.code !== 0) {
+  if (!res.ok || !body || body.code !== SUCCESS_CODE) {
     const message =
       body && typeof body.message === 'string' && body.message
         ? body.message
         : '请求失败（HTTP ' + res.status + '）'
-    throw new ApiError(message, res.status, body?.code ?? res.status)
+    throw new ApiError(message, res.status, body?.code ?? String(res.status))
   }
   return body.data as T
 }

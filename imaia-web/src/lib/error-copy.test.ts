@@ -3,13 +3,13 @@ import { copyForCode, ERROR_CODE_COPY } from './error-copy'
 
 describe('copyForCode', () => {
   it('maps a known backend code to its stable copy', () => {
-    expect(copyForCode(2404)).toBe('要访问的内容不存在。')
-    expect(copyForCode(3401)).toBe('用户名或密码错误。')
+    expect(copyForCode('resource.not-found')).toBe('要访问的内容不存在。')
+    expect(copyForCode('auth.invalid-credentials')).toBe('用户名或密码错误。')
   })
 
   it('mentions the raw code for an unmapped code so it is diagnosable', () => {
-    const text = copyForCode(9999)
-    expect(text).toContain('9999')
+    const text = copyForCode('brand.new.code')
+    expect(text).toContain('brand.new.code')
   })
 
   it('returns a generic message when no code is available', () => {

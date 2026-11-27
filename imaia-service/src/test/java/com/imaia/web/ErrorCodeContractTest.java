@@ -1,56 +1,97 @@
 package com.imaia.web;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ReloadableResourceBundleMessageSource;
+
+import com.imaia.common.error.CommonErrorCodeEnum;
+import com.imaia.common.error.ErrorCode;
+
 /**
- * 错误码契约：一场景一码，码唯一且与 HTTP 状态分离。
+ * 错误码契约：一场景一码、码不可重复、每码双语齐备。
  *
- * <p>重复码会让前端无法按 code 分支——两个不同失败场景共用一个码，
- * 前端只能拿到含糊的通用文案，这正是本条款要防的。
+ * <p>这些是前端稳定分支的前提——码重复或缺失译文都会让前端映射失效。
  */
 class ErrorCodeContractTest {
 
+    private static final List<ErrorCode> ALL = Arrays.stream(ImaiaErrorCodeEnum.values())
+            .map(ErrorCode.class::cast).toList();
+
+    private static final List<ErrorCode> COMMON = Arrays.stream(CommonErrorCodeEnum.values())
+            .map(ErrorCode.class::cast).toList();
+
+    private ReloadableResourceBundleMessageSource messages(Locale locale) {
+        ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
+        source.setBasename("classpath:messages");
+        source.setDefaultEncoding("UTF-8");
+        source.setDefaultLocale(locale);
+        source.setUseCodeAsDefaultMessage(false);
+        return source;
+    }
+
     @Test
-    void codesAreUnique() {
-        Set<Integer> seen = new HashSet<>();
-        for (ErrorCode code : ErrorCode.values()) {
-            assertThat(seen.add(code.code()))
-                    .as("错误码重复：%s（%d）", code.name(), code.code())
-                    .isTrue();
+    void codesAreUniqueAcrossAllEnums() {
+        List<String> codes = ALL.stream().map(ErrorCode::code).toList();
+        assertThat(codes).doesNotHaveDuplicates();
+
+        List<String> commonCodes = COMMON.stream().map(ErrorCode::code).toList();
+        assertThat(commonCodes).doesNotHaveDuplicates();
+
+        // 业务码与公共码也不能撞，否则前端无法区分来源。
+        assertThat(codes).doesNotContainAnyElementsOf(commonCodes);
+    }
+
+    @Test
+    void messageKeyIsDerivedFromCode() {
+        for (ErrorCode code : ALL) {
+            assertThat(code.messageKey())
+                    .as("%s 的文案键必须由 code 派生", code.code())
+                    .isEqualTo("error." + code.code());
         }
     }
 
     @Test
-    void everyCodeCarriesHttpStatusAndMessage() {
-        for (ErrorCode code : ErrorCode.values()) {
-            assertThat(code.httpStatus()).as("%s 的 HTTP 状态", code.name()).isBetween(400, 599);
-            assertThat(code.defaultMessage()).as("%s 的兜底文案", code.name()).isNotBlank();
+    void everyCodeHasBothChineseAndEnglishCopy() {
+        for (ErrorCode code : ALL) {
+            assertThat(hasCopy(code, Locale.SIMPLIFIED_CHINESE))
+                    .as("%s 缺中文文案", code.code()).isTrue();
+            assertThat(hasCopy(code, Locale.US))
+                    .as("%s 缺英文文案", code.code()).isTrue();
         }
     }
 
     @Test
-    void namesAreLowercaseFreeAndUnique() {
-        long distinct = Arrays.stream(ErrorCode.values()).map(Enum::name).distinct().count();
-        assertThat(distinct).isEqualTo(ErrorCode.values().length);
+    void everyCommonCodeHasBothChineseAndEnglishCopy() {
+        for (ErrorCode code : COMMON) {
+            assertThat(hasCopy(code, Locale.SIMPLIFIED_CHINESE))
+                    .as("%s 缺中文文案", code.code()).isTrue();
+            assertThat(hasCopy(code, Locale.US))
+                    .as("%s 缺英文文案", code.code()).isTrue();
+        }
     }
 
     @Test
-    void businessExceptionExposesItsCode() {
-        BusinessException failure = new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        assertThat(failure.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
-        assertThat(failure.getMessage()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND.defaultMessage());
+    void statusIsStandardHttpStatus() {
+        for (ErrorCode code : ALL) {
+            assertThat(code.status()).as("%s 的 HTTP 状态不能为空", code.code()).isNotNull();
+            assertThat(code.status().value()).as("%s 的状态码必须在合法区间", code.code())
+                    .isBetween(400, 599);
+        }
     }
 
-    @Test
-    void businessExceptionAcceptsASpecificMessage() {
-        BusinessException failure = new BusinessException(ErrorCode.INVALID_REQUEST, "具体原因");
-        assertThat(failure.errorCode().code()).isEqualTo(ErrorCode.INVALID_REQUEST.code());
-        assertThat(failure.getMessage()).isEqualTo("具体原因");
+    private boolean hasCopy(ErrorCode code, Locale locale) {
+        String text = messages(locale).getMessage(code.messageKey(), null, locale);
+        // 未命中时 useCodeAsDefaultMessage=false 会抛异常；此处用包含判断兜底。
+        return text != null && !text.equals(code.messageKey());
+    }
+
+    /** 便于在别处复用：全部业务码。 */
+    static List<String> allCodes() {
+        return Arrays.stream(ImaiaErrorCodeEnum.values()).map(ErrorCode::code).toList();
     }
 }

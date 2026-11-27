@@ -1,5 +1,6 @@
 package com.imaia.web;
 
+import com.imaia.common.web.Result;
 import com.imaia.ai.AiSettingsService;
 import com.imaia.domain.ImConversation;
 import com.imaia.domain.ImTask;

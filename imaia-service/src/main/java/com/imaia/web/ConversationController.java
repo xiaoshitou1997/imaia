@@ -1,5 +1,7 @@
 package com.imaia.web;
 
+import com.imaia.common.error.ServiceException;
+import com.imaia.common.web.Result;
 import com.imaia.adapter.ImAdapter;
 import com.imaia.adapter.ImAdapters;
 import com.imaia.adapter.wechat.WechatHistoryService;
@@ -212,7 +214,7 @@ public class ConversationController {
         }
         String alias = raw.strip();
         if (alias.length() > AiSettingsService.SELF_COMMAND_ALIAS_MAX) {
-            throw new BusinessException(ErrorCode.SELF_COMMAND_ALIAS_TOO_LONG,
+            throw new ServiceException(ImaiaErrorCodeEnum.SELF_COMMAND_ALIAS_TOO_LONG,
                     "selfCommandAlias 最长 " + AiSettingsService.SELF_COMMAND_ALIAS_MAX + " 字符。");
         }
         return alias;
@@ -226,7 +228,7 @@ public class ConversationController {
         ImConversation conversation = requireConversation(id);
         ImAccount account = accounts.findById(conversation.getAccountId()).orElseThrow();
         if (account.getPlatform() != Platform.WECHAT) {
-            throw new BusinessException(ErrorCode.HISTORY_SYNC_UNSUPPORTED_PLATFORM);
+            throw new ServiceException(ImaiaErrorCodeEnum.HISTORY_SYNC_UNSUPPORTED);
         }
         long before = messages.countByConversationId(id);
         WechatHistoryService.Result result = wechatHistory.pull(conversation.getPlatformId(), pages, limit);
@@ -295,7 +297,7 @@ public class ConversationController {
     public Result<AnalysisRow> runAnalysis(@PathVariable Long id, @RequestBody AnalysisRequest body) {
         ImConversation conversation = requireConversation(id);
         if (body.contactId() == null) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "contactId 不能为空。");
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_INVALID, "contactId 不能为空。");
         }
         ImConversationContactProfile analysis = contactAnalyzer.analyzeContact(conversation, body.contactId());
         if (analysis == null) {
@@ -340,7 +342,7 @@ public class ConversationController {
                 .orElseThrow(() -> new NoSuchElementException("会话连接不存在，无法拉取附件内容。"));
         ImAdapter adapter = adapters.forPlatform(account.getPlatform());
         if (!adapter.configured()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_INVALID,
                     "平台连接未启用（" + account.getPlatform() + "），无法拉取附件内容。");
         }
         ImAdapter.MediaBytes media = attachment.getKind() == AttachmentKind.PREVIEW
@@ -366,7 +368,7 @@ public class ConversationController {
     @GetMapping("/search")
     public Result<List<SearchHit>> searchMessages(@RequestParam String keyword) {
         if (!StringUtils.hasText(keyword)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "keyword 不能为空。");
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_INVALID, "keyword 不能为空。");
         }
         Map<Long, String> conversationLabels = labels.labels();
         List<ImMessage> found = messages.searchByBody(keyword.strip(),
@@ -408,7 +410,7 @@ public class ConversationController {
 
     private ImConversation requireConversation(Long id) {
         if (id == null) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "conversationId 不能为空。");
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_INVALID, "conversationId 不能为空。");
         }
         return conversations.findById(id).orElseThrow();
     }

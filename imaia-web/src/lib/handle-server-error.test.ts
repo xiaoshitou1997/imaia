@@ -17,16 +17,16 @@ beforeEach(() => {
 
 describe('handleServerError', () => {
   it('passes the ApiError message through to the toast', () => {
-    handleServerError(new ApiError('会话不存在。', 404, 404))
+    handleServerError(new ApiError('会话不存在。', 404, 'resource.not-found'))
 
     expect(toastError).toHaveBeenCalledWith('会话不存在。')
   })
 
   it('falls back to the code-derived copy when the message is empty', () => {
-    handleServerError(new ApiError('', 404, 2404))
+    handleServerError(new ApiError('', 404, 'resource.not-found'))
 
     // code 是契约：即使 message 为空也能给出稳定描述。
-    expect(toastError).toHaveBeenCalledWith(copyForCode(2404))
+    expect(toastError).toHaveBeenCalledWith(copyForCode('resource.not-found'))
   })
 
   it('falls back to the generic copy for unknown errors', () => {

@@ -1,5 +1,6 @@
 package com.imaia.web;
 
+import com.imaia.common.web.Result;
 import com.imaia.ai.ModelSyncService;
 import com.imaia.config.AiModelCatalog;
 import com.imaia.domain.AiModel;

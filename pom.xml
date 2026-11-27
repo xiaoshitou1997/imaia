@@ -4,6 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- 根聚合 POM 承接 Spring Boot 依赖管理与插件管理，两个子模块共享同一基线版本 -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.9</version>
+        <relativePath/>
+    </parent>
+
     <groupId>com.imaia</groupId>
     <artifactId>imaia</artifactId>
     <version>0.1.0-SNAPSHOT</version>
@@ -12,6 +20,11 @@
     <description>imaia — 智能聚合中枢 IM（统一会话模型 + 原生 AI；adapter 归一化各 IM 方言）</description>
 
     <modules>
+        <module>imaia-common</module>
         <module>imaia-service</module>
     </modules>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
 </project>

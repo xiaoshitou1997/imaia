@@ -119,7 +119,7 @@ describe('UserAuthForm', () => {
 
   it('surfaces a login failure and stays on the page', async () => {
     const { ApiError } = await import('@/lib/api')
-    loginMock.mockRejectedValue(new ApiError('用户名或密码错误。', 401, 401))
+    loginMock.mockRejectedValue(new ApiError('用户名或密码错误。', 401, 'auth.invalid-credentials'))
 
     await userEvent.fill(usernameInput, 'admin')
     await userEvent.fill(passwordInput, 'wrong')

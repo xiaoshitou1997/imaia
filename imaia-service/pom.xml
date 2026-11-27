@@ -5,21 +5,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.9</version>
-        <relativePath/>
+        <groupId>com.imaia</groupId>
+        <artifactId>imaia</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>com.imaia</groupId>
     <artifactId>imaia-service</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
     <name>imaia-service</name>
     <description>imaia-service — 智能聚合中枢 IM 的服务端：adapter 归一化（微信/飞书）+ AI 原生链路</description>
-
-    <properties>
-        <java.version>21</java.version>
-    </properties>
 
     <dependencyManagement>
         <dependencies>
@@ -34,6 +27,12 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- 横切骨架：统一包络、错误码契约、国际化装配 -->
+        <dependency>
+            <groupId>com.imaia</groupId>
+            <artifactId>imaia-common</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
         <!-- Lombok：实体访问器（JDK21 下与 record 分工：实体=Lombok 类，值形状=record） -->
         <dependency>
             <groupId>org.projectlombok</groupId>

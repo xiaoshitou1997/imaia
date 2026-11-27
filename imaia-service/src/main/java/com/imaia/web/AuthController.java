@@ -1,5 +1,7 @@
 package com.imaia.web;
 
+import com.imaia.common.error.ServiceException;
+import com.imaia.common.web.Result;
 import com.imaia.config.AdminProperties;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -38,17 +40,14 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<Result<LoginResponse>> login(@Valid @RequestBody LoginRequest body) {
+        // 失败统一交给全局处理器：状态取枚举、code 取枚举、文案按请求 locale 渲染。
         if (!StringUtils.hasText(admin.password())) {
-            return Result.error(ErrorCode.AUTH_NOT_CONFIGURED.httpStatus(),
-                    ErrorCode.AUTH_NOT_CONFIGURED.code(),
-                    ErrorCode.AUTH_NOT_CONFIGURED.defaultMessage());
+            throw new ServiceException(ImaiaErrorCodeEnum.AUTH_NOT_CONFIGURED);
         }
         boolean userOk = constantTimeEquals(body.username(), admin.username());
         boolean passOk = constantTimeEquals(body.password(), admin.password());
         if (!userOk || !passOk) {
-            return Result.error(ErrorCode.AUTH_INVALID_CREDENTIALS.httpStatus(),
-                    ErrorCode.AUTH_INVALID_CREDENTIALS.code(),
-                    ErrorCode.AUTH_INVALID_CREDENTIALS.defaultMessage());
+            throw new ServiceException(ImaiaErrorCodeEnum.AUTH_INVALID_CREDENTIALS);
         }
         return ResponseEntity.ok(Result.ok(new LoginResponse(admin.username())));
     }

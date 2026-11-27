@@ -1,5 +1,7 @@
 package com.imaia.web;
 
+import com.imaia.common.error.ServiceException;
+import com.imaia.common.web.Result;
 import java.time.Instant;
 import com.imaia.domain.ImAccount;
 import com.imaia.domain.Platform;
@@ -68,7 +70,7 @@ public class AccountController {
     public Result<AccountRow> create(@Valid @RequestBody AccountCreate body) {
         Platform platform = Platform.fromValue(body.platformCode());
         if (!StringUtils.hasText(body.name())) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "name 不能为空。");
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_INVALID, "name 不能为空。");
         }
         Instant now = Instant.now();
         ImAccount created = ImAccount.builder()
@@ -105,7 +107,7 @@ public class AccountController {
     public Result<String> delete(@PathVariable Long id) {
         ImAccount account = accounts.findById(id).orElseThrow();
         if (conversations.existsByAccountId(id)) {
-            return Result.<String>error(409, 409, "该账号已有会话数据，禁止删除；可改为停用。").getBody();
+            throw new ServiceException(ImaiaErrorCodeEnum.DATA_CONFLICT);
         }
         accounts.deleteById(account.getId());
         streams.refreshPlatform(account.getPlatform());
@@ -137,7 +139,7 @@ public class AccountController {
 
     private String mergeConfig(String existingJson, JsonNode submitted) {
         if (!submitted.isObject()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "config 必须是 JSON 对象。");
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_INVALID, "config 必须是 JSON 对象。");
         }
         ObjectNode merged = (ObjectNode) jsonMapper.readTree(
                 !StringUtils.hasText(existingJson) ? "{}" : existingJson);

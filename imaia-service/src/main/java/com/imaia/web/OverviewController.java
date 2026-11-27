@@ -1,5 +1,7 @@
 package com.imaia.web;
 
+import com.imaia.common.web.Result;
+
 import com.imaia.ai.AiSettingsService;
 import com.imaia.domain.Platform;
 import com.imaia.ai.ImageGenerationClient;

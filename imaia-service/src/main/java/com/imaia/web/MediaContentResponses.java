@@ -1,5 +1,6 @@
 package com.imaia.web;
 
+import com.imaia.common.web.Result;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
