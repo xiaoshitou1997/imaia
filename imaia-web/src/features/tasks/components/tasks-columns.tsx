@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { api, ApiError, type TaskRow } from '@/lib/api'
+import { formatDateTime } from '@/lib/datetime'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -67,7 +68,7 @@ export const tasksColumns: ColumnDef<TaskRow>[] = [
           <code className='text-xs'>{row.original.cronExpr}</code>
         ) : (
           <span className='text-xs'>
-            {row.original.runAt ? row.original.runAt.replace('T', ' ') : '—'}
+            {formatDateTime(row.original.runAt)}
           </span>
         )}
         <span className='text-xs text-muted-foreground'>

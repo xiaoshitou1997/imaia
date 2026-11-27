@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatDateTime, localInputToIso } from '@/lib/datetime'
 import { api, ApiError, type TaskRun, type TaskRow } from '@/lib/api'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Badge } from '@/components/ui/badge'
@@ -178,7 +179,7 @@ function CreateTaskDialog({
         prompt: values.prompt.trim() || null,
         fireAt:
           values.scheduleMode === 'once'
-            ? values.fireAt.replace('T', ' ')
+            ? localInputToIso(values.fireAt) ?? values.fireAt
             : null,
         cron: values.scheduleMode === 'cron' ? values.cron.trim() : null,
       })
@@ -382,10 +383,8 @@ function RunsDialog({
                   <TableRow key={r.id}>
                     <TableCell className='whitespace-nowrap text-xs'>
                       {r.startedAt
-                        ? r.startedAt.replace('T', ' ').slice(0, 19)
-                        : r.scheduledFor
-                          ? r.scheduledFor.replace('T', ' ').slice(0, 19)
-                          : '—'}
+                        ? formatDateTime(r.startedAt)
+                        : formatDateTime(r.scheduledFor)}
                     </TableCell>
                     <TableCell>
                       <Badge

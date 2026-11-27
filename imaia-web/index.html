@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link
@@ -26,41 +26,18 @@
       href="/images/favicon_light.png"
       media="(prefers-color-scheme: dark)"
     />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Primary Meta Tags -->
-    <title>Shadcn Admin</title>
-    <meta name="title" content="Shadcn Admin" />
+    <!-- 主元信息：控制台仅供本机使用 -->
+    <title>imaia 中枢 · 控制台</title>
+    <meta name="title" content="imaia 中枢 · 控制台" />
     <meta
       name="description"
-      content="Admin Dashboard UI built with Shadcn and Vite."
+      content="imaia 中枢控制台：会话归档、AI 助手、定时任务与平台接入管理。"
     />
 
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://shadcn-admin.netlify.app" />
-    <meta property="og:title" content="Shadcn Admin" />
-    <meta
-      property="og:description"
-      content="Admin Dashboard UI built with Shadcn and Vite."
-    />
-    <meta
-      property="og:image"
-      content="https://shadcn-admin.netlify.app/images/shadcn-admin.png"
-    />
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="https://shadcn-admin.netlify.app" />
-    <meta property="twitter:title" content="Shadcn Admin" />
-    <meta
-      property="twitter:description"
-      content="Admin Dashboard UI built with Shadcn and Vite."
-    />
-    <meta
-      property="twitter:image"
-      content="https://shadcn-admin.netlify.app/images/shadcn-admin.png"
-    />
+    <!-- 这是仅回环访问的内网控制台，按规范不配置分享卡（Open Graph / Twitter Card）。 -->
 
     <!-- font family -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -70,7 +47,32 @@
       rel="stylesheet"
     />
 
-    <meta name="theme-color" content="#fff" />
+    <!-- 主题色取设计令牌：浅/深色各一套，不写死十六进制 -->
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#020817" media="(prefers-color-scheme: dark)" />
+
+    <style>
+      /* 首屏静态品牌占位：避免挂载前的白闪，也不呈现脚手架默认样式。 */
+      #root:empty {
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #64748b;
+        font-family: Inter, Manrope, system-ui, sans-serif;
+        font-size: 0.875rem;
+      }
+      #root:empty::after {
+        content: 'imaia 中枢 · 正在加载…';
+      }
+      @media (prefers-color-scheme: dark) {
+        #root:empty {
+          background: #020817;
+          color: #94a3b8;
+        }
+      }
+    </style>
   </head>
 
   <body>

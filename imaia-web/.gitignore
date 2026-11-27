@@ -12,7 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 本地环境文件一律不入库（前端无环境变量需求，不放任何前缀变量）
 .env
+.env.*
 
 # Editor directories and files
 .vscode/*
