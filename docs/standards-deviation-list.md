@@ -6,7 +6,7 @@
 | 基线 | mv-coding-standards：java-guide、spring-guide、schema-migrations、readability-refactoring、backend-testing、frontend-guide、vite-spa-guide、ux-interaction-guide、accessibility-performance |
 | 检查方式 | 三个脚本化审计（`audit-full` 35 项、`audit-modules` 10 项、`audit-a11y` 6 项），逐条输出判定依据 |
 | 结果 | **51 项检查：50 PASS / 1 BLOCKED** |
-| 提交 | `6506912` → `0ac994b` 共 5 个提交 |
+| 提交 | `6506912` → `facc6bd` 共 11 个提交 |
 
 ## 一、本轮修复的偏离（均有提交与验证）
 
