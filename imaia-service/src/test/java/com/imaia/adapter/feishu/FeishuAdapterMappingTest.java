@@ -1,6 +1,6 @@
 package com.imaia.adapter.feishu;
 
-import com.imaia.config.JsonSupport;
+import com.imaia.config.JsonSupportTestSeeder;
 import com.imaia.domain.MessageKind;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -14,7 +14,7 @@ class FeishuAdapterMappingTest {
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
     static {
-        JsonSupport.installForTesting(MAPPER);
+        JsonSupportTestSeeder.seed(MAPPER);
     }
 
     @Test

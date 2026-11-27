@@ -30,7 +30,7 @@ public class JsonSupport {
      * <p>生产代码不得调用——它存在只为让静态工具类可被单测覆盖，
      * 而不是为业务代码提供「自建 mapper」的后门。
      */
-    public static void installForTesting(JsonMapper mapper) {
+    static void installForTesting(JsonMapper mapper) {
         instance = mapper;
     }
 

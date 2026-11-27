@@ -13,7 +13,7 @@
 | 条款 | 偏离内容 | 判定依据 | 处理 |
 | --- | --- | --- | --- |
 | java-guide 模块命名 / 三种布局 | 缺必建的 `-common` 模块，只有单个 `-service` | 聚合 pom 仅 `<module>imaia-service</module>` | 新建 `imaia-common`，包根 `com.imaia.common` |
-| java-guide `-common` 包结构 | 无 `web/`、`error/`、`i18n/` 三包 | 三包与三件套均不存在 | 按规范建包：`Result`、`GlobalExceptionHandler`、`ErrorCode`、`CommonErrorCodeEnum`、`ServiceException`、locale 解析与 MessageSource 装配 |
+| java-guide `-common` 包结构 | 无 `web/`、`error/`、`i18n/` 三包 | 三包与三件套均不存在 | 建 `web/`、`error/`、`i18n/` 三包：`Result`、`GlobalExceptionHandler`、`ErrorCode`、`CommonErrorCodeEnum`、`ServiceException`、locale 解析与 MessageSource 装配。`config/`、`util/` 未建——规范原文「首个纯工具类出现时建，无工具类不建空目录」，当前 common 内无此类内容，不建空目录即合规 |
 | spring-guide 错误码契约 | `ErrorCode` 是 enum，`code`/`httpStatus` 均为 `int`，无 `messageKey()` | 旧 `ErrorCode.java` 字段声明 | 改接口：`HttpStatus status()` / `String code()` / `messageKey()`（按 `error.`+code 派生） |
 | spring-guide 公共错误码 | 缺 `CommonErrorCodeEnum` 六码 | 全项目无该枚举 | 落地 6 码：INTERNAL_ERROR / PARAM_INVALID / UNAUTHORIZED / SESSION_EXPIRED / LOGIN_FAILED / FORBIDDEN |
 | java-guide 国际化 38–40 | 文案硬编码在枚举；0 个 `messages*.properties` | `(Get-ChildItem -Include messages*.properties).Count == 0` | 建 20 个键的双语资源，`zh-CN` 默认、`en-US` 齐备；ADR-0003 记录取代 ADR-0001 的豁免 |

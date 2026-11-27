@@ -4,7 +4,7 @@ import com.imaia.adapter.wechat.WechatAccountConfig;
 import com.imaia.adapter.wechat.WechatConnection;
 import com.imaia.ai.AiSettingsService;
 import com.imaia.config.AiModelCatalog;
-import com.imaia.config.JsonSupport;
+import com.imaia.config.JsonSupportTestSeeder;
 import com.imaia.config.DispatchProperties;
 import com.imaia.domain.AiModel;
 import com.imaia.domain.AiProvider;
@@ -43,7 +43,7 @@ public final class TestProperties {
      * 这里预置一份与容器同源的配置，避免测试各自 builder().build() 复制一份。
      */
     static {
-        JsonSupport.installForTesting(JsonMapper.builder().build());
+        JsonSupportTestSeeder.seed(JsonMapper.builder().build());
     }
 
     private static final AtomicLong IDS = new AtomicLong();
