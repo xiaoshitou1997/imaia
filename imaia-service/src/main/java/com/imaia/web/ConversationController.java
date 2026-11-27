@@ -1,5 +1,6 @@
 package com.imaia.web;
 
+import com.imaia.ai.ConversationSettingsService;
 import com.imaia.common.error.ServiceException;
 import com.imaia.common.web.Result;
 import com.imaia.adapter.ImAdapter;
@@ -32,7 +33,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -71,13 +71,14 @@ public class ConversationController {
     private final ImAdapters adapters;
     private final S3MediaStorage mediaStorage;
     private final AiSettingsService settings;
+    private final ConversationSettingsService conversationSettings;
 
     public ConversationController(ImConversationRepository conversations, ImMessageRepository messages,
             ImConversationContactBindRepository binds, ImContactRepository contacts, ImAttachmentRepository attachments,
             ImConversationContactProfileRepository contactProfiles, ImAccountRepository accounts,
             ConversationLabels labels, ContactAnalyzer contactAnalyzer,
             WechatHistoryService wechatHistory, ImAdapters adapters, S3MediaStorage mediaStorage,
-            AiSettingsService settings) {
+            AiSettingsService settings, ConversationSettingsService conversationSettings) {
         this.conversations = conversations;
         this.messages = messages;
         this.binds = binds;
@@ -91,6 +92,7 @@ public class ConversationController {
         this.adapters = adapters;
         this.mediaStorage = mediaStorage;
         this.settings = settings;
+        this.conversationSettings = conversationSettings;
     }
 
     /**
@@ -184,30 +186,12 @@ public class ConversationController {
      * the save failed. {@code @Transactional} keeps the whole batch atomic.
      */
     @PutMapping("/{id}")
-    @Transactional
     public Result<Long> update(@PathVariable Long id, @Valid @RequestBody ConversationUpdate body) {
-        ImConversation conversation = requireConversation(id);
-        String alias = validateSelfCommandAlias(body.selfCommandAlias());
-        if (body.title() != null) {
-            conversation.setTitle(body.title().isBlank() ? null : body.title().strip());
-        }
-        if (body.remark() != null) {
-            conversation.setRemark(body.remark().isBlank() ? null : body.remark().strip());
-        }
-        if (body.persona() != null) {
-            settings.saveConversationPersona(conversation.getId(), body.persona());
-        }
-        if (body.autoreply() != null) {
-            settings.saveConversationAutoreply(conversation.getId(), body.autoreply());
-        }
-        if (alias != null) {
-            settings.saveConversationSelfCommandAlias(conversation.getId(), alias);
-        }
-        if (body.selfCommandEnabled() != null) {
-            settings.saveConversationSelfCommandEnabled(conversation.getId(), body.selfCommandEnabled());
-        }
-        conversations.save(conversation);
-        return Result.ok(conversation.getId());
+        // 事务边界在 ConversationSettingsService：Controller 只做路由与协议映射。
+        long updated = conversationSettings.update(id, new ConversationSettingsService.ConversationEdit(
+                body.title(), body.remark(), body.persona(), body.autoreply(),
+                body.selfCommandAlias(), body.selfCommandEnabled()));
+        return Result.ok(updated);
     }
 
     /** Null passthrough (field absent) is distinct from a present but blank value (clears). */

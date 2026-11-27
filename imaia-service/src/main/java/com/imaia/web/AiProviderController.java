@@ -1,5 +1,6 @@
 package com.imaia.web;
 
+import com.imaia.ai.AiProviderService;
 import com.imaia.common.web.Result;
 import com.imaia.ai.ModelSyncService;
 import com.imaia.config.AiModelCatalog;
@@ -19,7 +20,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RestController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,13 +52,16 @@ public class AiProviderController {
     private final AiModelRepository aiModels;
     private final AiModelCatalog catalog;
     private final ModelSyncService syncService;
+    private final AiProviderService providerService;
 
     public AiProviderController(AiProviderRepository providers, AiModelRepository aiModels,
-            AiModelCatalog catalog, ModelSyncService syncService, JsonMapper jsonMapper) {
+            AiModelCatalog catalog, ModelSyncService syncService, AiProviderService providerService,
+            JsonMapper jsonMapper) {
         this.providers = providers;
         this.aiModels = aiModels;
         this.catalog = catalog;
         this.syncService = syncService;
+        this.providerService = providerService;
         this.jsonMapper = jsonMapper;
     }
 
@@ -181,15 +184,10 @@ public class AiProviderController {
     }
 
     @DeleteMapping("/{id}")
-    @Transactional
     public Result<String> delete(@PathVariable Long id) {
-        providers.findById(id).orElseThrow();
-        List<AiModel> models = aiModels.findByProviderIdOrderByModelKeyAsc(id);
-        List<Long> modelIds = models.stream().map(AiModel::getId).toList();
-        aiModels.deleteAll(models);
-        providers.deleteById(id);
-        catalog.invalidate();
-        return Result.ok("已删除接入商，并移除 " + models.size() + " 个模型");
+        // 事务边界在 AiProviderService：Controller 只管路由与协议映射。
+        int removed = providerService.deleteWithModels(id);
+        return Result.ok("已删除接入商，并移除 " + removed + " 个模型");
     }
 
     /** 拉取 /v1/models 并同步目录；可用性以网关为准，本地标注不覆盖。 */
