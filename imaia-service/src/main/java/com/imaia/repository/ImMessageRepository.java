@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.List;
 
+/** 归档消息的数据访问：分页检索、上下文取数、跨线搜索与计数聚合。 */
 public interface ImMessageRepository extends JpaRepository<ImMessage, Long> {
 
     boolean existsByConversationIdAndPlatformId(Long conversationId, String platformId);

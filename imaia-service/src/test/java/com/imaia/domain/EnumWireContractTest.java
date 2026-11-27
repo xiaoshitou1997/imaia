@@ -1,6 +1,8 @@
 package com.imaia.domain;
 
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,18 +18,18 @@ class EnumWireContractTest {
 
     @Test
     void serializesToLowercaseValue() {
-        assertEquals("\"incoming\"", MAPPER.writeValueAsString(MessageDirection.INCOMING));
-        assertEquals("\"sync\"", MAPPER.writeValueAsString(ModelSource.SYNC));
-        assertEquals("\"wechat\"", MAPPER.writeValueAsString(Platform.WECHAT));
+        assertThat(MAPPER.writeValueAsString(MessageDirection.INCOMING)).isEqualTo("\"incoming\"");
+        assertThat(MAPPER.writeValueAsString(ModelSource.SYNC)).isEqualTo("\"sync\"");
+        assertThat(MAPPER.writeValueAsString(Platform.WECHAT)).isEqualTo("\"wechat\"");
     }
 
     @Test
     void deserializesFromLowercaseValue() {
-        assertEquals(TaskStatus.ACTIVE, MAPPER.readValue("\"active\"", TaskStatus.class));
-        assertEquals(ReportPeriod.MONTH, MAPPER.readValue("\"month\"", ReportPeriod.class));
-        assertEquals(DeliveryStatus.SENT, MAPPER.readValue("\"sent\"", DeliveryStatus.class));
-        assertEquals(ModelSlot.VISION, MAPPER.readValue("\"vision\"", ModelSlot.class));
-        assertEquals(Platform.FEISHU, MAPPER.readValue("\"feishu\"", Platform.class));
+        assertThat(MAPPER.readValue("\"active\"", TaskStatus.class)).isEqualTo(TaskStatus.ACTIVE);
+        assertThat(MAPPER.readValue("\"month\"", ReportPeriod.class)).isEqualTo(ReportPeriod.MONTH);
+        assertThat(MAPPER.readValue("\"sent\"", DeliveryStatus.class)).isEqualTo(DeliveryStatus.SENT);
+        assertThat(MAPPER.readValue("\"vision\"", ModelSlot.class)).isEqualTo(ModelSlot.VISION);
+        assertThat(MAPPER.readValue("\"feishu\"", Platform.class)).isEqualTo(Platform.FEISHU);
     }
 
     @Test

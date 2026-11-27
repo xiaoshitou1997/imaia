@@ -11,6 +11,8 @@ import com.imaia.repository.ImConversationRepository;
 import com.imaia.repository.ImMessageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageRequest;
 
@@ -18,9 +20,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -66,9 +65,9 @@ class AiChatServiceTest {
             return conversation;
         });
         ImConversation conversation = service.resolve(adapter, "wx-1");
-        assertEquals(7L, conversation.getId());
-        assertEquals(ConversationKind.DIRECT, conversation.getKind());
-        assertEquals("wx-1", conversation.getPlatformId());
+        assertThat(conversation.getId()).isEqualTo(7L);
+        assertThat(conversation.getKind()).isEqualTo(ConversationKind.DIRECT);
+        assertThat(conversation.getPlatformId()).isEqualTo("wx-1");
         verify(conversations, times(2)).save(any());
     }
 
@@ -79,7 +78,7 @@ class AiChatServiceTest {
                 .thenReturn(java.util.Optional.of(existing));
         when(conversations.save(any())).thenAnswer(inv -> inv.getArgument(0));
         ImConversation conversation = service.resolve(adapter, "wx-1");
-        assertEquals(9L, conversation.getId());
+        assertThat(conversation.getId()).isEqualTo(9L);
         verify(conversations, times(1)).save(any());
     }
 
@@ -107,16 +106,16 @@ class AiChatServiceTest {
                 .thenReturn(new OpenAiChatCompletion.ChatResult("好的", 3L, 1, 2));
         AiChatService.ChatReply reply = service.complete(conversation, "你好", null, null, null,
                 new ArrayList<>());
-        assertEquals("好的", reply.text());
+        assertThat(reply.text()).isEqualTo("好的");
         ArgumentCaptor<List<OpenAiChatCompletion.Turn>> history =
                 ArgumentCaptor.forClass((Class) List.class);
         verify(chatCompletion).complete(anyString(), history.capture(), eq("你好"),
                 eq(null), eq(null), anyList());
-        assertEquals(2, history.getValue().size());
-        assertEquals("旧问题", history.getValue().get(0).text());
-        assertFalse(history.getValue().get(0).assistant());
-        assertEquals("新回复", history.getValue().get(1).text());
-        assertTrue(history.getValue().get(1).assistant());
+        assertThat(history.getValue().size()).isEqualTo(2);
+        assertThat(history.getValue().get(0).text()).isEqualTo("旧问题");
+        assertThat(history.getValue().get(0).assistant()).isFalse();
+        assertThat(history.getValue().get(1).text()).isEqualTo("新回复");
+        assertThat(history.getValue().get(1).assistant()).isTrue();
     }
 
     @Test
@@ -134,9 +133,9 @@ class AiChatServiceTest {
         ArgumentCaptor<String> system = ArgumentCaptor.forClass(String.class);
         verify(chatCompletion).complete(system.capture(), anyList(), eq("你好"),
                 eq(null), eq(null), anyList());
-        assertTrue(system.getValue().startsWith("默认提示词"));
-        assertTrue(system.getValue().contains("本会话回复风格：毒舌群友"));
-        assertTrue(system.getValue().contains("当前时间"));
+        assertThat(system.getValue().startsWith("默认提示词")).isTrue();
+        assertThat(system.getValue().contains("本会话回复风格：毒舌群友")).isTrue();
+        assertThat(system.getValue().contains("当前时间")).isTrue();
     }
 
     @Test
@@ -145,7 +144,7 @@ class AiChatServiceTest {
         when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), any()))
                 .thenReturn(new OpenAiChatCompletion.ChatResult("  措辞好的消息  ", 3L, 1, 2));
         AiChatService.OneShot oneShot = service.completeOnce(conversation, "写一句问候");
-        assertEquals("措辞好的消息", oneShot.text());
+        assertThat(oneShot.text()).isEqualTo("措辞好的消息");
         verify(messages, times(0)).save(any());
     }
 }

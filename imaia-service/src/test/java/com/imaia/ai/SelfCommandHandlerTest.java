@@ -19,12 +19,12 @@ import com.imaia.repository.ImOutboundLedgerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -284,10 +284,8 @@ class SelfCommandHandlerTest {
                 org.mockito.ArgumentCaptor.forClass(String.class);
         verify(chatService).complete(any(ImConversation.class), eq("帮我总结一下"),
                 isNull(), isNull(), context.capture(), anyList());
-        org.junit.jupiter.api.Assertions.assertTrue(
-                context.getValue() != null
-                        && context.getValue().contains("近期群聊记录"),
-                "实际上下文：" + context.getValue());
+        assertThat(context.getValue() != null
+                        && context.getValue().contains("近期群聊记录")).as("实际上下文：" + context.getValue()).isTrue();
     }
 
     @Test
@@ -303,14 +301,14 @@ class SelfCommandHandlerTest {
 
     @Test
     void extractPromptRules() {
-        assertEquals("你好", SelfCommandHandler.extractPrompt("@小艾 你好", "小艾"));
-        assertEquals("你好", SelfCommandHandler.extractPrompt("@小艾：你好", "小艾"));
-        assertEquals("你好", SelfCommandHandler.extractPrompt("@小艾   你好 ", "小艾"));
-        assertNull(SelfCommandHandler.extractPrompt("@小艾", "小艾"));
-        assertNull(SelfCommandHandler.extractPrompt("@小艾斯 你好", "小艾"));
-        assertNull(SelfCommandHandler.extractPrompt("@张三 你好", "小艾"));
-        assertNull(SelfCommandHandler.extractPrompt("小艾 你好", "小艾"));
+        assertThat(SelfCommandHandler.extractPrompt("@小艾 你好", "小艾")).isEqualTo("你好");
+        assertThat(SelfCommandHandler.extractPrompt("@小艾：你好", "小艾")).isEqualTo("你好");
+        assertThat(SelfCommandHandler.extractPrompt("@小艾   你好 ", "小艾")).isEqualTo("你好");
+        assertThat(SelfCommandHandler.extractPrompt("@小艾", "小艾")).isNull();
+        assertThat(SelfCommandHandler.extractPrompt("@小艾斯 你好", "小艾")).isNull();
+        assertThat(SelfCommandHandler.extractPrompt("@张三 你好", "小艾")).isNull();
+        assertThat(SelfCommandHandler.extractPrompt("小艾 你好", "小艾")).isNull();
         // 剩余部分整体作为 prompt（含 @ 开头也无妨，交给模型理解）
-        assertEquals("@小艾", SelfCommandHandler.extractPrompt("@小艾 @小艾", "小艾"));
+        assertThat(SelfCommandHandler.extractPrompt("@小艾 @小艾", "小艾")).isEqualTo("@小艾");
     }
 }

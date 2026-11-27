@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
+/** AI 供应商的数据访问：控制台列表与按名查找，接入配置变更后同步模型。 */
 public interface AiProviderRepository extends JpaRepository<AiProvider, Long> {
 
     List<AiProvider> findByEnabledTrue();

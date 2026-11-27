@@ -8,6 +8,8 @@ import com.imaia.repository.ImMessageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -66,9 +68,9 @@ class GroupContextBuilderTest {
 
         String context = builder.build(CONVERSATION_ID, "trigger");
 
-        assertNotNull(context);
-        assertFalse(context.contains("被排除的这句"), "触发消息自身不能出现在上下文里");
-        assertTrue(context.contains("保留这句"));
+        assertThat(context).isNotNull();
+        assertThat(context.contains("被排除的这句")).as("触发消息自身不能出现在上下文里").isFalse();
+        assertThat(context.contains("保留这句")).isTrue();
     }
 
     @Test
@@ -82,10 +84,10 @@ class GroupContextBuilderTest {
 
         String context = builder.build(CONVERSATION_ID, "none");
 
-        assertNotNull(context);
-        assertTrue(context.contains("我：我发的话"), "outgoing 归因为「我」");
-        assertTrue(context.contains("小张：对方的话"), "incoming 用 alias 优先");
-        assertFalse(context.contains("张某某"), "有 alias 时不应回退 displayName");
+        assertThat(context).isNotNull();
+        assertThat(context.contains("我：我发的话")).as("outgoing 归因为「我」").isTrue();
+        assertThat(context.contains("小张：对方的话")).as("incoming 用 alias 优先").isTrue();
+        assertThat(context.contains("张某某")).as("有 alias 时不应回退 displayName").isFalse();
     }
 
     @Test
@@ -98,10 +100,9 @@ class GroupContextBuilderTest {
 
         String context = builder.build(CONVERSATION_ID, "none");
 
-        assertNotNull(context);
-        assertTrue(context.contains("张某某：无名者的话"), "无 alias 回退 displayName");
-        assertTrue(context.contains("成员：没联系人的话"),
-                "contactId 为 null 时归为「成员」，且不得抛 NPE");
+        assertThat(context).isNotNull();
+        assertThat(context.contains("张某某：无名者的话")).as("无 alias 回退 displayName").isTrue();
+        assertThat(context.contains("成员：没联系人的话")).as("contactId 为 null 时归为「成员」，且不得抛 NPE").isTrue();
     }
 
     @Test
@@ -114,9 +115,9 @@ class GroupContextBuilderTest {
 
         String context = builder.build(CONVERSATION_ID, "none");
 
-        assertNotNull(context);
+        assertThat(context).isNotNull();
         long lines = context.lines().filter(line -> line.contains("：")).count();
-        assertEquals(12, lines, "最多取 12 条");
+        assertThat(lines).as("最多取 12 条").isEqualTo(12);
     }
 
     @Test
@@ -128,15 +129,15 @@ class GroupContextBuilderTest {
 
         String context = builder.build(CONVERSATION_ID, "none");
 
-        assertNotNull(context);
+        assertThat(context).isNotNull();
         long lines = context.lines().filter(line -> line.contains("：")).count();
-        assertEquals(1, lines, "空正文不占上下文行");
+        assertThat(lines).as("空正文不占上下文行").isEqualTo(1);
     }
 
     @Test
     void returnsNullWhenNothingToShow() {
         stubRecent();
-        assertNull(builder.build(CONVERSATION_ID, "none"));
+        assertThat(builder.build(CONVERSATION_ID, "none")).isNull();
     }
 
     @Test
@@ -145,6 +146,6 @@ class GroupContextBuilderTest {
                 .thenThrow(new IllegalStateException("archive down"));
 
         // 读取失败不能把整条回复链带崩，只降级成「无上下文」。
-        assertNull(builder.build(CONVERSATION_ID, "none"));
+        assertThat(builder.build(CONVERSATION_ID, "none")).isNull();
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
+/** 会话线的数据访问：按账号+平台 id 定位、控制台分页列表。 */
 public interface ImConversationRepository extends JpaRepository<ImConversation, Long> {
 
     Optional<ImConversation> findByAccountIdAndPlatformId(Long accountId, String platformId);

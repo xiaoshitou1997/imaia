@@ -14,17 +14,15 @@ import com.imaia.repository.ImConversationContactProfileRepository;
 import com.imaia.repository.ImMessageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,7 +63,7 @@ class ContactAnalyzerTest {
         when(binds.findByConversationIdAndContactIdAndLeftAtIsNull(9L, 3L)).thenReturn(Optional.of(bind()));
         when(messages.findTop100ByConversationIdAndContactIdOrderByArchivedAtDesc(9L, 3L))
                 .thenReturn(List.of());
-        assertNull(analyzer.analyzeContact(conversation, 3L));
+        assertThat(analyzer.analyzeContact(conversation, 3L)).isNull();
     }
 
     @Test
@@ -80,13 +78,12 @@ class ContactAnalyzerTest {
 
         ImConversationContactProfile profile = analyzer.analyzeContact(conversation, 3L);
 
-        assertNotNull(profile);
-        assertEquals("此人热爱运动，性格开朗。", profile.getProfile());
-        assertEquals(1, profile.getMessageCount());
+        assertThat(profile).isNotNull();
+        assertThat(profile.getProfile()).isEqualTo("此人热爱运动，性格开朗。");
+        assertThat(profile.getMessageCount()).isEqualTo(1);
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
         verify(chatService).completeOnce(eq(conversation), prompt.capture());
-        assertTrue(prompt.getValue().contains("今天天气不错，出去跑了五公里。"),
-                "上下文字数上限内应包含归档消息原文");
+        assertThat(prompt.getValue().contains("今天天气不错，出去跑了五公里。")).as("上下文字数上限内应包含归档消息原文").isTrue();
     }
 
     private ImConversationContactBind bind() {

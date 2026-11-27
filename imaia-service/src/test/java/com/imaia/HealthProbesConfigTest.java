@@ -1,6 +1,8 @@
 package com.imaia;
 
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
@@ -36,8 +38,7 @@ class HealthProbesConfigTest {
         Boolean enabled = binder().bind("management.endpoint.health.probes.enabled", Boolean.class)
                 .orElse(false);
         // Compose does not auto-enable the probe endpoints; k8s does. Both must work.
-        assertEquals(Boolean.TRUE, enabled,
-                "management.endpoint.health.probes.enabled 必须为 true");
+        assertThat(enabled).as("management.endpoint.health.probes.enabled 必须为 true").isEqualTo(Boolean.TRUE);
     }
 
     @Test
@@ -45,8 +46,7 @@ class HealthProbesConfigTest {
         List<String> included = binder()
                 .bind("management.endpoints.web.exposure.include", Bindable.listOf(String.class))
                 .orElse(List.of());
-        assertEquals(List.of("health"), included,
-                "exposure.include 只放开 health，其余按需再开");
+        assertThat(included).as("exposure.include 只放开 health，其余按需再开").isEqualTo(List.of("health"));
     }
 
     @Test
@@ -55,8 +55,7 @@ class HealthProbesConfigTest {
                 .bind("management.health.group.liveness.include", Bindable.listOf(String.class))
                 .orElse(List.of());
         // A datastore blip must not restart the container.
-        assertEquals(List.of("livenessState"), liveness,
-                "liveness 只含进程内状态，不聚合 db/redis");
+        assertThat(liveness).as("liveness 只含进程内状态，不聚合 db/redis").isEqualTo(List.of("livenessState"));
     }
 
     @Test
@@ -64,8 +63,7 @@ class HealthProbesConfigTest {
         List<String> readiness = binder()
                 .bind("management.health.group.readiness.include", Bindable.listOf(String.class))
                 .orElse(List.of());
-        assertEquals(List.of("readinessState", "db"), readiness,
-                "readiness 聚合 readinessState 与 db，作为部署门禁");
+        assertThat(readiness).as("readiness 聚合 readinessState 与 db，作为部署门禁").isEqualTo(List.of("readinessState", "db"));
     }
 
     @Test
@@ -73,9 +71,7 @@ class HealthProbesConfigTest {
         // The config above is inert without the starter; fail loudly if it is dropped.
         // Boot 4 moved health out of spring-boot-actuator into spring-boot-health,
         // so the old org.springframework.boot.actuate.health.HealthEndpoint no longer exists.
-        org.junit.jupiter.api.Assertions.assertTrue(
-                isPresent("org.springframework.boot.health.actuate.endpoint.HealthEndpoint"),
-                "spring-boot-starter-actuator 必须在依赖里");
+        assertThat(isPresent("org.springframework.boot.health.actuate.endpoint.HealthEndpoint")).as("spring-boot-starter-actuator 必须在依赖里").isTrue();
     }
 
     private static boolean isPresent(String className) {

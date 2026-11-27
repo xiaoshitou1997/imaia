@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.Instant;
 import java.util.List;
 
+/** 定时任务的数据访问：按状态与到期时间取待执行任务。 */
 public interface ImTaskRepository extends JpaRepository<ImTask, Long> {
 
     List<ImTask> findTop20ByStatusAndNextRunAtLessThanEqualOrderByNextRunAtAsc(

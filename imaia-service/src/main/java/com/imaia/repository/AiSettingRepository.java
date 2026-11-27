@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Collection;
 import java.util.List;
 
+/** 能力配置 KV 的数据访问：按四级作用域（平台/账号/会话/全局）读取配置行。 */
 public interface AiSettingRepository extends JpaRepository<AiSetting, Long> {
 
     List<AiSetting> findByPlatformIsNullAndAccountIdIsNullAndConversationIdIsNull();

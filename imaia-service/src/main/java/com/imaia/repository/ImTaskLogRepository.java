@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+/** 任务运行记录的数据访问：按任务分页查看执行历史。 */
 public interface ImTaskLogRepository extends JpaRepository<ImTaskLog, Long> {
 
     Optional<ImTaskLog> findByTaskIdAndScheduledFor(Long taskId, Instant scheduledFor);

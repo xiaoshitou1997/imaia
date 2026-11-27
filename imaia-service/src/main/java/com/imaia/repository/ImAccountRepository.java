@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
+/** IM 接入账号的数据访问：按平台取启用连接、控制台列表。 */
 public interface ImAccountRepository extends JpaRepository<ImAccount, Long> {
 
     /** The enabled connection of one platform, lowest id first. */

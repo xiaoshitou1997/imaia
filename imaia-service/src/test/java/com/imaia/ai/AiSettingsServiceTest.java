@@ -9,6 +9,8 @@ import com.imaia.repository.ImAccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 import java.util.Map;
 
@@ -74,14 +76,14 @@ class AiSettingsServiceTest {
 
         AiSettings resolved = service.forConversation(conversation());
 
-        assertEquals("小艾", resolved.getSelfCommandAlias(), "别名仍可继承");
-        assertFalse(resolved.isSelfCommandEnabled(), "会话层显式关闭必须生效");
+        assertThat(resolved.getSelfCommandAlias()).as("别名仍可继承").isEqualTo("小艾");
+        assertThat(resolved.isSelfCommandEnabled()).as("会话层显式关闭必须生效").isFalse();
     }
 
     @Test
     void switchDefaultsToOnWhenNoRowExists() {
         AiSettings resolved = service.forConversation(conversation());
-        assertTrue(resolved.isSelfCommandEnabled(), "未配置时默认开启，由别名控制是否生效");
+        assertThat(resolved.isSelfCommandEnabled()).as("未配置时默认开启，由别名控制是否生效").isTrue();
     }
 
     @Test
@@ -91,8 +93,7 @@ class AiSettingsServiceTest {
         when(repository.findByConversationId(CONVERSATION_ID))
                 .thenReturn(List.of(AiSetting.lineBool("self_command_enabled", CONVERSATION_ID, true)));
 
-        assertTrue(service.forConversation(conversation()).isSelfCommandEnabled(),
-                "会话层比全局层更具体，应覆盖");
+        assertThat(service.forConversation(conversation()).isSelfCommandEnabled()).as("会话层比全局层更具体，应覆盖").isTrue();
     }
 
     // --- 作用域优先级 ---------------------------------------------------------
@@ -104,7 +105,7 @@ class AiSettingsServiceTest {
         when(repository.findByConversationId(CONVERSATION_ID))
                 .thenReturn(List.of(AiSetting.lineText("persona", CONVERSATION_ID, "本会话人设")));
 
-        assertEquals("本会话人设", service.forConversation(conversation()).getPersona());
+        assertThat(service.forConversation(conversation()).getPersona()).isEqualTo("本会话人设");
     }
 
     @Test
@@ -115,8 +116,7 @@ class AiSettingsServiceTest {
         when(repository.findByConversationId(CONVERSATION_ID))
                 .thenReturn(List.of(AiSetting.lineText("history_limit", CONVERSATION_ID, "5")));
 
-        assertEquals(30, service.forConversation(conversation()).getHistoryLimit(),
-                "globalOnly 键忽略会话层取值");
+        assertThat(service.forConversation(conversation()).getHistoryLimit()).as("globalOnly 键忽略会话层取值").isEqualTo(30);
     }
 
     // --- 别名写入 -------------------------------------------------------------
@@ -139,8 +139,8 @@ class AiSettingsServiceTest {
         org.mockito.ArgumentCaptor<AiSetting> captor =
                 org.mockito.ArgumentCaptor.forClass(AiSetting.class);
         verify(repository).save(captor.capture());
-        assertEquals("\"小艾\"", captor.getValue().getValue());
-        assertEquals(CONVERSATION_ID, captor.getValue().getConversationId());
+        assertThat(captor.getValue().getValue()).isEqualTo("\"小艾\"");
+        assertThat(captor.getValue().getConversationId()).isEqualTo(CONVERSATION_ID);
     }
 
     @Test
@@ -151,7 +151,7 @@ class AiSettingsServiceTest {
         org.mockito.ArgumentCaptor<AiSetting> captor =
                 org.mockito.ArgumentCaptor.forClass(AiSetting.class);
         verify(repository).save(captor.capture());
-        assertEquals("false", captor.getValue().getValue());
+        assertThat(captor.getValue().getValue()).isEqualTo("false");
     }
 
     // --- 列表视图（lineSettings） ---------------------------------------------
@@ -171,9 +171,9 @@ class AiSettingsServiceTest {
                 service.lineSettings(List.of(conversation()));
 
         AiSettingsService.LineCaps line = caps.get(CONVERSATION_ID);
-        assertEquals("小艾", line.selfCommandAlias(), "继承来的别名必须出现在列表里");
-        assertTrue(line.selfCommandEnabled());
-        assertTrue(line.autoreply());
+        assertThat(line.selfCommandAlias()).as("继承来的别名必须出现在列表里").isEqualTo("小艾");
+        assertThat(line.selfCommandEnabled()).isTrue();
+        assertThat(line.autoreply()).isTrue();
     }
 
     @Test
@@ -188,13 +188,13 @@ class AiSettingsServiceTest {
         AiSettingsService.LineCaps line =
                 service.lineSettings(List.of(conversation())).get(CONVERSATION_ID);
 
-        assertEquals("小艾", line.selfCommandAlias());
-        assertFalse(line.selfCommandEnabled(), "UI 需要能显示「配了别名但本会话关着」");
+        assertThat(line.selfCommandAlias()).isEqualTo("小艾");
+        assertThat(line.selfCommandEnabled()).as("UI 需要能显示「配了别名但本会话关着」").isFalse();
     }
 
     @Test
     void lineSettingsEmptyInputSkipsAllQueries() {
-        assertTrue(service.lineSettings(List.of()).isEmpty());
+        assertThat(service.lineSettings(List.of()).isEmpty()).isTrue();
         verify(repository, never()).findByConversationIdIn(anyCollection());
     }
 
@@ -204,7 +204,7 @@ class AiSettingsServiceTest {
                 .thenReturn(List.of(com.imaia.TestProperties.account(ACCOUNT_ID, "wechat")));
         AiSettingsService.LineCaps line =
                 service.lineSettings(List.of(conversation())).get(CONVERSATION_ID);
-        assertNull(line.persona(), "未配置人设时为 null，交给全局提示词");
+        assertThat(line.persona()).as("未配置人设时为 null，交给全局提示词").isNull();
     }
 
     // --- 坏数据 ---------------------------------------------------------------
@@ -216,6 +216,6 @@ class AiSettingsServiceTest {
         when(repository.findByConversationId(CONVERSATION_ID)).thenReturn(List.of(broken));
 
         // 单行坏数据不能把整条配置解析打崩。
-        assertNull(service.forConversation(conversation()).getPersona());
+        assertThat(service.forConversation(conversation()).getPersona()).isNull();
     }
 }
