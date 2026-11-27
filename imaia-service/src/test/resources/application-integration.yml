@@ -1,0 +1,35 @@
+# 集成测试专用配置：连接本机 WSL 的 infra 栈（PostgreSQL + rustfs S3）。
+#
+# 凭据经环境变量注入，不写死在仓库里（java-guide 条款 41）。
+# 库名默认 imaia_test——独立库，避免污染 dev 的 infra 库。
+spring:
+  datasource:
+    url: ${IMAIA_TEST_PG_URL:jdbc:postgresql://127.0.0.1:15432/imaia_test}
+    username: ${IMAIA_TEST_PG_USERNAME:infra}
+    password: ${IMAIA_TEST_PG_PASSWORD:}
+  jpa:
+    hibernate:
+      # 集成测试要让 Flyway 建表，Hibernate 只做校验
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    clean-disabled: false
+    locations: classpath:db/migration
+
+# 媒体存储：本次集成测试不覆盖上传路径，但容器启动要求依赖可用
+imaia:
+  storage:
+    endpoint: ${IMAIA_TEST_S3_ENDPOINT:http://127.0.0.1:19000}
+    access-key: ${IMAIA_TEST_S3_ACCESS_KEY:infra}
+    secret-key: ${IMAIA_TEST_S3_SECRET_KEY:}
+    bucket: ${IMAIA_TEST_S3_BUCKET:imaia-test}
+
+server:
+  address: 127.0.0.1
+  port: 0
+
+logging:
+  level:
+    org.flywaydb: INFO
+    org.hibernate.SQL: WARN
