@@ -1,6 +1,7 @@
 import { useNavigate, useRouter } from '@tanstack/react-router'
 import { Logo } from '@/assets/logo'
 import { Button } from '@/components/ui/button'
+import { t } from '@/lib/copy'
 
 interface ErrorPageProps {
   /** 错误语义码，仅作视觉标识。 */
@@ -13,10 +14,7 @@ interface ErrorPageProps {
 
 /**
  * 系统页（404/403/500/维护）与错误边界兜底的统一外壳：
- * 品牌标识 + 产品名 + 中文可操作入口。
- *
- * 脚手架自带的是英文示例文案（"Oops! Page Not Found!"），交付前必须替换——
- * 这是用户看到的第一屏。
+ * 品牌标识 + 产品名 + 可操作入口。文案走资源层，不在此硬编码。
  */
 export function ErrorPage({
   code,
@@ -33,7 +31,7 @@ export function ErrorPage({
         {!minimal && <Logo className='size-10 text-primary' />}
         {!minimal && (
           <span className='text-sm font-medium text-muted-foreground'>
-            imaia 中枢
+            {t('product.name')}
           </span>
         )}
         {!minimal && (
@@ -46,9 +44,11 @@ export function ErrorPage({
         {!minimal && (
           <div className='mt-4 flex gap-3'>
             <Button variant='outline' onClick={() => history.go(-1)}>
-              返回上一页
+              {t('action.back')}
             </Button>
-            <Button onClick={() => navigate({ to: '/' })}>回到首页</Button>
+            <Button onClick={() => navigate({ to: '/' })}>
+              {t('action.home')}
+            </Button>
           </div>
         )}
       </div>

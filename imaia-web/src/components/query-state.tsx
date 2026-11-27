@@ -1,5 +1,6 @@
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { t } from '@/lib/copy'
 
 interface QueryStateProps {
   /** First load in flight; renders the skeleton instead of stale content. */
@@ -15,16 +16,16 @@ interface QueryStateProps {
 }
 
 /**
- * The single place a list/form decides between loading, failed and empty. Pages used
- * to fold "request failed" into the empty state, so a network error looked like
- * "there is nothing here" and offered no way back.
+ * The single place a list/form decides between loading, failed and empty.
+ * Pages used to fold "request failed" into the empty state, so a network error
+ * looked like "there is nothing here" and offered no way back.
  */
 export function QueryState({
   isLoading,
   isError,
   isEmpty = false,
-  errorText = '加载失败，请稍后重试。',
-  emptyText = '暂无数据。',
+  errorText = t('state.loadFailed'),
+  emptyText = t('state.empty'),
   onRetry,
   children,
 }: QueryStateProps) {
@@ -38,7 +39,7 @@ export function QueryState({
         <p className='text-sm text-muted-foreground'>{errorText}</p>
         {onRetry ? (
           <Button type='button' variant='outline' size='sm' onClick={onRetry}>
-            重试
+            {t('action.retry')}
           </Button>
         ) : null}
       </div>
@@ -53,7 +54,7 @@ export function QueryState({
         className='flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground'
       >
         <Loader2 className='size-4 animate-spin' />
-        加载中…
+        {t('state.loading')}
       </div>
     )
   }

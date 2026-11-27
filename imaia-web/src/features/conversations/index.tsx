@@ -55,6 +55,8 @@ export function Conversations() {
             total={listQuery.data?.total ?? 0}
             totalPages={listQuery.data?.totalPages ?? 1}
             loading={listQuery.isLoading}
+            isError={listQuery.isError}
+            onRetry={() => void listQuery.refetch()}
             selectedId={selectedId}
             onSelect={(id) => {
               setSelectedId(id)

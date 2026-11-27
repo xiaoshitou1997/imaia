@@ -177,7 +177,18 @@ export function ConversationMessages({
           </div>
 
           <div className='chat-text-container relative -me-4 flex min-h-0 flex-1 flex-col overflow-y-hidden'>
-            {messagesQuery.isLoading ? (
+            {messagesQuery.isError ? (
+              <div className='flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground'>
+                <span>消息加载失败，请稍后重试。</span>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => void messagesQuery.refetch()}
+                >
+                  重试
+                </Button>
+              </div>
+            ) : messagesQuery.isLoading ? (
               <div className='flex flex-1 items-center justify-center text-sm text-muted-foreground'>
                 加载中…
               </div>

@@ -95,7 +95,14 @@ function AccountsBody() {
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-1'>
-        {accounts.isLoading ? (
+        {accounts.isError ? (
+          <div className='flex flex-col items-center gap-2 py-6 text-center'>
+            <p className='text-sm text-muted-foreground'>加载失败，请稍后重试。</p>
+            <Button variant='outline' size='sm' onClick={() => void accounts.refetch()}>
+              重试
+            </Button>
+          </div>
+        ) : accounts.isLoading ? (
           <p className='py-6 text-center text-sm text-muted-foreground'>
             加载中…
           </p>

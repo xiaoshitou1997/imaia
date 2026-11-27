@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { type Conversation } from '@/lib/api'
+import { t } from '@/lib/copy'
 
 interface ConversationListProps {
   search: string
@@ -18,6 +19,9 @@ interface ConversationListProps {
   total: number
   totalPages: number
   loading: boolean
+  /** 列表请求失败；必须与「空列表」区分开，否则用户以为是没有数据。 */
+  isError?: boolean
+  onRetry?: () => void
   selectedId: number | null
   onSelect: (id: number) => void
 }
@@ -31,6 +35,8 @@ export function ConversationList({
   total,
   totalPages,
   loading,
+  isError = false,
+  onRetry,
   selectedId,
   onSelect,
 }: ConversationListProps) {
@@ -100,9 +106,18 @@ export function ConversationList({
             <Separator className='my-1' />
           </Fragment>
         ))}
-        {!items.length && !loading ? (
+        {isError ? (
+          <div className='flex flex-col items-center gap-2 px-2 py-6 text-center'>
+            <p className='text-sm text-muted-foreground'>{t('state.loadFailed')}</p>
+            {onRetry ? (
+              <Button variant='outline' size='sm' onClick={onRetry}>
+                {t('action.retry')}
+              </Button>
+            ) : null}
+          </div>
+        ) : !items.length && !loading ? (
           <p className='px-2 py-6 text-sm text-muted-foreground'>
-            没有匹配的会话。
+            {search ? t('conversation.empty') : t('state.empty')}
           </p>
         ) : null}
       </ScrollArea>
