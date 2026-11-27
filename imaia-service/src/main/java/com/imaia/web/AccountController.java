@@ -6,6 +6,9 @@ import com.imaia.domain.Platform;
 import com.imaia.repository.ImAccountRepository;
 import com.imaia.repository.ImConversationRepository;
 import com.imaia.stream.StreamOrchestrator;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,10 +52,10 @@ public class AccountController {
     }
 
     /** platform 入参为 wire 字符串，fromValue 显式转换并校验值域。 */
-    public record AccountCreate(String platformCode, String name, Boolean enabled, JsonNode config) {
+    public record AccountCreate(@NotBlank @Size(max = 16) String platformCode, @NotBlank @Size(max = 64) String name, Boolean enabled, JsonNode config) {
     }
 
-    public record AccountUpdate(String name, Boolean enabled, JsonNode config) {
+    public record AccountUpdate(@Size(max = 64) String name, Boolean enabled, JsonNode config) {
     }
 
     @GetMapping
@@ -62,7 +65,7 @@ public class AccountController {
     }
 
     @PostMapping
-    public Result<AccountRow> create(@RequestBody AccountCreate body) {
+    public Result<AccountRow> create(@Valid @RequestBody AccountCreate body) {
         Platform platform = Platform.fromValue(body.platformCode());
         if (!StringUtils.hasText(body.name())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "name 不能为空。");
@@ -82,7 +85,7 @@ public class AccountController {
     }
 
     @PutMapping("/{id}")
-    public Result<AccountRow> update(@PathVariable Long id, @RequestBody AccountUpdate body) {
+    public Result<AccountRow> update(@PathVariable Long id, @Valid @RequestBody AccountUpdate body) {
         ImAccount account = accounts.findById(id).orElseThrow();
         if (StringUtils.hasText(body.name())) {
             account.setName(body.name().strip());

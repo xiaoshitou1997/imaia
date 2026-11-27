@@ -150,6 +150,9 @@ public class FeishuPlatformSource implements PlatformSource {
         }
         String msgType = message.getMessageType();
         String chatType = message.getChatType();
+        // 三方协议原始载荷快照：结构由飞书定义、无本方固定 Schema，
+        // java-guide「结构化数据用 POJO 承载」条款明确允许此例外。
+        // 业务数据一律走强类型，不用 Map 承载。
         Map<String, Object> raw = new LinkedHashMap<>();
         raw.put("msgType", msgType);
         raw.put("chatType", chatType);

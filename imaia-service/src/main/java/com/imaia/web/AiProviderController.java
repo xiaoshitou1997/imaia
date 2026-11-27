@@ -7,6 +7,9 @@ import com.imaia.domain.AiProvider;
 import com.imaia.domain.ModelSource;
 import com.imaia.repository.AiModelRepository;
 import com.imaia.repository.AiProviderRepository;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,7 +69,9 @@ public class AiProviderController {
             boolean enabled, String modelsDevId, List<ModelRow> models, String sync) {
     }
 
-    public record ProviderCreate(String name, String baseUrl, String apiKey,
+    public record ProviderCreate(@NotBlank @Size(max = 64) String name,
+            @NotBlank @Size(max = 512) String baseUrl,
+            @Size(max = 512) String apiKey,
             Boolean enabled, String modelsDevId) {
     }
 
@@ -74,7 +79,9 @@ public class AiProviderController {
     public record CreatedProvider(ProviderRow provider, String sync) {
     }
 
-    public record ProviderUpdate(String baseUrl, String apiKey, Boolean enabled, String modelsDevId) {
+    public record ProviderUpdate(@Size(max = 512) String baseUrl,
+            @Size(max = 512) String apiKey,
+            Boolean enabled, String modelsDevId) {
     }
 
     public record ModelUpdate(String modelKey, String name, String modalitiesIn, String modalitiesOut,
@@ -101,7 +108,7 @@ public class AiProviderController {
     }
 
     @PostMapping
-    public Result<CreatedProvider> create(@RequestBody ProviderCreate body) {
+    public Result<CreatedProvider> create(@Valid @RequestBody ProviderCreate body) {
         requireText(body.name(), "name");
         requireText(body.baseUrl(), "baseUrl");
         Instant now = Clock.now();
@@ -131,7 +138,7 @@ public class AiProviderController {
     }
 
     @PutMapping("/{id}")
-    public Result<ProviderRow> update(@PathVariable Long id, @RequestBody ProviderUpdate body) {
+    public Result<ProviderRow> update(@PathVariable Long id, @Valid @RequestBody ProviderUpdate body) {
         AiProvider provider = providers.findById(id).orElseThrow();
         String oldBaseUrl = provider.getBaseUrl();
         String oldApiKey = provider.getApiKey();

@@ -26,6 +26,8 @@ import com.imaia.repository.ImMessageRepository;
 import com.imaia.repository.ImConversationContactProfileRepository;
 import com.imaia.storage.S3MediaStorage;
 import com.imaia.ai.AiSettingsService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -109,7 +111,10 @@ public class ConversationController {
             Long sizeBytes, Long durationMs, String status) {
     }
 
-    public record ConversationUpdate(String title, String remark, String persona, Boolean autoreply,
+    public record ConversationUpdate(@Size(max = 100) String title,
+            @Size(max = 200) String remark,
+            @Size(max = 2000) String persona,
+            Boolean autoreply,
             String selfCommandAlias, Boolean selfCommandEnabled) {
     }
 
@@ -175,7 +180,7 @@ public class ConversationController {
      */
     @PutMapping("/{id}")
     @Transactional
-    public Result<Long> update(@PathVariable Long id, @RequestBody ConversationUpdate body) {
+    public Result<Long> update(@PathVariable Long id, @Valid @RequestBody ConversationUpdate body) {
         ImConversation conversation = requireConversation(id);
         String alias = validateSelfCommandAlias(body.selfCommandAlias());
         if (body.title() != null) {

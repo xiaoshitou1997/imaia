@@ -1,6 +1,9 @@
 package com.imaia.web;
 
 import com.imaia.config.AdminProperties;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,14 +30,14 @@ public class AuthController {
         this.admin = admin;
     }
 
-    public record LoginRequest(String username, String password) {
+    public record LoginRequest(@NotBlank @Size(max = 64) String username, @NotBlank @Size(max = 256) String password) {
     }
 
     public record LoginResponse(String username) {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Result<LoginResponse>> login(@RequestBody LoginRequest body) {
+    public ResponseEntity<Result<LoginResponse>> login(@Valid @RequestBody LoginRequest body) {
         if (!StringUtils.hasText(admin.password())) {
             return Result.error(503, 503, "IMAIA_ADMIN_PASSWORD 未配置，控制台登录已禁用。");
         }

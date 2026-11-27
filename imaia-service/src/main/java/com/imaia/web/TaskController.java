@@ -9,6 +9,10 @@ import com.imaia.domain.TaskStatus;
 import com.imaia.repository.ImConversationRepository;
 import com.imaia.repository.ImTaskLogRepository;
 import com.imaia.repository.ImTaskRepository;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -60,8 +64,11 @@ public class TaskController {
             Instant lastRunAt, Instant createdAt) {
     }
 
-    public record TaskCreate(Long conversationId, String content, String prompt,
-            String fireAt, String cron, String timezone,
+    public record TaskCreate(@NotNull Long conversationId,
+            @Size(max = 8000) String content,
+            @Size(max = 8000) String prompt,
+            String fireAt, String cron,
+            @NotBlank @Size(max = 64) String timezone,
             tools.jackson.databind.JsonNode params) {
     }
 
@@ -93,7 +100,7 @@ public class TaskController {
     }
 
     @PostMapping
-    public Result<Long> create(@RequestBody TaskCreate body) {
+    public Result<Long> create(@Valid @RequestBody TaskCreate body) {
         if (body.conversationId() == null) {
             throw new IllegalArgumentException("conversationId 不能为空。");
         }
