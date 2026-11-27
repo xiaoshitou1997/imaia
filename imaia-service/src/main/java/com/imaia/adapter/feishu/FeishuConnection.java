@@ -103,7 +103,7 @@ public class FeishuConnection {
         FeishuConnection connection = new FeishuConnection(null, JsonMapper.builder().build(), fixedConfig);
         ImAccount app = ImAccount.builder()
                 .platform(Platform.FEISHU).name("default").enabled(true).config("{}")
-                .createdAt(java.time.Instant.now()).updatedAt(java.time.Instant.now()).build();
+                .build();
         app.setId(2L);
         connection.appRow = app;
         return connection;

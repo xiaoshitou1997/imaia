@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, ApiError, type Settings } from '@/lib/api'
+import { QueryState } from '@/components/query-state'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import {
@@ -61,6 +62,9 @@ function AssistantForm() {
 
   const form = useForm<AssistantForm>({
     resolver: zodResolver(formSchema),
+    // Validate on blur so required/length errors surface while the user moves
+    // through the form, instead of only after pressing 保存.
+    mode: 'onTouched',
     defaultValues: {
       enabled: false,
       systemPrompt: '',
@@ -93,17 +97,18 @@ function AssistantForm() {
   }, [settings.data, form])
 
   const onSubmit = form.handleSubmit((values) => {
-    const body: Partial<Settings> = {
-      enabled: values.enabled,
-      systemPrompt: values.systemPrompt,
-      historyLimit: values.historyLimit,
-      requireGroupMention: values.requireGroupMention,
-      quietHoursEnabled: values.quietHoursEnabled,
-      quietHoursStart: values.quietHoursStart,
-      quietHoursEnd: values.quietHoursEnd,
-      timezone: values.timezone,
-      selfCommandAlias: values.selfCommandAlias,
-      selfCommandEnabled: values.selfCommandEnabled,
+    // Only send what actually changed. Sending the whole form turns a failed
+    // GET /settings into a config wipe: the form would still be holding defaults
+    // (assistant off, empty prompt) and PUT them over the real values.
+    const body: Partial<Settings> = {}
+    for (const key of Object.keys(values) as (keyof typeof values)[]) {
+      if (settings.data && settings.data[key] !== values[key]) {
+        Object.assign(body, { [key]: values[key] })
+      }
+    }
+    if (Object.keys(body).length === 0) {
+      toast.info('没有需要保存的修改')
+      return Promise.resolve(null)
     }
     return api
       .updateSettings(body)
@@ -120,10 +125,17 @@ function AssistantForm() {
   })
 
   const quietOn = form.watch('quietHoursEnabled')
+  const isReady = !settings.isError && !!settings.data
 
   return (
-    <Form {...form}>
-      <form onSubmit={onSubmit} className='space-y-6'>
+    <QueryState
+      isLoading={settings.isLoading}
+      isError={settings.isError}
+      errorText='加载助手设置失败。为避免用默认值覆盖服务器上的真实配置，保存已禁用。'
+      onRetry={() => void settings.refetch()}
+    >
+      <Form {...form}>
+        <form onSubmit={onSubmit} className='space-y-6'>
         <FormField
           control={form.control}
           name='enabled'
@@ -290,13 +302,17 @@ function AssistantForm() {
             </div>
           ) : null}
         </div>
-        <Button type='submit' disabled={form.formState.isSubmitting}>
+        <Button
+          type='submit'
+          disabled={!isReady || form.formState.isSubmitting}
+        >
           {form.formState.isSubmitting ? (
             <Loader2 className='animate-spin' />
           ) : null}
           保存
         </Button>
       </form>
-    </Form>
+      </Form>
+    </QueryState>
   )
 }

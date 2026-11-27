@@ -12,7 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
+import lombok.experimental.SuperBuilder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -32,10 +32,10 @@ import java.time.Instant;
 @Table(name = "ai_setting")
 @Getter
 @Setter
-@Builder
+@SuperBuilder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class AiSetting {
+public class AiSetting extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -62,28 +62,25 @@ public class AiSetting {
     @Column(nullable = false)
     private String value;
 
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
     public static AiSetting globalText(String key, String raw) {
-        return builder().key(key).value(StringNode.valueOf(raw).toString()).updatedAt(Instant.now()).build();
+        return builder().key(key).value(StringNode.valueOf(raw).toString()).build();
     }
 
     public static AiSetting globalInt(String key, int raw) {
-        return builder().key(key).value(IntNode.valueOf(raw).toString()).updatedAt(Instant.now()).build();
+        return builder().key(key).value(IntNode.valueOf(raw).toString()).build();
     }
 
     public static AiSetting globalBool(String key, boolean raw) {
-        return builder().key(key).value(BooleanNode.valueOf(raw).toString()).updatedAt(Instant.now()).build();
+        return builder().key(key).value(BooleanNode.valueOf(raw).toString()).build();
     }
 
     public static AiSetting lineText(String key, long conversationId, String raw) {
         return builder().key(key).conversationId(conversationId)
-                .value(StringNode.valueOf(raw).toString()).updatedAt(Instant.now()).build();
+                .value(StringNode.valueOf(raw).toString()).build();
     }
 
     public static AiSetting lineBool(String key, long conversationId, boolean raw) {
         return builder().key(key).conversationId(conversationId)
-                .value(BooleanNode.valueOf(raw).toString()).updatedAt(Instant.now()).build();
+                .value(BooleanNode.valueOf(raw).toString()).build();
     }
 }

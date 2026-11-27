@@ -77,12 +77,12 @@ export function ConversationList({
               <div className='flex gap-2'>
                 <Avatar>
                   <AvatarFallback>
-                    {(c.title || c.platformId || '?').slice(0, 1)}
+                    {c.displayName.slice(0, 1)}
                   </AvatarFallback>
                 </Avatar>
                 <div className='min-w-0'>
                   <span className='block truncate font-medium'>
-                    {c.title || c.platformId}
+                    {c.displayName}
                   </span>
                   <span className='block truncate text-xs text-muted-foreground group-hover:text-accent-foreground/90'>
                     {c.platformCode ?? '—'} · {c.messageCount} 条

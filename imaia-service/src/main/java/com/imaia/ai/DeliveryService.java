@@ -37,7 +37,7 @@ public class DeliveryService {
                 .body(body)
                 .status(DeliveryStatus.PENDING)
                 .attempts(0)
-                .createdAt(Instant.now())
+                
                 .build();
         try {
             return deliveries.save(candidate);

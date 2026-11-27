@@ -181,7 +181,6 @@ public class MessageArchiveHandler implements ImEventHandler {
             contact.setDisplayName(fetched.senderName());
         }
         contact.setLastSeenAt(now);
-        contact.setUpdatedAt(now);
         return contacts.save(contact).getId();
     }
 

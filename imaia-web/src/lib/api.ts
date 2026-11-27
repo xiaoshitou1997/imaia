@@ -98,7 +98,10 @@ export interface Account {
 
 export interface Conversation {
   id: number
+  /** 平台原生会话 id（wxid / xxx@chatroom / oc_xxx）。排障用，不要展示给用户。 */
   platformId: string
+  /** 用户可见的会话名，由后端给出：title 优先，否则按封闭值域 code 给占位名。 */
+  displayName: string
   title: string | null
   remark: string | null
   kind: string

@@ -97,7 +97,7 @@ export function ConversationMessages({
           <div className='min-w-0'>
             <div className='flex items-center gap-2'>
               <span className='truncate text-sm font-medium lg:text-base'>
-                {convo.title || convo.platformId}
+                {convo.displayName}
               </span>
               {convo.kind === 'group' ? (
                 <Badge variant='outline'>群聊</Badge>

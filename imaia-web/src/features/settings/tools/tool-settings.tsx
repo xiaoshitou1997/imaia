@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, ApiError, type Settings } from '@/lib/api'
+import { QueryState } from '@/components/query-state'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
@@ -75,33 +76,52 @@ function ToolForm({ fields }: { fields: ToolFieldConfig[] }) {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.getSettings })
 
-  const shape: Record<string, z.ZodTypeAny> = {}
-  for (const f of fields) {
-    shape[f.key] = z.string()
-  }
-  const formSchema = z.object(shape)
-  type ToolForm = z.infer<typeof formSchema>
+  // The schema shape is fixed for this page's field set, so it can be spelled out
+  // once as a literal. A Record<string, ZodTypeAny> shape used to force every call
+  // site through `as never`, which severed the link to the Settings contract.
+  const formSchema = useMemo(
+    () =>
+      z.object(
+        Object.fromEntries(
+          fields.map((f) => [f.key, z.string()])
+        ) as Record<ToolFieldConfig['key'], z.ZodString>
+      ),
+    [fields]
+  )
+  type ToolFormValues = z.infer<typeof formSchema>
 
-  const empty: Record<string, string> = {}
-  for (const f of fields) empty[f.key] = ''
-
-  const form = useForm<ToolForm>({
-    resolver: zodResolver(formSchema as never),
-    defaultValues: empty as never,
+  const form = useForm<ToolFormValues>({
+    resolver: zodResolver(formSchema),
+    mode: 'onTouched',
+    defaultValues: Object.fromEntries(
+      fields.map((f) => [f.key, ''])
+    ) as ToolFormValues,
   })
 
   useEffect(() => {
     const s = settings.data
     if (!s) return
-    const values: Record<string, string> = {}
-    for (const f of fields) {
-      values[f.key] = (s as unknown as Record<string, unknown>)[f.key] as string
-    }
-    form.reset(values as never)
+    form.reset(
+      Object.fromEntries(
+        fields.map((f) => [f.key, s[f.key] ?? ''])
+      ) as ToolFormValues
+    )
   }, [settings.data, form, fields])
 
   const onSubmit = form.handleSubmit((values) => {
-    const body = values as Partial<Settings>
+    // Differencing against the loaded settings is what keeps a failed GET from
+    // overwriting real keys: an unloaded form holds '' for every secret field, and
+    // '' has "clear this value" semantics in SettingsController.applyToolKey.
+    const body: Partial<Settings> = {}
+    for (const f of fields) {
+      if (settings.data && settings.data[f.key] !== values[f.key]) {
+        Object.assign(body, { [f.key]: values[f.key] })
+      }
+    }
+    if (Object.keys(body).length === 0) {
+      toast.info('没有需要保存的修改')
+      return Promise.resolve(null)
+    }
     return api
       .updateSettings(body)
       .then((saved) => {
@@ -115,39 +135,51 @@ function ToolForm({ fields }: { fields: ToolFieldConfig[] }) {
       )
   })
 
+  const isReady = !settings.isError && !!settings.data
+
   return (
-    <Form {...form}>
-      <form onSubmit={onSubmit} className='space-y-6'>
-        {fields.map((f) => (
-          <FormField
-            key={f.key}
-            control={form.control}
-            name={f.key as never}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{f.label}</FormLabel>
-                <FormControl>
-                  <Input
-                    type={f.password ? 'password' : 'text'}
-                    placeholder={f.placeholder}
-                    {...field}
-                  />
-                </FormControl>
-                {f.description ? (
-                  <FormDescription>{f.description}</FormDescription>
-                ) : null}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        ))}
-        <Button type='submit' disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? (
-            <Loader2 className='animate-spin' />
-          ) : null}
-          保存
-        </Button>
-      </form>
-    </Form>
+    <QueryState
+      isLoading={settings.isLoading}
+      isError={settings.isError}
+      errorText='加载工具端点配置失败。为避免用默认值覆盖服务器上的真实配置，保存已禁用。'
+      onRetry={() => void settings.refetch()}
+    >
+      <Form {...form}>
+        <form onSubmit={onSubmit} className='space-y-6'>
+          {fields.map((f) => (
+            <FormField
+              key={f.key}
+              control={form.control}
+              name={f.key}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{f.label}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type={f.password ? 'password' : 'text'}
+                      placeholder={f.placeholder}
+                      {...field}
+                    />
+                  </FormControl>
+                  {f.description ? (
+                    <FormDescription>{f.description}</FormDescription>
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ))}
+          <Button
+            type='submit'
+            disabled={!isReady || form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting ? (
+              <Loader2 className='animate-spin' />
+            ) : null}
+            保存
+          </Button>
+        </form>
+      </Form>
+    </QueryState>
   )
 }

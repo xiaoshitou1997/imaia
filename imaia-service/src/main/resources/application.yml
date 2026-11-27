@@ -38,6 +38,32 @@ logging:
       netty: WARN
     com.imaia.ai: DEBUG
 
+management:
+  endpoint:
+    health:
+      # Readiness/liveness are the deployment probe contract; Compose does not enable
+      # them automatically, so they must be switched on explicitly here.
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        # Minimal surface: health only. liveness stays process-local, readiness
+        # aggregates the datastore the app cannot serve without.
+        include: health
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    # A datastore blip must not restart the container: db/redis only gate readiness.
+    # liveness reflects in-process state alone.
+    group:
+      liveness:
+        include: livenessState
+      readiness:
+        include: readinessState,db
+
 imaia:
   admin:
     # 控制台登录凭据：只从环境变量注入，不落库不落盘；密码未配置时登录端点整体禁用。

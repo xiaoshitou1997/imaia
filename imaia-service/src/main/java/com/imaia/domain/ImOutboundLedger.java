@@ -9,7 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
+import lombok.experimental.SuperBuilder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -26,10 +26,10 @@ import java.time.Instant;
 @Table(name = "im_outbound_ledger")
 @Getter
 @Setter
-@Builder
+@SuperBuilder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class ImOutboundLedger {
+public class ImOutboundLedger extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,13 +48,11 @@ public class ImOutboundLedger {
     @Column
     private String body;
 
-
     @Column(name = "platform_message_id")
     private String platformMessageId;
 
     @Column(name = "message_id")
     private Long messageId;
-
 
     @Convert(converter = DeliveryStatus.Converter.class)
     @Column(nullable = false)
@@ -65,9 +63,6 @@ public class ImOutboundLedger {
 
     @Column(name = "last_error")
     private String lastError;
-
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
 
     @Column(name = "sent_at")
     private Instant sentAt;

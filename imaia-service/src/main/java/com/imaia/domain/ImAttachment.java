@@ -9,7 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
+import lombok.experimental.SuperBuilder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -25,10 +25,10 @@ import java.time.Instant;
 @Table(name = "im_attachment")
 @Getter
 @Setter
-@Builder
+@SuperBuilder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class ImAttachment {
+public class ImAttachment extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -74,9 +74,6 @@ public class ImAttachment {
 
     @Column
     private String error;
-
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
 
     @Column(name = "downloaded_at")
     private Instant downloadedAt;

@@ -113,7 +113,7 @@ public class WechatConnection {
         WechatConnection connection = new WechatConnection(null, JsonMapper.builder().build(), fixedConfig);
         ImAccount app = ImAccount.builder()
                 .platform(Platform.WECHAT).name("default").enabled(true).config("{}")
-                .createdAt(java.time.Instant.now()).updatedAt(java.time.Instant.now()).build();
+                .build();
         app.setId(1L);
         connection.appRow = app;
         return connection;

@@ -62,11 +62,10 @@ public class AiChatService {
                                 ? ConversationKind.GROUP : ConversationKind.DIRECT)
                         .firstSeenAt(now)
                         .lastSeenAt(now)
-                        .createdAt(now)
-                        .updatedAt(now)
+                        
+                        
                         .build()));
         conversation.setLastSeenAt(now);
-        conversation.setUpdatedAt(now);
         return conversations.save(conversation);
     }
 

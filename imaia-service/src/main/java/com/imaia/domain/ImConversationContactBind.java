@@ -11,7 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
+import lombok.experimental.SuperBuilder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -27,10 +27,10 @@ import java.time.Instant;
 @Table(name = "im_conversation_contact_bind")
 @Getter
 @Setter
-@Builder
+@SuperBuilder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class ImConversationContactBind {
+public class ImConversationContactBind extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -58,6 +58,4 @@ public class ImConversationContactBind {
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
 
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
 }

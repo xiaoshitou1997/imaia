@@ -3,6 +3,7 @@ package com.imaia.ai;
 import com.imaia.repository.ImTaskRepository;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,28 +22,30 @@ public class ChatTools {
     private final VideoGenerationClient videoClient;
     private final WebSearchClient webSearch;
     private final ImTaskRepository tasks;
+    private final JsonMapper jsonMapper;
 
     public ChatTools(ImageGenerationClient imageClient, VideoGenerationClient videoClient,
-            WebSearchClient webSearch, ImTaskRepository tasks) {
+            WebSearchClient webSearch, ImTaskRepository tasks, JsonMapper jsonMapper) {
         this.imageClient = imageClient;
         this.videoClient = videoClient;
         this.webSearch = webSearch;
         this.tasks = tasks;
+        this.jsonMapper = jsonMapper;
     }
 
     /** The tools for one reply, bound to the conversation that triggered it. */
     public List<ToolCallback> tools(long conversationId, List<GeneratedMedia> collector) {
         List<ToolCallback> tools = new ArrayList<>();
         if (imageClient.available()) {
-            tools.add(new ImageGenerationTool(imageClient, collector));
+            tools.add(new ImageGenerationTool(imageClient, collector, jsonMapper));
         }
         if (videoClient.available()) {
-            tools.add(new VideoGenerationTool(videoClient, collector));
+            tools.add(new VideoGenerationTool(videoClient, collector, jsonMapper));
         }
         if (webSearch.available()) {
-            tools.add(new WebSearchTool(webSearch));
+            tools.add(new WebSearchTool(webSearch, jsonMapper));
         }
-        tools.add(new ScheduleReminderTool(conversationId, tasks));
+        tools.add(new ScheduleReminderTool(conversationId, tasks, jsonMapper));
         return tools;
     }
 }

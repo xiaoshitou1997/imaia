@@ -4,14 +4,16 @@ import { type Locator, userEvent } from 'vitest/browser'
 import { UserAuthForm } from './user-auth-form'
 
 const FORM_MESSAGES = {
-  emailEmpty: 'Please enter your email.',
-  passwordEmpty: 'Please enter your password.',
-  passwordShort: 'Password must be at least 7 characters long.',
+  usernameEmpty: '请输入用户名',
+  passwordEmpty: '请输入密码',
 } as const
 
 const navigate = vi.fn()
 const setUserMock = vi.fn()
 const setAccessTokenMock = vi.fn()
+const loginMock = vi.fn()
+const toastSuccess = vi.fn()
+const toastError = vi.fn()
 
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: () => ({
@@ -22,112 +24,111 @@ vi.mock('@/stores/auth-store', () => ({
   }),
 }))
 
+vi.mock('sonner', () => ({
+  toast: {
+    success: toastSuccess,
+    error: toastError,
+  },
+}))
+
+// The console authenticates against the single-admin API, not an email/password IdP.
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>()
+  return {
+    ...actual,
+    api: { login: loginMock },
+  }
+})
+
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
     useNavigate: () => navigate,
-    Link: ({
-      children,
-      to,
-      className,
-      ...rest
-    }: {
-      children?: React.ReactNode
-      to: string
-      className?: string
-    }) => (
-      <a href={to} className={className} {...rest}>
-        {children}
-      </a>
-    ),
   }
 })
 
-vi.mock('@/lib/utils', async (orig) => ({
-  ...(await orig()),
-  sleep: vi.fn(() => Promise.resolve()),
-}))
-
 describe('UserAuthForm', () => {
-  describe('Rendering without redirectTo', () => {
-    let screen: RenderResult
-    let emailInput: Locator
-    let passwordInput: Locator
-    let signInButton: Locator
-    let forgotPasswordLink: Locator
+  let screen: RenderResult
+  let usernameInput: Locator
+  let passwordInput: Locator
+  let submitButton: Locator
 
-    beforeEach(async () => {
-      vi.clearAllMocks()
-      screen = await render(<UserAuthForm />)
-      emailInput = screen.getByRole('textbox', { name: /^Email$/i })
-      passwordInput = screen.getByLabelText(/^Password$/i)
-      signInButton = screen.getByRole('button', { name: /^Sign in$/i })
-      forgotPasswordLink = screen.getByText(/^Forgot password\?$/i)
-    })
-
-    it('renders fields, submit button, and forgot password link', async () => {
-      await expect.element(emailInput).toBeInTheDocument()
-      await expect.element(passwordInput).toBeInTheDocument()
-      await expect.element(signInButton).toBeInTheDocument()
-      await expect.element(forgotPasswordLink).toBeInTheDocument()
-    })
-
-    it('shows validation messages when submitting empty form', async () => {
-      await userEvent.click(signInButton)
-
-      await expect
-        .element(screen.getByText(FORM_MESSAGES.emailEmpty))
-        .toBeInTheDocument()
-      await expect
-        .element(screen.getByText(FORM_MESSAGES.passwordEmpty))
-        .toBeInTheDocument()
-    })
-
-    it('authenticates and navigates to default route on success', async () => {
-      await userEvent.fill(emailInput, 'a@b.com')
-      await userEvent.fill(passwordInput, '1234567')
-
-      await userEvent.click(signInButton)
-
-      await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
-      expect(setUserMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          email: 'a@b.com',
-          accountNo: expect.any(String),
-          role: expect.any(Array),
-          exp: expect.any(Number),
-        })
-      )
-      expect(setAccessTokenMock).toHaveBeenCalledOnce()
-      expect(setAccessTokenMock).toHaveBeenCalledWith('mock-access-token')
-
-      await vi.waitFor(() =>
-        expect(navigate).toHaveBeenCalledWith({ to: '/', replace: true })
-      )
-    })
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    loginMock.mockResolvedValue({ username: 'admin' })
+    screen = await render(<UserAuthForm />)
+    usernameInput = screen.getByLabelText(/^用户名$/i)
+    passwordInput = screen.getByLabelText(/^密码$/i)
+    submitButton = screen.getByRole('button', { name: /^登录$/i })
   })
 
-  it('navigates to redirectTo when provided', async () => {
-    vi.clearAllMocks()
+  it('renders username, password and the submit button', async () => {
+    await expect.element(usernameInput).toBeInTheDocument()
+    await expect.element(passwordInput).toBeInTheDocument()
+    await expect.element(submitButton).toBeInTheDocument()
+  })
 
-    const { getByRole, getByLabelText } = await render(
-      <UserAuthForm redirectTo='/settings' />
-    )
+  it('shows field-level messages when submitting an empty form', async () => {
+    await userEvent.click(submitButton)
 
-    await userEvent.fill(getByRole('textbox', { name: /Email/i }), 'a@b.com')
-    await userEvent.fill(getByLabelText('Password'), '1234567')
+    await expect
+      .element(screen.getByText(FORM_MESSAGES.usernameEmpty))
+      .toBeInTheDocument()
+    await expect
+      .element(screen.getByText(FORM_MESSAGES.passwordEmpty))
+      .toBeInTheDocument()
+    expect(loginMock).not.toHaveBeenCalled()
+  })
 
-    await userEvent.click(getByRole('button', { name: /Sign in/i }))
-
-    await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
-    expect(setAccessTokenMock).toHaveBeenCalledOnce()
+  it('stores the session and navigates to "/" on success', async () => {
+    await userEvent.fill(usernameInput, 'admin')
+    await userEvent.fill(passwordInput, 'secret')
+    await userEvent.click(submitButton)
 
     await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({
-        to: '/settings',
-        replace: true,
+      expect(loginMock).toHaveBeenCalledWith({
+        username: 'admin',
+        password: 'secret',
       })
     )
+    await vi.waitFor(() =>
+      expect(setAccessTokenMock).toHaveBeenCalledWith('console-session')
+    )
+    expect(setUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ accountNo: 'admin' })
+    )
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({ to: '/', replace: true })
+    )
+  })
+
+  it('honours redirectTo when provided', async () => {
+    vi.clearAllMocks()
+    loginMock.mockResolvedValue({ username: 'admin' })
+    const redirected = await render(<UserAuthForm redirectTo='/settings' />)
+
+    await userEvent.fill(redirected.getByLabelText(/^用户名$/i), 'admin')
+    await userEvent.fill(redirected.getByLabelText(/^密码$/i), 'secret')
+    await userEvent.click(redirected.getByRole('button', { name: /^登录$/i }))
+
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({ to: '/settings', replace: true })
+    )
+  })
+
+  it('surfaces a login failure and stays on the page', async () => {
+    const { ApiError } = await import('@/lib/api')
+    loginMock.mockRejectedValue(new ApiError('用户名或密码错误。', 401, 401))
+
+    await userEvent.fill(usernameInput, 'admin')
+    await userEvent.fill(passwordInput, 'wrong')
+    await userEvent.click(submitButton)
+
+    await vi.waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('用户名或密码错误。')
+    )
+    expect(navigate).not.toHaveBeenCalled()
+    expect(setAccessTokenMock).not.toHaveBeenCalled()
   })
 })

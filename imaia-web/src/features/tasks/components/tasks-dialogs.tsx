@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
@@ -219,7 +219,7 @@ function CreateTaskDialog({
                     <SelectContent>
                       {(conversations.data?.items ?? []).map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>
-                          {c.title || c.platformId}（#{c.id}）
+                          {c.displayName}（#{c.id}）
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -348,20 +348,22 @@ function RunsDialog({
     enabled: open,
   })
 
-  useEffect(() => {
-    if (open) setPage(1)
-  }, [open])
-
   const rows = runs.data?.items ?? []
   const totalPages = runs.data?.totalPages ?? 1
 
+  // 每次打开都从第一页看起：在打开动作里重置，而不是开一个 effect 去同步 setState。
+  const handleOpenChange = (next: boolean) => {
+    if (next) setPage(1)
+    else onOpenChange()
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onOpenChange() }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='sm:max-w-2xl'>
         <DialogHeader>
           <DialogTitle>运行记录 · #{task.id}</DialogTitle>
           <DialogDescription>
-            {task.conversationLabel ?? '#' + task.conversationId} 最近 10 条 / 页。
+            {task.conversationLabel ?? '未知会话'} 最近 10 条 / 页。
           </DialogDescription>
         </DialogHeader>
         <div className='overflow-hidden rounded-md border'>

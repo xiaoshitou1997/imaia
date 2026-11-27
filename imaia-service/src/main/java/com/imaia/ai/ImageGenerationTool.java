@@ -19,15 +19,17 @@ class ImageGenerationTool implements ToolCallback {
 
     static final String NAME = "generate_image";
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入的 bean，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper mapper;
 
     private final ImageGenerationClient imageClient;
     private final List<GeneratedMedia> collector;
     private final AtomicInteger counter = new AtomicInteger();
 
-    ImageGenerationTool(ImageGenerationClient imageClient, List<GeneratedMedia> collector) {
+    ImageGenerationTool(ImageGenerationClient imageClient, List<GeneratedMedia> collector, JsonMapper mapper) {
         this.imageClient = imageClient;
         this.collector = collector;
+        this.mapper = mapper;
     }
 
     @Override
@@ -42,7 +44,7 @@ class ImageGenerationTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        JsonNode input = MAPPER.readTree(toolInput == null ? "{}" : toolInput);
+        JsonNode input = mapper.readTree(toolInput == null ? "{}" : toolInput);
         String prompt = input.path("prompt").asString("");
         if (prompt.isBlank()) {
             return "generate_image 失败：prompt 不能为空。";

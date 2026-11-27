@@ -106,6 +106,10 @@ public class ContactAnalyzer {
         if (contact != null && StringUtils.hasText(contact.getAlias())) {
             return contact.getAlias();
         }
-        return contact == null ? String.valueOf(bind.getContactId()) : contact.getDisplayName();
+        if (contact != null && StringUtils.hasText(contact.getDisplayName())) {
+            return contact.getDisplayName();
+        }
+        // 不用 contactId 兜底：自增 id 是存储实现细节，会被写进画像文案。
+        return "未知成员";
     }
 }

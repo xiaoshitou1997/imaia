@@ -14,12 +14,14 @@ class WebSearchTool implements ToolCallback {
 
     static final String NAME = "web_search";
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入的 bean，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper mapper;
 
     private final WebSearchClient webSearch;
 
-    WebSearchTool(WebSearchClient webSearch) {
+    WebSearchTool(WebSearchClient webSearch, JsonMapper mapper) {
         this.webSearch = webSearch;
+        this.mapper = mapper;
     }
 
     @Override
@@ -34,7 +36,7 @@ class WebSearchTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        JsonNode input = MAPPER.readTree(toolInput == null ? "{}" : toolInput);
+        JsonNode input = mapper.readTree(toolInput == null ? "{}" : toolInput);
         String query = input.path("query").asString("");
         if (query.isBlank()) {
             return "web_search 失败：query 不能为空。";

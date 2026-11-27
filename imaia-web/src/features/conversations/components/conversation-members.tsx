@@ -73,7 +73,7 @@ export function ConversationMembers({ convoId }: { convoId: number }) {
               <div className='min-w-0 flex-1'>
                 <div className='flex items-center gap-2'>
                   <span className='truncate text-sm font-medium'>
-                    {c.displayName || c.platformId}
+                    {c.displayName || '未命名成员'}
                   </span>
                   <Badge variant='outline'>{c.role}</Badge>
                   {c.analyzed ? <Badge>已画像</Badge> : null}

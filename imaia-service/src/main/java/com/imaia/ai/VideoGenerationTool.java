@@ -19,15 +19,17 @@ class VideoGenerationTool implements ToolCallback {
 
     static final String NAME = "generate_video";
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入的 bean，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper mapper;
 
     private final VideoGenerationClient videoClient;
     private final List<GeneratedMedia> collector;
     private final AtomicInteger counter = new AtomicInteger();
 
-    VideoGenerationTool(VideoGenerationClient videoClient, List<GeneratedMedia> collector) {
+    VideoGenerationTool(VideoGenerationClient videoClient, List<GeneratedMedia> collector, JsonMapper mapper) {
         this.videoClient = videoClient;
         this.collector = collector;
+        this.mapper = mapper;
     }
 
     @Override
@@ -42,7 +44,7 @@ class VideoGenerationTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        JsonNode input = MAPPER.readTree(toolInput == null ? "{}" : toolInput);
+        JsonNode input = mapper.readTree(toolInput == null ? "{}" : toolInput);
         String prompt = input.path("prompt").asString("");
         if (prompt.isBlank()) {
             return "generate_video 失败：prompt 不能为空。";

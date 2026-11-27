@@ -103,7 +103,7 @@ export function EditConversationDialog({
           <DialogTitle>编辑会话</DialogTitle>
           <DialogDescription>
             {convo
-              ? (convo.title || convo.platformId) +
+              ? convo.displayName +
                 ' · 修改展示名、备注、AI 人设、自动回复与自指令。'
               : ''}
           </DialogDescription>

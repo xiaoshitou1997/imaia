@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,7 +53,7 @@ class OutboundSenderTest {
                 .body("hi")
                 .status(status)
                 .attempts(0)
-                .createdAt(Instant.now())
+                
                 .build();
     }
 
@@ -78,8 +77,37 @@ class OutboundSenderTest {
 
         sender.sendText(adapter, conversation, KEY, DeliverySource.SELF_COMMAND, "hi");
 
-        verify(deliveries).markSkipped(eq(row), anyString());
+        // Assert the exact reason: an anyString() matcher here would stay green even if
+        // the operator-facing reason regressed to something unusable.
+        verify(deliveries).markSkipped(row, "platform reports the key was already delivered");
         verify(deliveries, never()).markFailed(any(), any());
+    }
+
+    @Test
+    void textRetriesWhenThePreviousAttemptFailed() {
+        // Only SENT suppresses a resend. A FAILED row must be retried, otherwise one
+        // transient platform error would permanently silence that message.
+        ImOutboundLedger row = ledger(DeliveryStatus.FAILED);
+        when(deliveries.begin(9L, KEY, DeliverySource.SELF_COMMAND, "hi")).thenReturn(row);
+        when(adapter.sendText(PLATFORM_ID, "hi", KEY)).thenReturn("sent-9");
+
+        sender.sendText(adapter, conversation, KEY, DeliverySource.SELF_COMMAND, "hi");
+
+        verify(deliveries).markSent(row, "sent-9");
+    }
+
+    @Test
+    void textFailureMarksFailedWithTheFailureMessage() {
+        ImOutboundLedger row = ledger(DeliveryStatus.PENDING);
+        when(deliveries.begin(9L, KEY, DeliverySource.SELF_COMMAND, "hi")).thenReturn(row);
+        when(adapter.sendText(PLATFORM_ID, "hi", KEY))
+                .thenThrow(new IllegalStateException("platform down"));
+        when(deliveries.markFailed(row, "platform down")).thenReturn(row);
+
+        assertThrows(IllegalStateException.class,
+                () -> sender.sendText(adapter, conversation, KEY, DeliverySource.SELF_COMMAND, "hi"));
+
+        verify(deliveries).markFailed(row, "platform down");
     }
 
     @Test
@@ -114,7 +142,7 @@ class OutboundSenderTest {
         ImOutboundLedger row = ImOutboundLedger.builder()
                 .id(2L).conversationId(9L).idempotencyKey(mediaKey)
                 .source(DeliverySource.SELF_COMMAND).body("cat.png")
-                .status(DeliveryStatus.PENDING).attempts(0).createdAt(Instant.now()).build();
+                .status(DeliveryStatus.PENDING).attempts(0).build();
         GeneratedMedia media = new GeneratedMedia(MediaKind.IMAGE, new byte[] {1},
                 "cat.png", "image/png", "一只猫");
         when(deliveries.begin(9L, mediaKey, DeliverySource.SELF_COMMAND, "cat.png")).thenReturn(row);
@@ -132,7 +160,7 @@ class OutboundSenderTest {
         ImOutboundLedger row = ImOutboundLedger.builder()
                 .id(3L).conversationId(9L).idempotencyKey(mediaKey)
                 .source(DeliverySource.SELF_COMMAND).body("cat.png")
-                .status(DeliveryStatus.PENDING).attempts(0).createdAt(Instant.now()).build();
+                .status(DeliveryStatus.PENDING).attempts(0).build();
         GeneratedMedia media = new GeneratedMedia(MediaKind.IMAGE, new byte[] {1},
                 "cat.png", "image/png", "一只猫");
         when(deliveries.begin(9L, mediaKey, DeliverySource.SELF_COMMAND, "cat.png")).thenReturn(row);
@@ -146,12 +174,33 @@ class OutboundSenderTest {
     }
 
     @Test
+    void mediaDuplicateReceiptIsMarkedSkipped() {
+        String mediaKey = KEY + "-gen1";
+        ImOutboundLedger row = ImOutboundLedger.builder()
+                .id(5L).conversationId(9L).idempotencyKey(mediaKey)
+                .source(DeliverySource.SELF_COMMAND).body("cat.png")
+                .status(DeliveryStatus.PENDING).attempts(0).build();
+        GeneratedMedia media = new GeneratedMedia(MediaKind.IMAGE, new byte[] {1},
+                "cat.png", "image/png", "一只猫");
+        when(deliveries.begin(9L, mediaKey, DeliverySource.SELF_COMMAND, "cat.png")).thenReturn(row);
+        when(adapter.uploadMedia(any(byte[].class), anyString(), anyString())).thenReturn("src-1");
+        when(adapter.sendMedia(PLATFORM_ID, MediaKind.IMAGE, "src-1", mediaKey))
+                .thenThrow(new DuplicateSendException("already delivered"));
+
+        sender.sendMedia(adapter, conversation, mediaKey, DeliverySource.SELF_COMMAND, media);
+
+        // The text and media chains must treat a duplicate receipt identically.
+        verify(deliveries).markSkipped(row, "platform reports the key was already delivered");
+        verify(deliveries, never()).markFailed(any(), any());
+    }
+
+    @Test
     void mediaAlreadySentIsNotUploadedAgain() {
         String mediaKey = KEY + "-gen1";
         ImOutboundLedger row = ImOutboundLedger.builder()
                 .id(4L).conversationId(9L).idempotencyKey(mediaKey)
                 .source(DeliverySource.SELF_COMMAND).body("cat.png")
-                .status(DeliveryStatus.SENT).attempts(1).createdAt(Instant.now()).build();
+                .status(DeliveryStatus.SENT).attempts(1).build();
         when(deliveries.begin(9L, mediaKey, DeliverySource.SELF_COMMAND, "cat.png")).thenReturn(row);
         GeneratedMedia media = new GeneratedMedia(MediaKind.IMAGE, new byte[] {1},
                 "cat.png", "image/png", "一只猫");

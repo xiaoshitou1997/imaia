@@ -51,7 +51,7 @@ public final class TestProperties {
         Instant now = Instant.now();
         ImAccount connection = ImAccount.builder()
                 .platform(Platform.fromValue(platform)).name("default").enabled(true).config("{}")
-                .createdAt(now).updatedAt(now).build();
+                .build();
         connection.setId(id);
         return connection;
     }
@@ -60,8 +60,11 @@ public final class TestProperties {
         Instant now = Instant.now();
         ImConversation conversation = ImConversation.builder()
                 .accountId(1L).platformId(platformId).kind(ConversationKind.DIRECT)
-                .firstSeenAt(now).lastSeenAt(now).createdAt(now).updatedAt(now)
+                .firstSeenAt(now).lastSeenAt(now)
                 .build();
+        // 审计字段由 JPA 审计监听器填充，不在 builder 里设；未持久化的测试对象直接 set。
+        conversation.setCreatedAt(now);
+        conversation.setUpdatedAt(now);
         conversation.setId(id);
         return conversation;
     }
@@ -74,7 +77,7 @@ public final class TestProperties {
         Instant now = Instant.now();
         AiProvider provider = AiProvider.builder()
                 .name(name).baseUrl(baseUrl).apiKey("key")
-                .config("{}").enabled(true).createdAt(now).updatedAt(now).build();
+                .config("{}").enabled(true).build();
         provider.setId(IDS.incrementAndGet());
         return provider;
     }
@@ -96,8 +99,8 @@ public final class TestProperties {
                 .source(ModelSource.SYNC)
                 .available(true)
                 .enabled(true)
-                .createdAt(now)
-                .updatedAt(now)
+                
+                
                 .build();
         model.setId(IDS.incrementAndGet());
         return model;
@@ -142,7 +145,7 @@ public final class TestProperties {
                 .timezone("Asia/Shanghai")
                 .enabled(true)
                 .selfCommandEnabled(true)
-                .updatedAt(Instant.now())
+                
                 .build();
     }
 

@@ -24,15 +24,17 @@ class ScheduleReminderTool implements ToolCallback {
 
     static final String NAME = "schedule_reminder";
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入的 bean，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper mapper;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final long conversationId;
     private final ImTaskRepository tasks;
 
-    ScheduleReminderTool(long conversationId, ImTaskRepository tasks) {
+    ScheduleReminderTool(long conversationId, ImTaskRepository tasks, JsonMapper mapper) {
         this.conversationId = conversationId;
         this.tasks = tasks;
+        this.mapper = mapper;
     }
 
     @Override
@@ -49,7 +51,7 @@ class ScheduleReminderTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        JsonNode input = MAPPER.readTree(toolInput == null ? "{}" : toolInput);
+        JsonNode input = mapper.readTree(toolInput == null ? "{}" : toolInput);
         String time = input.path("time").asString("").strip();
         String content = input.path("content").asString("").strip();
         if (time.isEmpty() || content.isEmpty()) {

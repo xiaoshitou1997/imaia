@@ -85,7 +85,7 @@ public class AiProviderController {
 
     @GetMapping
     public Result<List<ProviderRow>> list() {
-        List<AiProvider> all = providers.findAllByOrderByIdAsc();
+        List<AiProvider> all = providers.findTop200ByOrderByIdAsc();
         Map<Long, List<ModelRow>> modelsByProvider = new HashMap<>();
         for (AiModel model : aiModels.findByProviderIdIn(all.stream().map(AiProvider::getId).toList())) {
             modelsByProvider.computeIfAbsent(model.getProviderId(), key -> new ArrayList<>())

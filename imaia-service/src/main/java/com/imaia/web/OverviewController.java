@@ -130,7 +130,8 @@ public class OverviewController {
                                         .orElse("对方"));
                     }
                     return new RecentMessageRow(m.getId(),
-                            labelMap.getOrDefault(m.getConversationId(), String.valueOf(m.getConversationId())),
+                            // 兜底不用 conversation_id：id 是存储实现细节，不进用户可见文案。
+                            labelMap.getOrDefault(m.getConversationId(), "未知会话"),
                             sender,
                             m.getDirection() == com.imaia.domain.MessageDirection.OUTGOING,
                             m.getBody() == null ? "" : m.getBody(),

@@ -37,7 +37,7 @@ export const tasksColumns: ColumnDef<TaskRow>[] = [
     meta: { className: 'max-w-40' },
     cell: ({ row }) => (
       <span className='truncate'>
-        {row.original.conversationLabel ?? '#' + row.original.conversationId}
+        {row.original.conversationLabel ?? '未知会话'}
       </span>
     ),
   },

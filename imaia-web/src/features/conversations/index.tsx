@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -12,7 +12,7 @@ import { EditConversationDialog } from './components/edit-conversation-dialog'
 export function Conversations() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [explicitId, setSelectedId] = useState<number | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [editing, setEditing] = useState(false)
 
@@ -21,14 +21,12 @@ export function Conversations() {
     queryFn: () => api.conversations(search.trim() || undefined, page, 20),
   })
   const items = listQuery.data?.items ?? []
-  const selected = items.find((c) => c.id === selectedId) ?? null
 
-  // 首屏 / 列表变化后自动选中第一个会话
-  useEffect(() => {
-    if (selectedId === null && items.length) {
-      setSelectedId(items[0].id)
-    }
-  }, [listQuery.data, selectedId, items])
+  // 首屏/翻页后落到第一个会话；用派生值而不是 effect+setState，
+  // 避免「effect 里同步 setState 触发级联渲染」。
+  const firstId = items.length ? items[0].id : null
+  const selectedId = explicitId ?? firstId
+  const selected = items.find((c) => c.id === selectedId) ?? null
 
   return (
     <>

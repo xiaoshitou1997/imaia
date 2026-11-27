@@ -86,10 +86,18 @@ public class ConversationController {
         this.settings = settings;
     }
 
-    public record ConversationRow(Long id, String platformId, String title, String remark,
-            ConversationKind kind, String persona, boolean autoreply, String selfCommandAlias,
-            boolean selfCommandEnabled, Instant lastSeenAt, Instant lastMessageAt, Long accountId,
-            Platform platformCode, String connectionName, long messageCount) {
+    /**
+     * 会话目录行。{@code displayName} 是给用户看的名字：优先用户改过的 title，
+     * 否则按封闭值域 code 给「未命名群聊 / 未命名单聊 / 未命名频道」。
+     * 不使用 platformId（wxid / xxx@chatroom / oc_xxx，平台内部标识），
+     * 也不使用自增 id（存储实现细节，不进契约与文案）。{@code platformId}
+     * 仍随行返回，供控制台排障与按平台 id 检索。
+     */
+    public record ConversationRow(Long id, String platformId, String displayName, String title,
+            String remark, ConversationKind kind, String persona, boolean autoreply,
+            String selfCommandAlias, boolean selfCommandEnabled, Instant lastSeenAt,
+            Instant lastMessageAt, Long accountId, Platform platformCode, String connectionName,
+            long messageCount) {
     }
 
     public record MessageRow(Long id, String platformId, Long contactId, String senderName,
@@ -141,7 +149,8 @@ public class ConversationController {
             AiSettingsService.LineCaps line = caps.getOrDefault(conversation.getId(),
                     AiSettingsService.LineCaps.DEFAULT);
             return new ConversationRow(conversation.getId(), conversation.getPlatformId(),
-                    conversation.getTitle(), conversation.getRemark(), conversation.getKind(),
+                    displayNameOf(conversation), conversation.getTitle(),
+                    conversation.getRemark(), conversation.getKind(),
                     line.persona(), line.autoreply(), line.selfCommandAlias(),
                     line.selfCommandEnabled(),
                     conversation.getLastSeenAt(), conversation.getLastMessageAt(),
@@ -151,6 +160,11 @@ public class ConversationController {
                     counts.getOrDefault(conversation.getId(), 0L));
         });
         return Result.ok(PageResult.of(rows));
+    }
+
+    /** 用户可见的会话名：改过的 title 优先，否则按封闭值域 code 给占位名。 */
+    private static String displayNameOf(ImConversation conversation) {
+        return ConversationLabels.displayNameOf(conversation);
     }
 
     /**
@@ -182,7 +196,6 @@ public class ConversationController {
         if (body.selfCommandEnabled() != null) {
             settings.saveConversationSelfCommandEnabled(conversation.getId(), body.selfCommandEnabled());
         }
-        conversation.setUpdatedAt(Instant.now());
         conversations.save(conversation);
         return Result.ok(conversation.getId());
     }
@@ -194,7 +207,7 @@ public class ConversationController {
         }
         String alias = raw.strip();
         if (alias.length() > AiSettingsService.SELF_COMMAND_ALIAS_MAX) {
-            throw new IllegalArgumentException(
+            throw new BusinessException(ErrorCode.SELF_COMMAND_ALIAS_TOO_LONG,
                     "selfCommandAlias 最长 " + AiSettingsService.SELF_COMMAND_ALIAS_MAX + " 字符。");
         }
         return alias;
@@ -208,7 +221,7 @@ public class ConversationController {
         ImConversation conversation = requireConversation(id);
         ImAccount account = accounts.findById(conversation.getAccountId()).orElseThrow();
         if (account.getPlatform() != Platform.WECHAT) {
-            throw new IllegalArgumentException("只有微信连接支持拉取历史消息。");
+            throw new BusinessException(ErrorCode.HISTORY_SYNC_UNSUPPORTED_PLATFORM);
         }
         long before = messages.countByConversationId(id);
         WechatHistoryService.Result result = wechatHistory.pull(conversation.getPlatformId(), pages, limit);
@@ -277,7 +290,7 @@ public class ConversationController {
     public Result<AnalysisRow> runAnalysis(@PathVariable Long id, @RequestBody AnalysisRequest body) {
         ImConversation conversation = requireConversation(id);
         if (body.contactId() == null) {
-            throw new IllegalArgumentException("contactId 不能为空。");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "contactId 不能为空。");
         }
         ImConversationContactProfile analysis = contactAnalyzer.analyzeContact(conversation, body.contactId());
         if (analysis == null) {
@@ -322,7 +335,7 @@ public class ConversationController {
                 .orElseThrow(() -> new NoSuchElementException("会话连接不存在，无法拉取附件内容。"));
         ImAdapter adapter = adapters.forPlatform(account.getPlatform());
         if (!adapter.configured()) {
-            throw new IllegalArgumentException(
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "平台连接未启用（" + account.getPlatform() + "），无法拉取附件内容。");
         }
         ImAdapter.MediaBytes media = attachment.getKind() == AttachmentKind.PREVIEW
@@ -348,7 +361,7 @@ public class ConversationController {
     @GetMapping("/search")
     public Result<List<SearchHit>> searchMessages(@RequestParam String keyword) {
         if (!StringUtils.hasText(keyword)) {
-            throw new IllegalArgumentException("keyword 不能为空。");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "keyword 不能为空。");
         }
         Map<Long, String> conversationLabels = labels.labels();
         List<ImMessage> found = messages.searchByBody(keyword.strip(),
@@ -356,8 +369,8 @@ public class ConversationController {
         Map<Long, ImContact> contactById = contactMap(found);
         return Result.ok(found.stream()
                 .map(message -> new SearchHit(message.getId(), message.getConversationId(),
-                        conversationLabels.getOrDefault(message.getConversationId(),
-                                String.valueOf(message.getConversationId())),
+                        // 兜底不用 id：labels() 已覆盖全部会话，查不到时给中性名即可。
+                        conversationLabels.getOrDefault(message.getConversationId(), "未知会话"),
                         message.getContactId(),
                         contactName(contactById.get(message.getContactId())),
                         message.getKind().value(), message.getBody(), message.getArchivedAt()))
@@ -381,13 +394,16 @@ public class ConversationController {
         if (StringUtils.hasText(contact.getAlias())) {
             return contact.getAlias();
         }
-        return StringUtils.hasText(contact.getDisplayName())
-                ? contact.getDisplayName() : contact.getPlatformId();
+        if (StringUtils.hasText(contact.getDisplayName())) {
+            return contact.getDisplayName();
+        }
+        // 不用 platformId 兜底：那是平台内部标识，不该出现在界面文案里。
+        return "未命名成员";
     }
 
     private ImConversation requireConversation(Long id) {
         if (id == null) {
-            throw new IllegalArgumentException("conversationId 不能为空。");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "conversationId 不能为空。");
         }
         return conversations.findById(id).orElseThrow();
     }

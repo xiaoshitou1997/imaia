@@ -93,8 +93,8 @@ public class ModelSyncService extends AbstractAiHttpClient {
                         .available(true)
                         .enabled(true)
                         .source(ModelSource.SYNC)
-                        .createdAt(now)
-                        .updatedAt(now)
+                        
+                        
                         .build();
                 added++;
             } else {

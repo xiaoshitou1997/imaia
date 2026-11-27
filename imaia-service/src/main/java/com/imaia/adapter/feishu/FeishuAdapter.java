@@ -389,7 +389,14 @@ public class FeishuAdapter implements ImAdapter {
         return MAPPER.writeValueAsString(payload);
     }
 
-    /** The original payload snapshot kept on the archive row for later platform-specific reads. */
+    /**
+     * The original payload snapshot kept on the archive row for later
+     * platform-specific reads.
+     *
+     * <p>此处用 {@code Map<String, Object>} 属规范允许的例外：这是三方协议
+     * （飞书消息体）的原始载荷快照，结构由平台定义、无本方固定 Schema，
+     * 归档用途就是「原样保留平台特性」。业务数据不用 Map 承载。
+     */
     private static String rawJson(String msgType, String content, Mention[] mentions) {
         Map<String, Object> raw = new LinkedHashMap<>();
         raw.put("msgType", msgType);

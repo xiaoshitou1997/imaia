@@ -92,7 +92,7 @@ class ContactAnalyzerTest {
     private ImConversationContactBind bind() {
         return ImConversationContactBind.builder()
                 .conversationId(9L).contactId(3L).role(BindRole.MEMBER)
-                .displayName("小明").joinedAt(Instant.now()).createdAt(Instant.now()).build();
+                .displayName("小明").joinedAt(Instant.now()).build();
     }
 
     private ImMessage message(String body) {

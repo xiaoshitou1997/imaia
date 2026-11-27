@@ -29,7 +29,7 @@ import java.util.List;
 @RequestMapping("/api/accounts")
 public class AccountController {
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    private final JsonMapper jsonMapper;
     private static final String MASK = "••••••••";
     private static final List<String> SECRET_KEYS = List.of("token", "appSecret", "apiKey", "secret", "password");
     private final ImAccountRepository accounts;
@@ -37,10 +37,11 @@ public class AccountController {
     private final StreamOrchestrator streams;
 
     public AccountController(ImAccountRepository accounts, ImConversationRepository conversations,
-            StreamOrchestrator streams) {
+            StreamOrchestrator streams, JsonMapper jsonMapper) {
         this.accounts = accounts;
         this.conversations = conversations;
         this.streams = streams;
+        this.jsonMapper = jsonMapper;
     }
 
     public record AccountRow(Long id, Platform platformCode, String name, boolean enabled, String config,
@@ -56,7 +57,7 @@ public class AccountController {
 
     @GetMapping
     public Result<List<AccountRow>> list() {
-        return Result.ok(accounts.findAllByOrderByIdAsc().stream()
+        return Result.ok(accounts.findTop200ByOrderByIdAsc().stream()
                 .map(this::toRow).toList());
     }
 
@@ -64,16 +65,16 @@ public class AccountController {
     public Result<AccountRow> create(@RequestBody AccountCreate body) {
         Platform platform = Platform.fromValue(body.platformCode());
         if (!StringUtils.hasText(body.name())) {
-            throw new IllegalArgumentException("name 不能为空。");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "name 不能为空。");
         }
         Instant now = Instant.now();
         ImAccount created = ImAccount.builder()
                 .platform(platform)
                 .name(body.name().strip())
                 .enabled(body.enabled() == null || body.enabled())
-                .config(body.config() == null ? "{}" : MAPPER.writeValueAsString(body.config()))
-                .createdAt(now)
-                .updatedAt(now)
+                .config(body.config() == null ? "{}" : jsonMapper.writeValueAsString(body.config()))
+                
+                
                 .build();
         ImAccount saved = accounts.save(created);
         streams.refreshPlatform(saved.getPlatform());
@@ -116,7 +117,7 @@ public class AccountController {
     /** Secret values become the mask; a masked value written back restores the stored one. */
     private String maskConfig(String configJson) {
         try {
-            JsonNode config = MAPPER.readTree(!StringUtils.hasText(configJson) ? "{}" : configJson);
+            JsonNode config = jsonMapper.readTree(!StringUtils.hasText(configJson) ? "{}" : configJson);
             if (config.isObject()) {
                 for (String key : SECRET_KEYS) {
                     if (config.has(key) && config.get(key).isString()
@@ -125,7 +126,7 @@ public class AccountController {
                     }
                 }
             }
-            return MAPPER.writeValueAsString(config);
+            return jsonMapper.writeValueAsString(config);
         } catch (RuntimeException failure) {
             return "{}"; // 历史配置可能不是合法 JSON，掩码视图按空对象返回
         }
@@ -133,9 +134,9 @@ public class AccountController {
 
     private String mergeConfig(String existingJson, JsonNode submitted) {
         if (!submitted.isObject()) {
-            throw new IllegalArgumentException("config 必须是 JSON 对象。");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "config 必须是 JSON 对象。");
         }
-        ObjectNode merged = (ObjectNode) MAPPER.readTree(
+        ObjectNode merged = (ObjectNode) jsonMapper.readTree(
                 !StringUtils.hasText(existingJson) ? "{}" : existingJson);
         for (var field : submitted.properties()) {
             String key = field.getKey();
@@ -145,6 +146,6 @@ public class AccountController {
             }
             merged.set(key, field.getValue());
         }
-        return MAPPER.writeValueAsString(merged);
+        return jsonMapper.writeValueAsString(merged);
     }
 }

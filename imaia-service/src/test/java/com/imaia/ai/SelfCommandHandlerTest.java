@@ -96,7 +96,7 @@ class SelfCommandHandlerTest {
                         .body(inv.getArgument(3))
                         .status(DeliveryStatus.PENDING)
                         .attempts(0)
-                        .createdAt(Instant.now())
+                        
                         .build());
         when(deliveries.markSent(any(), any())).thenAnswer(inv -> inv.getArgument(0));
         when(deliveries.markSkipped(any(), any())).thenAnswer(inv -> inv.getArgument(0));

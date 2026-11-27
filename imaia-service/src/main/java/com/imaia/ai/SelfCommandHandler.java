@@ -71,72 +71,95 @@ public class SelfCommandHandler implements ImEventHandler {
         String platformMessageId = event.platformMessageId();
         String conversationPlatformId = event.conversationPlatformId();
         ImAdapter adapter = adapters.forPlatform(event.platform());
-        AiSettings config = settings.current();
-        if (!config.isEnabled()) {
-            return;
-        }
-        if (adapter.hasProcessed(platformMessageId)) {
-            log.debug("Self command already handled; replay ignored: message={}.", platformMessageId);
+        if (!settings.current().isEnabled() || adapter.hasProcessed(platformMessageId)) {
+            log.debug("Self command skipped before resolution: message={} (master switch off or replay).",
+                    platformMessageId);
             return;
         }
         ImConversation conversation = chatService.resolve(adapter, conversationPlatformId);
-        config = settings.forConversation(conversation);
-        String alias = aliasOf(config);
+        String alias = aliasOf(settings.forConversation(conversation));
         if (alias == null) {
+            return; // 该会话未开自指令：最常见路径，不打日志以免噪声
+        }
+        String prompt = resolvePrompt(adapter, conversation, platformMessageId, alias);
+        if (prompt == null) {
             return;
         }
+        answer(adapter, conversation, event, platformMessageId, prompt);
+    }
+
+    /**
+     * 逐道门控之后把「@别名 内容」解析成待处理指令；任一条件不满足即返回 null。
+     * 拆分自 handle：这一段全是判定，与后面的应答副作用不在同一抽象层次。
+     */
+    private String resolvePrompt(ImAdapter adapter, ImConversation conversation,
+            String platformMessageId, String alias) {
         ImAdapter.FetchedMessage message = adapter.fetchMessage(platformMessageId);
-        if (!conversationPlatformId.equals(message.conversationPlatformId())) {
+        if (!conversation.getPlatformId().equals(message.conversationPlatformId())) {
             log.debug("Self command skipped: message identity drifted (message={}).", platformMessageId);
-            return;
+            return null;
         }
         if (!"outgoing".equals(message.direction()) || !"human".equals(message.origin())) {
             // 静默丢弃前留一行日志：origin 归因由发送后时间窗近似，被误判成 ai 时
             // 现场只能靠这行确认「命令收到但判成了回声」。
             log.debug("Self command skipped: not a human outgoing message (message={} direction={} origin={}).",
                     platformMessageId, message.direction(), message.origin());
-            return;
+            return null;
         }
         if (outboundLedger.findFirstByPlatformMessageId(platformMessageId).isPresent()) {
             log.debug("Self command skipped: message {} is our own send echoing back.", platformMessageId);
-            return;
+            return null;
         }
         if (message.kind() != MessageKind.TEXT || !StringUtils.hasText(message.body())) {
-            return;
+            return null;
         }
-        String prompt = extractPrompt(message.body().strip(), alias);
-        if (prompt == null) {
-            return;
-        }
+        return extractPrompt(message.body().strip(), alias);
+    }
+
+    /** 群内报告指令直出，否则走模型生成回复与媒体，最后统一记已处理。 */
+    private void answer(ImAdapter adapter, ImConversation conversation, ImEvent event,
+            String platformMessageId, String prompt) {
         String keyPrefix = "imaia-selfcmd-" + platformMessageId;
-        boolean groupChat = adapter.isGroupConversation(conversationPlatformId);
-        if (groupChat) {
-            String reportReply = insightService.handleCommand(conversation, prompt);
-            if (reportReply != null) {
-                outboundSender.sendText(adapter, conversation, keyPrefix,
-                        DeliverySource.SELF_COMMAND, reportReply);
-                adapter.markProcessed(platformMessageId);
-                log.info("Self-command report sent on platform={} conversation={} for message={}.",
-                        event.platform(), conversationPlatformId, platformMessageId);
-                return;
-            }
+        boolean groupChat = adapter.isGroupConversation(event.conversationPlatformId());
+        if (groupChat && answerReport(adapter, conversation, keyPrefix, prompt)) {
+            adapter.markProcessed(platformMessageId);
+            log.info("Self-command report sent on platform={} conversation={} for message={}.",
+                    event.platform(), event.conversationPlatformId(), platformMessageId);
+            return;
         }
+        answerWithModel(adapter, conversation, keyPrefix, prompt, groupChat, platformMessageId);
+        adapter.markProcessed(platformMessageId);
+        log.info("Self-command reply sent on platform={} conversation={} for message={}.",
+                event.platform(), event.conversationPlatformId(), platformMessageId);
+    }
+
+    /** 群内统计类指令直接回报告；不是报告指令则返回 false 交回模型链。 */
+    private boolean answerReport(ImAdapter adapter, ImConversation conversation, String keyPrefix,
+            String prompt) {
+        String reportReply = insightService.handleCommand(conversation, prompt);
+        if (reportReply == null) {
+            return false;
+        }
+        outboundSender.sendText(adapter, conversation, keyPrefix, DeliverySource.SELF_COMMAND,
+                reportReply);
+        return true;
+    }
+
+    private void answerWithModel(ImAdapter adapter, ImConversation conversation, String keyPrefix,
+            String prompt, boolean groupChat, String platformMessageId) {
         String context = groupChat
                 ? groupContext.build(conversation.getId(), platformMessageId) : null;
         List<GeneratedMedia> generated = new ArrayList<>();
         AiChatService.ChatReply reply = chatService.complete(conversation, prompt, null, null,
                 context, generated);
-        outboundSender.sendText(adapter, conversation, keyPrefix,
-                DeliverySource.SELF_COMMAND, reply.text());
+        outboundSender.sendText(adapter, conversation, keyPrefix, DeliverySource.SELF_COMMAND,
+                reply.text());
         int index = 0;
         for (GeneratedMedia media : reply.generated()) {
             index++;
             outboundSender.sendMedia(adapter, conversation, keyPrefix + "-gen" + index,
                     DeliverySource.SELF_COMMAND, media);
         }
-        adapter.markProcessed(platformMessageId);
-        log.info("Self-command reply sent on platform={} conversation={} for message={}.",
-                event.platform(), conversationPlatformId, platformMessageId);
     }
 
     /**

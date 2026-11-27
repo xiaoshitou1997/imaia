@@ -71,8 +71,8 @@ class ModelSyncServiceTest {
                 .apiKey("key")
                 .modelsDevId("zhipu")
                 .enabled(true)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                
+                
                 .build();
 
         ModelSyncService.SyncResult result = service.sync(provider);

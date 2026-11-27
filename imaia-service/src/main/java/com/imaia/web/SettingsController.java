@@ -56,7 +56,7 @@ public class SettingsController {
         }
         if (body.historyLimit() != null) {
             if (body.historyLimit() < 2 || body.historyLimit() > 200) {
-                throw new IllegalArgumentException("historyLimit 取值范围 2-200。");
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "historyLimit 取值范围 2-200。");
             }
             current.setHistoryLimit(body.historyLimit());
         }
@@ -76,7 +76,7 @@ public class SettingsController {
             try {
                 ZoneId.of(body.timezone().strip());
             } catch (RuntimeException failure) {
-                throw new IllegalArgumentException("timezone 不是有效的 IANA 时区：" + body.timezone());
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "timezone 不是有效的 IANA 时区：" + body.timezone());
             }
             current.setTimezone(body.timezone().strip());
         }
@@ -86,7 +86,7 @@ public class SettingsController {
         if (body.selfCommandAlias() != null) {
             String alias = body.selfCommandAlias().strip();
             if (alias.length() > AiSettingsService.SELF_COMMAND_ALIAS_MAX) {
-                throw new IllegalArgumentException(
+                throw new BusinessException(ErrorCode.SELF_COMMAND_ALIAS_TOO_LONG,
                         "selfCommandAlias 最长 " + AiSettingsService.SELF_COMMAND_ALIAS_MAX + " 字符。");
             }
             current.setSelfCommandAlias(alias);
@@ -116,7 +116,7 @@ public class SettingsController {
         try {
             return LocalTime.parse(value.strip()).toString();
         } catch (DateTimeParseException failure) {
-            throw new IllegalArgumentException(field + " 必须是 HH:mm 格式。");
+            throw new BusinessException(ErrorCode.INVALID_TIME_FORMAT, field + " 必须是 HH:mm 格式。");
         }
     }
 

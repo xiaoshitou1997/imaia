@@ -108,6 +108,12 @@
             <version>2.4.19</version>
         </dependency>
 
+        <!-- 健康探针：readiness/liveness 双端点作为部署门禁探活地址 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

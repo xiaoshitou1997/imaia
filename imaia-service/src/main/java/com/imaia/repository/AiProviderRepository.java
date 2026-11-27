@@ -13,5 +13,10 @@ public interface AiProviderRepository extends JpaRepository<AiProvider, Long> {
 
     Optional<AiProvider> findByName(String name);
 
-    List<AiProvider> findAllByOrderByIdAsc();
+    /**
+     * All providers, stable order. Bounded: list queries never scan unbounded.
+     * Provider rows are configuration data (single-admin console), but the cap is
+     * a hard constraint rather than an assumption about data volume.
+     */
+    List<AiProvider> findTop200ByOrderByIdAsc();
 }
