@@ -37,6 +37,13 @@
 | accessibility-performance | 图标按钮无名称、装饰图 alt 为脚手架品牌、无 `prefers-reduced-motion` | 组件扫描 | 3 处修复；加全局 reduced-motion 媒体查询 |
 | ux-interaction 日期格式 | 手写 `replace('T',' ').slice(0,19)`（UTC 原样显示，整体偏移 8 小时） | 4 处 | 统一 `Intl` 格式化；提交值改 ISO |
 
+### 本轮新增修复
+
+| 条款 | 偏离内容 | 判定依据 | 处理 |
+| --- | --- | --- | --- |
+| java-guide 13 不吞异常 | `AiModelCatalog.parseList/parseMap` 把 JSON 解析失败静默返回空列表 | 两处 `catch (RuntimeException) { return List.of(); }` | 区分「字段为空（合法）」与「有内容但解析失败（数据损坏）」，后者记 warn 保留现场；补 2 个用例锁住 |
+| backend-testing 2 新增 Service 必测失败路径 | 本轮新建的 `AiProviderService`、`ConversationSettingsService` 零覆盖 | JaCoCo 报告 0 行覆盖 | 补 12 个用例：缺省/清空语义、别名边界、首次建会话、重复投递幂等、消息身份漂移 |
+
 ## 二、未处理项（需你决策或提供资源）
 
 | 条款 | 偏离内容 | 阻塞原因 |
@@ -45,9 +52,11 @@
 
 ## 三、必须如实说明的质量事实
 
-**覆盖率：行 35.4%（1331/3756）、分支 26.9%（451/1675）。**
+**覆盖率：行 40.4%、分支 31.3%（174 用例）。**
 
-明显低于规范的 70%/50%。「145 个用例全绿」不等于覆盖达标——大量 Service 分支、Adapter 协议解析、定时任务执行路径尚无测试。我没有设置 CI 覆盖率门槛（规范要求先与团队确立），只产出报告。
+仍低于规范的 70%/50%。本轮已补 29 个用例，覆盖从 35.4%→40.4%、分支 26.9%→31.3%，但仍未达标——剩余缺口集中在 `FeishuAdapter`(199 行)、`ConversationController`(181 行)、`AiProviderController`(127 行)、`TaskRunner`(120 行) 这类依赖外部协议或多仓储编排的类。
+
+未设置 CI 覆盖率门槛（规范要求先与团队确立），只产出报告。
 
 ## 四、验证证据
 
