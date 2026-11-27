@@ -3,10 +3,8 @@ package com.imaia.domain;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import tools.jackson.databind.json.JsonMapper;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * 锁死枚举的 wire 契约：API/JSON 一律小写值（@JsonValue/@JsonCreator），
@@ -34,7 +32,6 @@ class EnumWireContractTest {
 
     @Test
     void rejectsUnknownValue() {
-        assertThrows(tools.jackson.databind.exc.ValueInstantiationException.class,
-                () -> MAPPER.readValue("\"weekly\"", ReportPeriod.class));
+        assertThatThrownBy(() -> MAPPER.readValue("\"weekly\"", ReportPeriod.class)).isInstanceOf(tools.jackson.databind.exc.ValueInstantiationException.class);
     }
 }

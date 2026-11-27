@@ -10,10 +10,12 @@ import com.imaia.domain.MediaKind;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.time.Instant;
 
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -104,8 +106,7 @@ class OutboundSenderTest {
                 .thenThrow(new IllegalStateException("platform down"));
         when(deliveries.markFailed(row, "platform down")).thenReturn(row);
 
-        assertThrows(IllegalStateException.class,
-                () -> sender.sendText(adapter, conversation, KEY, DeliverySource.SELF_COMMAND, "hi"));
+        assertThatThrownBy(() -> sender.sendText(adapter, conversation, KEY, DeliverySource.SELF_COMMAND, "hi")).isInstanceOf(IllegalStateException.class);
 
         verify(deliveries).markFailed(row, "platform down");
     }
@@ -118,10 +119,10 @@ class OutboundSenderTest {
         when(adapter.sendText(PLATFORM_ID, "hi", KEY)).thenThrow(boom);
         when(deliveries.markFailed(row, "platform down")).thenReturn(row);
 
-        IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> sender.sendText(adapter, conversation, KEY, DeliverySource.SELF_COMMAND, "hi"));
-
-        assertSame(boom, thrown);
+        IllegalStateException thrown = catchThrowableOfType(
+                () -> sender.sendText(adapter, conversation, KEY, DeliverySource.SELF_COMMAND, "hi"),
+                IllegalStateException.class);
+        assertThat(thrown).isSameAs(boom);
         verify(deliveries).markFailed(row, "platform down");
     }
 

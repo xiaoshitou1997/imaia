@@ -14,8 +14,6 @@ import org.springframework.core.env.MutablePropertySources;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 /**
  * 探针契约：readiness/liveness 显式开启，且暴露面最小化。
  *

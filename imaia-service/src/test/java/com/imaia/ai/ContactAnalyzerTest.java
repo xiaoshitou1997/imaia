@@ -16,13 +16,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -55,7 +55,7 @@ class ContactAnalyzerTest {
     @Test
     void analyzeRejectsContactOutsideConversation() {
         when(binds.findByConversationIdAndContactIdAndLeftAtIsNull(9L, 3L)).thenReturn(Optional.empty());
-        assertThrows(IllegalArgumentException.class, () -> analyzer.analyzeContact(conversation, 3L));
+        assertThatThrownBy(() -> analyzer.analyzeContact(conversation, 3L)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
