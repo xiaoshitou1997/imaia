@@ -18,6 +18,9 @@ import com.imaia.repository.ImMessageRepository;
 import com.imaia.repository.ImOutboundLedgerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -299,16 +302,30 @@ class SelfCommandHandlerTest {
                 eq("imaia-selfcmd-" + MESSAGE_ID + "-gen1"));
     }
 
-    @Test
-    void extractPromptRules() {
-        assertThat(SelfCommandHandler.extractPrompt("@小艾 你好", "小艾")).isEqualTo("你好");
-        assertThat(SelfCommandHandler.extractPrompt("@小艾：你好", "小艾")).isEqualTo("你好");
-        assertThat(SelfCommandHandler.extractPrompt("@小艾   你好 ", "小艾")).isEqualTo("你好");
-        assertThat(SelfCommandHandler.extractPrompt("@小艾", "小艾")).isNull();
-        assertThat(SelfCommandHandler.extractPrompt("@小艾斯 你好", "小艾")).isNull();
-        assertThat(SelfCommandHandler.extractPrompt("@张三 你好", "小艾")).isNull();
-        assertThat(SelfCommandHandler.extractPrompt("小艾 你好", "小艾")).isNull();
-        // 剩余部分整体作为 prompt（含 @ 开头也无妨，交给模型理解）
-        assertThat(SelfCommandHandler.extractPrompt("@小艾 @小艾", "小艾")).isEqualTo("@小艾");
+    /**
+     * 「@别名 内容」的解析规则：命中的分隔符（空格/中文冒号/多个空格）。
+     * 每组输入互不相干，用 @ParameterizedTest 表达而不是堆在一个方法里。
+     */
+    @ParameterizedTest(name = "[{index}] {0} -> {1}")
+    @CsvSource({
+            "'@小艾 你好', 你好",
+            "'@小艾：你好', 你好",
+            "'@小艾   你好 ', 你好",
+            "'@小艾 @小艾', @小艾",
+    })
+    void extractPromptMatchesAliasWithSeparator(String body, String expected) {
+        assertThat(SelfCommandHandler.extractPrompt(body, "小艾")).isEqualTo(expected);
+    }
+
+    /** 不构成指令的输入：裸别名、别名只是更长名字的前缀、他人别名、缺少 @ 前缀。 */
+    @ParameterizedTest(name = "[{index}] {0} -> null")
+    @ValueSource(strings = {
+            "@小艾",
+            "@小艾斯 你好",
+            "@张三 你好",
+            "小艾 你好",
+    })
+    void extractPromptRejectsNonCommands(String body) {
+        assertThat(SelfCommandHandler.extractPrompt(body, "小艾")).isNull();
     }
 }
