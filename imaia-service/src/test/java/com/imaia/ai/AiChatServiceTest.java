@@ -29,6 +29,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.imaia.TestProperties;
+import com.imaia.domain.AiSetting;
+import java.util.Optional;
 
 /** 单层会话聊天编排：resolve 登记、历史从档案重建、系统注入。 */
 class AiChatServiceTest {
@@ -47,10 +50,10 @@ class AiChatServiceTest {
         conversations = mock(ImConversationRepository.class);
         chatTools = mock(ChatTools.class);
         adapter = mock(ImAdapter.class);
-        when(adapter.account()).thenReturn(com.imaia.TestProperties.account(1L, "wechat"));
+        when(adapter.account()).thenReturn(TestProperties.account(1L, "wechat"));
         when(adapter.isGroupConversation(anyString())).thenReturn(false);
-        var settings = com.imaia.TestProperties.settingsService(
-                com.imaia.TestProperties.settings("默认提示词", 20, true, false, "00:00", "07:00"));
+        var settings = TestProperties.settingsService(
+                TestProperties.settings("默认提示词", 20, true, false, "00:00", "07:00"));
         service = new AiChatService(chatCompletion, messages, conversations,
                 settings, chatTools);
         when(chatTools.tools(anyLong(), anyList())).thenReturn(List.of());
@@ -58,7 +61,7 @@ class AiChatServiceTest {
 
     @Test
     void resolveCreatesConversationWithKind() {
-        when(conversations.findByAccountIdAndPlatformId(1L, "wx-1")).thenReturn(java.util.Optional.empty());
+        when(conversations.findByAccountIdAndPlatformId(1L, "wx-1")).thenReturn(Optional.empty());
         when(conversations.save(any())).thenAnswer(inv -> {
             ImConversation conversation = inv.getArgument(0);
             conversation.setId(7L);
@@ -73,9 +76,9 @@ class AiChatServiceTest {
 
     @Test
     void resolveReusesExistingConversation() {
-        ImConversation existing = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        ImConversation existing = TestProperties.imConversation(9L, "wx-1");
         when(conversations.findByAccountIdAndPlatformId(1L, "wx-1"))
-                .thenReturn(java.util.Optional.of(existing));
+                .thenReturn(Optional.of(existing));
         when(conversations.save(any())).thenAnswer(inv -> inv.getArgument(0));
         ImConversation conversation = service.resolve(adapter, "wx-1");
         assertThat(conversation.getId()).isEqualTo(9L);
@@ -97,7 +100,7 @@ class AiChatServiceTest {
 
     @Test
     void completeRebuildsHistoryFromArchiveInChronologicalOrder() {
-        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        ImConversation conversation = TestProperties.imConversation(9L, "wx-1");
         // 档案查询返回新→旧；重建后应翻转为旧→新，且 AI 发出的是 assistant 轮
         when(messages.findRecentConversationLines(eq(9L), any(PageRequest.class))).thenReturn(List.of(
                 line("m3", true, "新回复", 1),
@@ -120,10 +123,10 @@ class AiChatServiceTest {
 
     @Test
     void personaIsInjectedIntoSystemContext() {
-        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
-        var personaSettings = com.imaia.TestProperties.settingsService(
-                com.imaia.TestProperties.settings("默认提示词", 20, true, false, "00:00", "07:00"),
-                List.of(com.imaia.domain.AiSetting.lineText("persona", 9L, "毒舌群友")));
+        ImConversation conversation = TestProperties.imConversation(9L, "wx-1");
+        var personaSettings = TestProperties.settingsService(
+                TestProperties.settings("默认提示词", 20, true, false, "00:00", "07:00"),
+                List.of(AiSetting.lineText("persona", 9L, "毒舌群友")));
         AiChatService personaService = new AiChatService(chatCompletion, messages, conversations,
                 personaSettings, chatTools);
         when(messages.findRecentConversationLines(eq(9L), any(PageRequest.class))).thenReturn(List.of());
@@ -140,7 +143,7 @@ class AiChatServiceTest {
 
     @Test
     void completeOnceReturnsPlainTextWithoutTouchingArchive() {
-        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, "wx-1");
+        ImConversation conversation = TestProperties.imConversation(9L, "wx-1");
         when(chatCompletion.complete(anyString(), anyList(), anyString(), any(), any(), any()))
                 .thenReturn(new OpenAiChatCompletion.ChatResult("  措辞好的消息  ", 3L, 1, 2));
         AiChatService.OneShot oneShot = service.completeOnce(conversation, "写一句问候");

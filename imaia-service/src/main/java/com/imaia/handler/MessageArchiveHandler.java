@@ -29,6 +29,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Archives every observed message to PostgreSQL through the platform adapter: the
@@ -131,7 +132,7 @@ public class MessageArchiveHandler implements ImEventHandler {
     /** Registers platform attachment references now; bytes are fetched lazily later. */
     private void persistAttachments(ImAdapter adapter, ImMessage archived,
             ImAdapter.FetchedMessage fetched) {
-        java.util.List<ImAdapter.AttachmentRef> refs;
+        List<ImAdapter.AttachmentRef> refs;
         try {
             refs = adapter.attachments(fetched.platformMessageId(), fetched.kind());
         } catch (RuntimeException failure) {

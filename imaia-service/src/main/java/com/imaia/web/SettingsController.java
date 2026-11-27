@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.function.Consumer;
 
 /** 全局助理设置：默认提示词、历史窗口、护栏，以及工具端点（网页搜索/生图/生视频）。 */
 @RestController
@@ -108,7 +109,7 @@ public class SettingsController {
     }
 
     /** Tool endpoint keys apply when present; the mask round-trip means unchanged, "" clears. */
-    private static void applyToolKey(String value, java.util.function.Consumer<String> setter) {
+    private static void applyToolKey(String value, Consumer<String> setter) {
         if (value != null && !MASK.equals(value.strip())) {
             setter.accept(value.strip());
         }

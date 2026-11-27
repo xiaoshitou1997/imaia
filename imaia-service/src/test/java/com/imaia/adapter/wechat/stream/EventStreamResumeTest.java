@@ -42,8 +42,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class EventStreamResumeTest {
 
-    private static final tools.jackson.databind.json.JsonMapper MAPPER =
-            tools.jackson.databind.json.JsonMapper.builder().build();
+    private static final JsonMapper MAPPER =
+            JsonMapper.builder().build();
 
 
     private MockWebServer server;

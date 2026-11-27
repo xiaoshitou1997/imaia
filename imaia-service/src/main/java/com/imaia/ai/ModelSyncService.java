@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.util.StringUtils;
 import java.util.Set;
+import java.math.BigDecimal;
 
 /**
  * Pulls the provider's /v1/models listing and upserts ai_model rows — availability
@@ -218,7 +219,7 @@ public class ModelSyncService extends AbstractAiHttpClient {
         return node.isNumber() ? node.asInt() : null;
     }
 
-    private static java.math.BigDecimal costOrNull(JsonNode node) {
+    private static BigDecimal costOrNull(JsonNode node) {
         return node.isNumber() ? node.decimalValue() : null;
     }
 

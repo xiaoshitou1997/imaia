@@ -20,6 +20,11 @@ import java.util.function.Function;
 
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriBuilder;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.web.reactive.function.BodyInserters;
 
 /**
  * Blocking client for the daemon's account-scoped HTTP API. Handlers run on a bounded
@@ -187,7 +192,7 @@ public class DaemonClient {
     /** Downloads the bytes behind a daemon media path such as /v1/accounts/…/content. */
     public MediaBytes getBytesByPath(String path) {
         try {
-            org.springframework.http.ResponseEntity<byte[]> response = blocking(connection.client().get()
+            ResponseEntity<byte[]> response = blocking(connection.client().get()
                     .uri(path)
                     .retrieve()
                     .toEntity(byte[].class));
@@ -253,18 +258,18 @@ public class DaemonClient {
 
     /** Stages one file with the daemon (multipart) and returns its media source id. */
     public String uploadMedia(byte[] data, String filename, String mimeType) {
-        org.springframework.http.client.MultipartBodyBuilder builder =
-                new org.springframework.http.client.MultipartBodyBuilder();
-        builder.part("file", new org.springframework.core.io.ByteArrayResource(data) {
+        MultipartBodyBuilder builder =
+                new MultipartBodyBuilder();
+        builder.part("file", new ByteArrayResource(data) {
             @Override
             public String getFilename() {
                 return filename;
             }
-        }).contentType(org.springframework.http.MediaType.valueOf(mimeType));
+        }).contentType(MediaType.valueOf(mimeType));
         JsonNode body = blocking(connection.client().post()
                 .uri(uriBuilder -> uriBuilder.path("/v1/accounts/{accountId}/uploads").build(accountId()))
-                .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA)
-                .body(org.springframework.web.reactive.function.BodyInserters.fromMultipartData(builder.build()))
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(builder.build()))
                 .retrieve()
                 .bodyToMono(JsonNode.class));
         JsonNode id = body == null ? null : body.get("id");

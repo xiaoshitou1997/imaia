@@ -8,6 +8,10 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import com.imaia.domain.MessageDirection;
+import com.imaia.domain.MessageKind;
+import com.imaia.domain.MessageOrigin;
+import java.util.Optional;
 
 /** 归档消息的数据访问：分页检索、上下文取数、跨线搜索与计数聚合。 */
 public interface ImMessageRepository extends JpaRepository<ImMessage, Long> {
@@ -16,7 +20,7 @@ public interface ImMessageRepository extends JpaRepository<ImMessage, Long> {
 
     long countByConversationId(Long conversationId);
 
-    java.util.Optional<ImMessage> findByConversationIdAndPlatformId(Long conversationId, String platformId);
+    Optional<ImMessage> findByConversationIdAndPlatformId(Long conversationId, String platformId);
 
     List<ImMessage> findTop8ByOrderByIdDesc();
 
@@ -34,9 +38,9 @@ public interface ImMessageRepository extends JpaRepository<ImMessage, Long> {
 
     /** 模型历史重建：会话最近文本线（incoming 或 AI 发出），新→旧。 */
     @Query("select m from ImMessage m where m.conversationId = :conversationId "
-            + "and m.kind = com.imaia.domain.MessageKind.TEXT "
-            + "and (m.direction = com.imaia.domain.MessageDirection.INCOMING "
-            + "or m.origin = com.imaia.domain.MessageOrigin.AI) "
+            + "and m.kind = MessageKind.TEXT "
+            + "and (m.direction = MessageDirection.INCOMING "
+            + "or m.origin = MessageOrigin.AI) "
             + "order by m.occurredAt desc, m.id desc")
     List<ImMessage> findRecentConversationLines(@Param("conversationId") Long conversationId,
             Pageable pageable);

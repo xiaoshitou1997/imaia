@@ -6,6 +6,7 @@ import com.imaia.domain.Platform;
 import com.imaia.repository.ImAccountRepository;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * The feishu adapter's wiring: resolves the enabled im_account row, parses its structured
@@ -31,7 +32,7 @@ public class FeishuConnection {
         client = null;
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public FeishuConnection(ImAccountRepository accounts, JsonMapper jsonMapper) {
         this(accounts, jsonMapper, null);
     }

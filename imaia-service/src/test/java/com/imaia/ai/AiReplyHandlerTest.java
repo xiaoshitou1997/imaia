@@ -31,6 +31,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.imaia.TestProperties;
+import com.imaia.domain.AiSetting;
+import com.imaia.domain.AiSettings;
+import com.imaia.repository.ImConversationRepository;
 
 /** 回复管线门控：总开关、线级开关、@门控、静默时段、语音静默、群指令、正常回复。 */
 class AiReplyHandlerTest {
@@ -46,7 +50,7 @@ class AiReplyHandlerTest {
     private InsightService insightService;
     private ImMessageRepository archivedMessages;
     private DeliveryService deliveries;
-    private com.imaia.repository.ImConversationRepository conversations;
+    private ImConversationRepository conversations;
     private GroupContextBuilder groupContext;
     private OutboundSender outboundSender;
     private AiReplyHandler handler;
@@ -54,10 +58,10 @@ class AiReplyHandlerTest {
 
     /** 小包装：便于在每个用例里改线级开关/静默配置后重建 handler。 */
     private static final class SettingsFixture {
-        com.imaia.domain.AiSettings current =
-                com.imaia.TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
-        java.util.List<com.imaia.domain.AiSetting> conversationRows =
-                java.util.List.of(com.imaia.domain.AiSetting.lineBool("autoreply", 9L, true));
+        AiSettings current =
+                TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
+        List<AiSetting> conversationRows =
+                List.of(AiSetting.lineBool("autoreply", 9L, true));
     }
 
     @BeforeEach
@@ -69,19 +73,19 @@ class AiReplyHandlerTest {
         insightService = mock(InsightService.class);
         archivedMessages = mock(ImMessageRepository.class);
         deliveries = mock(DeliveryService.class);
-        conversations = mock(com.imaia.repository.ImConversationRepository.class);
+        conversations = mock(ImConversationRepository.class);
         settingsFixture = new SettingsFixture();
         rebuild();
         when(adapters.forPlatform(Platform.WECHAT)).thenReturn(adapter);
         when(adapter.platform()).thenReturn(Platform.WECHAT);
-        when(adapter.account()).thenReturn(com.imaia.TestProperties.account(1L, "wechat"));
+        when(adapter.account()).thenReturn(TestProperties.account(1L, "wechat"));
         when(adapter.hasProcessed(anyString())).thenReturn(false);
         when(adapter.isGroupConversation(EXTERNAL_ID)).thenReturn(false);
         when(adapter.sendText(anyString(), anyString(), anyString())).thenReturn("sent-1");
         when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(new ImAdapter.FetchedMessage(
                 EXTERNAL_ID, MESSAGE_ID, "peer", "对方", "incoming", null,
                 MessageKind.TEXT, false, "human", "你好", null, Instant.now()));
-        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, EXTERNAL_ID);
+        ImConversation conversation = TestProperties.imConversation(9L, EXTERNAL_ID);
         when(conversations.findByAccountIdAndPlatformId(1L, EXTERNAL_ID))
                 .thenReturn(Optional.of(conversation));
         when(conversations.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -112,7 +116,7 @@ class AiReplyHandlerTest {
     }
 
     private void rebuild() {
-        settings = com.imaia.TestProperties.settingsService(
+        settings = TestProperties.settingsService(
                 settingsFixture.current, settingsFixture.conversationRows);
         groupContext = new GroupContextBuilder(archivedMessages, mock(ImContactRepository.class));
         outboundSender = new OutboundSender(deliveries);
@@ -126,7 +130,7 @@ class AiReplyHandlerTest {
 
     @Test
     void masterSwitchOffSkipsEverything() {
-        settingsFixture.current = com.imaia.TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
+        settingsFixture.current = TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
         settingsFixture.current.setEnabled(false);
         rebuild();
         handler.handle(event());
@@ -137,9 +141,9 @@ class AiReplyHandlerTest {
 
     @Test
     void lineSwitchOffSkipsReply() {
-        settingsFixture.conversationRows = java.util.List.of();
+        settingsFixture.conversationRows = List.of();
         rebuild();
-        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, EXTERNAL_ID);
+        ImConversation conversation = TestProperties.imConversation(9L, EXTERNAL_ID);
         when(chatService.resolve(adapter, EXTERNAL_ID)).thenReturn(conversation);
         handler.handle(event());
         verify(chatService, never()).complete(any(ImConversation.class), anyString(), any(), any(),
@@ -157,7 +161,7 @@ class AiReplyHandlerTest {
 
     @Test
     void quietHoursHoldReplies() {
-        settingsFixture.current = com.imaia.TestProperties.settings("提示词", 20, true, true, "00:00", "23:59");
+        settingsFixture.current = TestProperties.settings("提示词", 20, true, true, "00:00", "23:59");
         rebuild();
         handler.handle(event());
         verify(chatService, never()).complete(any(ImConversation.class), anyString(), any(), any(),
@@ -166,7 +170,7 @@ class AiReplyHandlerTest {
 
     @Test
     void quietHoursDisabledRepliesNormally() {
-        settingsFixture.current = com.imaia.TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
+        settingsFixture.current = TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
         rebuild();
         handler.handle(event());
         verify(adapter).sendText(eq(EXTERNAL_ID), eq("好的"), eq("imaia-ai-" + MESSAGE_ID));

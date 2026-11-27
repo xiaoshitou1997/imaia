@@ -16,6 +16,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentMatchers;
 
 /**
  * 群上下文块的四个关键语义：排除触发消息自身、方向/别名归因、条数与字符上限、
@@ -70,7 +71,7 @@ class GroupContextBuilderTest {
 
     @Test
     void outgoingIsAttributedToMeIncomingToContactAlias() {
-        when(contacts.findAllById(org.mockito.ArgumentMatchers.anyList()))
+        when(contacts.findAllById(ArgumentMatchers.anyList()))
                 .thenReturn(List.of(ImContact.builder().id(1L).alias("小张")
                         .displayName("张某某").build()));
         stubRecent(
@@ -87,7 +88,7 @@ class GroupContextBuilderTest {
 
     @Test
     void fallsBackToDisplayNameThenMemberWhenUnresolvable() {
-        when(contacts.findAllById(org.mockito.ArgumentMatchers.anyList()))
+        when(contacts.findAllById(ArgumentMatchers.anyList()))
                 .thenReturn(List.of(ImContact.builder().id(1L).displayName("张某某").build()));
         stubRecent(
                 message("m1", "无名者的话", MessageDirection.INCOMING, 1L),

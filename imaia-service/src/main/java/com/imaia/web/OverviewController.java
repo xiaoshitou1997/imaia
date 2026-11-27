@@ -26,6 +26,9 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import com.imaia.domain.MessageDirection;
+import com.imaia.domain.MessageOrigin;
+import java.util.HashMap;
 
 /** 总览与运行时能力状态（只读）。 */
 @RestController
@@ -109,19 +112,19 @@ public class OverviewController {
 
     /** 一条最近动态：会话、发送者、正文摘要与发生时间。 */
     public record RecentMessageRow(Long id, String conversationLabel, String sender, boolean own,
-            String body, String kind, java.time.Instant occurredAt) {
+            String body, String kind, Instant occurredAt) {
     }
 
     @GetMapping("/messages/recent")
     public Result<List<RecentMessageRow>> recentMessages() {
         Map<Long, String> labelMap = labels.labels();
-        Map<Long, String> contactNames = new java.util.HashMap<>();
+        Map<Long, String> contactNames = new HashMap<>();
         return Result.ok(messages.findTop8ByOrderByIdDesc().stream()
                 .map((m) -> {
                     String sender;
-                    if (m.getOrigin() == com.imaia.domain.MessageOrigin.AI) {
+                    if (m.getOrigin() == MessageOrigin.AI) {
                         sender = "AI";
-                    } else if (m.getDirection() == com.imaia.domain.MessageDirection.OUTGOING) {
+                    } else if (m.getDirection() == MessageDirection.OUTGOING) {
                         sender = "我";
                     } else if (m.getContactId() == null) {
                         sender = "对方";
@@ -135,7 +138,7 @@ public class OverviewController {
                             // 兜底不用 conversation_id：id 是存储实现细节，不进用户可见文案。
                             labelMap.getOrDefault(m.getConversationId(), "未知会话"),
                             sender,
-                            m.getDirection() == com.imaia.domain.MessageDirection.OUTGOING,
+                            m.getDirection() == MessageDirection.OUTGOING,
                             m.getBody() == null ? "" : m.getBody(),
                             m.getKind().value(), m.getOccurredAt());
                 })

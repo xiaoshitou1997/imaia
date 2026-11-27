@@ -38,6 +38,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.imaia.TestProperties;
+import com.imaia.domain.AiSettings;
+import org.mockito.ArgumentCaptor;
 
 /** 自指令链门控：别名开关、方向/归因、账本回声、前缀解析、群上下文与报告指令。 */
 class SelfCommandHandlerTest {
@@ -59,10 +62,10 @@ class SelfCommandHandlerTest {
 
     /** 小包装：别名行级开关在每个用例里可改后重建 handler。 */
     private static final class SettingsFixture {
-        com.imaia.domain.AiSettings current =
-                com.imaia.TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
-        java.util.List<com.imaia.domain.AiSetting> conversationRows =
-                java.util.List.of(AiSetting.lineText("self_command_alias", 9L, ALIAS));
+        AiSettings current =
+                TestProperties.settings("提示词", 20, true, false, "00:00", "07:00");
+        List<AiSetting> conversationRows =
+                List.of(AiSetting.lineText("self_command_alias", 9L, ALIAS));
     }
 
     @BeforeEach
@@ -83,7 +86,7 @@ class SelfCommandHandlerTest {
         when(adapter.uploadMedia(any(byte[].class), anyString(), anyString())).thenReturn("src-1");
         when(adapter.fetchMessage(MESSAGE_ID)).thenReturn(selfCommand("帮我总结一下"));
         when(outboundLedger.findFirstByPlatformMessageId(anyString())).thenReturn(Optional.empty());
-        ImConversation conversation = com.imaia.TestProperties.imConversation(9L, EXTERNAL_ID);
+        ImConversation conversation = TestProperties.imConversation(9L, EXTERNAL_ID);
         when(chatService.resolve(adapter, EXTERNAL_ID)).thenReturn(conversation);
         when(chatService.complete(any(ImConversation.class), anyString(), any(), any(),
                 any(), anyList())).thenReturn(new AiChatService.ChatReply("好的", List.of()));
@@ -107,7 +110,7 @@ class SelfCommandHandlerTest {
     }
 
     private void rebuild() {
-        settings = com.imaia.TestProperties.settingsService(
+        settings = TestProperties.settingsService(
                 settingsFixture.current, settingsFixture.conversationRows);
         handler = new SelfCommandHandler(adapters, chatService, settings, insightService,
                 new GroupContextBuilder(archivedMessages, mock(ImContactRepository.class)),
@@ -283,8 +286,8 @@ class SelfCommandHandlerTest {
                         .direction(MessageDirection.INCOMING)
                         .occurredAt(Instant.now()).archivedAt(Instant.now()).build()));
         handler.handle(event());
-        org.mockito.ArgumentCaptor<String> context =
-                org.mockito.ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> context =
+                ArgumentCaptor.forClass(String.class);
         verify(chatService).complete(any(ImConversation.class), eq("帮我总结一下"),
                 isNull(), isNull(), context.capture(), anyList());
         assertThat(context.getValue() != null

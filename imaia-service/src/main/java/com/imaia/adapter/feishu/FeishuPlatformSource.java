@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.util.StringUtils;
 import java.util.function.Consumer;
+import java.lang.reflect.Method;
 
 /**
  * The feishu event line: the official SDK's WS long connection receives
@@ -123,7 +124,7 @@ public class FeishuPlatformSource implements PlatformSource {
             return;
         }
         try {
-            java.lang.reflect.Method disconnect = Client.class.getDeclaredMethod("disconnect");
+            Method disconnect = Client.class.getDeclaredMethod("disconnect");
             disconnect.setAccessible(true);
             disconnect.invoke(current);
             log.info("Feishu WS long connection closed.");

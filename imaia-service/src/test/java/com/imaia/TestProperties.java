@@ -34,8 +34,8 @@ import java.util.stream.Collectors;
 /** Test fixture: entity builders and stubbed-repository services. */
 public final class TestProperties {
 
-    private static final tools.jackson.databind.json.JsonMapper MAPPER =
-            tools.jackson.databind.json.JsonMapper.builder().build();
+    private static final JsonMapper MAPPER =
+            JsonMapper.builder().build();
 
 
     /**

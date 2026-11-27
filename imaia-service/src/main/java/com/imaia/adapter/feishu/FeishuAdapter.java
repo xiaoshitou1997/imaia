@@ -37,6 +37,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import org.springframework.util.StringUtils;
 import java.util.Map;
+import com.imaia.domain.AttachmentKind;
+import java.io.ByteArrayOutputStream;
 
 /**
  * The feishu platform adapter over the official oapi-sdk: WS long-connection event
@@ -143,13 +145,13 @@ public class FeishuAdapter implements ImAdapter {
                 mediaMime(category), null, null));
     }
 
-    private static com.imaia.domain.AttachmentKind attachmentKind(MessageKind category) {
+    private static AttachmentKind attachmentKind(MessageKind category) {
         return switch (category) {
-            case IMAGE -> com.imaia.domain.AttachmentKind.IMAGE;
-            case VOICE -> com.imaia.domain.AttachmentKind.VOICE;
-            case VIDEO -> com.imaia.domain.AttachmentKind.VIDEO;
-            case STICKER -> com.imaia.domain.AttachmentKind.STICKER;
-            default -> com.imaia.domain.AttachmentKind.FILE;
+            case IMAGE -> AttachmentKind.IMAGE;
+            case VOICE -> AttachmentKind.VOICE;
+            case VIDEO -> AttachmentKind.VIDEO;
+            case STICKER -> AttachmentKind.STICKER;
+            default -> AttachmentKind.FILE;
         };
     }
 
@@ -332,7 +334,7 @@ public class FeishuAdapter implements ImAdapter {
         }
         requireSuccess(response.success(), response.getCode(), response.getMsg(),
                 "download " + type + " " + fileKey);
-        java.io.ByteArrayOutputStream stream = response.getData();
+        ByteArrayOutputStream stream = response.getData();
         if (stream == null || stream.size() == 0) {
             return null;
         }

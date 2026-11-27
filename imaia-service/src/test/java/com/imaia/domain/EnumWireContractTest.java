@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.exc.ValueInstantiationException;
 
 /**
  * 锁死枚举的 wire 契约：API/JSON 一律小写值（@JsonValue/@JsonCreator），
@@ -32,6 +33,6 @@ class EnumWireContractTest {
 
     @Test
     void rejectsUnknownValue() {
-        assertThatThrownBy(() -> MAPPER.readValue("\"weekly\"", ReportPeriod.class)).isInstanceOf(tools.jackson.databind.exc.ValueInstantiationException.class);
+        assertThatThrownBy(() -> MAPPER.readValue("\"weekly\"", ReportPeriod.class)).isInstanceOf(ValueInstantiationException.class);
     }
 }

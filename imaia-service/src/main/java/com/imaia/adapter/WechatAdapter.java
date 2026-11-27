@@ -26,6 +26,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.util.StringUtils;
 import java.util.concurrent.ConcurrentHashMap;
+import com.imaia.domain.AttachmentKind;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The wechat platform adapter over the agent-wechat daemon: SSE event stream,
@@ -225,14 +228,14 @@ public class WechatAdapter implements ImAdapter {
     }
 
     @Override
-    public java.util.List<AttachmentRef> attachments(String platformMessageId, MessageKind category) {
+    public List<AttachmentRef> attachments(String platformMessageId, MessageKind category) {
         if (category != MessageKind.IMAGE && category != MessageKind.VOICE
                 && category != MessageKind.VIDEO && category != MessageKind.STICKER
                 && category != MessageKind.FILE) {
-            return java.util.List.of();
+            return List.of();
         }
         JsonNode assets = daemonClient.getMediaAssets(platformMessageId);
-        java.util.List<AttachmentRef> refs = new java.util.ArrayList<>();
+        List<AttachmentRef> refs = new ArrayList<>();
         for (JsonNode asset : assets) {
             JsonNode id = asset.get("id");
             if (id == null || !id.isString() || id.asString().isBlank()) {
@@ -246,14 +249,14 @@ public class WechatAdapter implements ImAdapter {
         return refs;
     }
 
-    private static com.imaia.domain.AttachmentKind attachmentKind(String kind, MessageKind category) {
+    private static AttachmentKind attachmentKind(String kind, MessageKind category) {
         String value = kind.isBlank() ? category.value() : kind;
         return switch (value) {
-            case "image" -> com.imaia.domain.AttachmentKind.IMAGE;
-            case "voice" -> com.imaia.domain.AttachmentKind.VOICE;
-            case "video" -> com.imaia.domain.AttachmentKind.VIDEO;
-            case "sticker" -> com.imaia.domain.AttachmentKind.STICKER;
-            default -> com.imaia.domain.AttachmentKind.FILE;
+            case "image" -> AttachmentKind.IMAGE;
+            case "voice" -> AttachmentKind.VOICE;
+            case "video" -> AttachmentKind.VIDEO;
+            case "sticker" -> AttachmentKind.STICKER;
+            default -> AttachmentKind.FILE;
         };
     }
 

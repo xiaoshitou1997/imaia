@@ -13,6 +13,7 @@ import org.springframework.util.StringUtils;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 近期群聊上下文块：取会话最近归档的有文本行，按「谁：内容」拼成模型可读的
@@ -72,7 +73,7 @@ public class GroupContextBuilder {
 
     private Map<Long, String> contactNames(List<ImMessage> messages) {
         List<Long> ids = messages.stream().map(ImMessage::getContactId)
-                .filter(java.util.Objects::nonNull).distinct().toList();
+                .filter(Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
             return Map.of();
         }

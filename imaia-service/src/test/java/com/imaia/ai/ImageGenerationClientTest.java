@@ -14,12 +14,13 @@ import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Image generation against a simulated OpenAI images endpoint: b64 and url replies. */
 class ImageGenerationClientTest {
 
-    private static final tools.jackson.databind.json.JsonMapper MAPPER =
-            tools.jackson.databind.json.JsonMapper.builder().build();
+    private static final JsonMapper MAPPER =
+            JsonMapper.builder().build();
 
 
     private static final byte[] FAKE_PNG = new byte[]{(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};

@@ -17,6 +17,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The gateway listing is allowed to contain nothing but model ids; the catalog must
@@ -24,8 +25,8 @@ import static org.mockito.Mockito.when;
  */
 class ModelSyncServiceTest {
 
-    private static final tools.jackson.databind.json.JsonMapper MAPPER =
-            tools.jackson.databind.json.JsonMapper.builder().build();
+    private static final JsonMapper MAPPER =
+            JsonMapper.builder().build();
 
 
     private static final String GATEWAY_ONLY_IDS = """

@@ -11,6 +11,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Shared plumbing for the JDK-based AI endpoint clients: one client, one header set
@@ -58,7 +59,7 @@ abstract class AbstractAiHttpClient {
             }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new IllegalStateException("Endpoint returned HTTP " + response.statusCode()
-                        + ": " + new String(response.body(), java.nio.charset.StandardCharsets.UTF_8));
+                        + ": " + new String(response.body(), StandardCharsets.UTF_8));
             }
             return mapper.readTree(response.body());
         } catch (InterruptedException interrupted) {

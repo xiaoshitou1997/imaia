@@ -22,6 +22,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.imaia.TestProperties;
 
 /**
  * 出账发送的三条分支：已发不重发、平台回报「键已投递」记 skipped、
@@ -42,7 +43,7 @@ class OutboundSenderTest {
     void setUp() {
         deliveries = mock(DeliveryService.class);
         adapter = mock(ImAdapter.class);
-        conversation = com.imaia.TestProperties.imConversation(9L, PLATFORM_ID);
+        conversation = TestProperties.imConversation(9L, PLATFORM_ID);
         sender = new OutboundSender(deliveries);
     }
 

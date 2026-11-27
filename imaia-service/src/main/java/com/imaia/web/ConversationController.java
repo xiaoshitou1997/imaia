@@ -49,6 +49,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.ArrayList;
+import java.util.Objects;
+import org.springframework.data.domain.PageRequest;
 
 /** 统一收件箱：会话目录、归档消息、上下文流、成员快照与画像、跨线检索。 */
 @RestController
@@ -252,7 +255,7 @@ public class ConversationController {
         if (!recent.isEmpty()) {
             List<Long> messageIds = recent.stream().map(ImMessage::getId).toList();
             for (ImAttachment attachment : attachments.findByMessageIdInOrderByIdAsc(messageIds)) {
-                attachmentsByMessage.computeIfAbsent(attachment.getMessageId(), key -> new java.util.ArrayList<>())
+                attachmentsByMessage.computeIfAbsent(attachment.getMessageId(), key -> new ArrayList<>())
                         .add(new AttachmentRow(attachment.getId(), attachment.getKind().value(),
                                 attachment.getFilename(), attachment.getMimeType(),
                                 attachment.getSizeBytes(), attachment.getDurationMs(),
@@ -372,7 +375,7 @@ public class ConversationController {
         }
         Map<Long, String> conversationLabels = labels.labels();
         List<ImMessage> found = messages.searchByBody(keyword.strip(),
-                org.springframework.data.domain.PageRequest.of(0, 50));
+                PageRequest.of(0, 50));
         Map<Long, ImContact> contactById = contactMap(found);
         return Result.ok(found.stream()
                 .map(message -> new SearchHit(message.getId(), message.getConversationId(),
@@ -386,7 +389,7 @@ public class ConversationController {
 
     private Map<Long, ImContact> contactMap(List<ImMessage> list) {
         List<Long> ids = list.stream().map(ImMessage::getContactId)
-                .filter(java.util.Objects::nonNull).distinct().toList();
+                .filter(Objects::nonNull).distinct().toList();
         Map<Long, ImContact> byId = new HashMap<>();
         for (ImContact contact : contacts.findAllById(ids)) {
             byId.put(contact.getId(), contact);

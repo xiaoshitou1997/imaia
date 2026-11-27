@@ -21,6 +21,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.imaia.TestProperties;
+import java.util.Optional;
+import org.mockito.ArgumentCaptor;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 配置解析与写入语义：四级作用域优先级、自指令别名与开关的独立承载、
@@ -28,8 +32,8 @@ import static org.mockito.Mockito.when;
  */
 class AiSettingsServiceTest {
 
-    private static final tools.jackson.databind.json.JsonMapper MAPPER =
-            tools.jackson.databind.json.JsonMapper.builder().build();
+    private static final JsonMapper MAPPER =
+            JsonMapper.builder().build();
 
 
     private static final Long CONVERSATION_ID = 9L;
@@ -52,13 +56,13 @@ class AiSettingsServiceTest {
         when(repository.findByConversationIdIn(anyCollection())).thenReturn(List.of());
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(repository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(accounts.findById(anyLong())).thenReturn(java.util.Optional.empty());
+        when(accounts.findById(anyLong())).thenReturn(Optional.empty());
         when(accounts.findAllById(anyCollection())).thenReturn(List.of());
         service = new AiSettingsService(repository, accounts, MAPPER);
     }
 
     private ImConversation conversation() {
-        ImConversation conversation = com.imaia.TestProperties.imConversation(
+        ImConversation conversation = TestProperties.imConversation(
                 CONVERSATION_ID, "wx-1");
         conversation.setAccountId(ACCOUNT_ID);
         return conversation;
@@ -136,8 +140,8 @@ class AiSettingsServiceTest {
     void aliasIsStrippedBeforePersisting() {
         service.saveConversationSelfCommandAlias(CONVERSATION_ID, "  小艾  ");
 
-        org.mockito.ArgumentCaptor<AiSetting> captor =
-                org.mockito.ArgumentCaptor.forClass(AiSetting.class);
+        ArgumentCaptor<AiSetting> captor =
+                ArgumentCaptor.forClass(AiSetting.class);
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getValue()).isEqualTo("\"小艾\"");
         assertThat(captor.getValue().getConversationId()).isEqualTo(CONVERSATION_ID);
@@ -148,8 +152,8 @@ class AiSettingsServiceTest {
         // false 必须落一行显式记录：删除行只能回落外层，无法表达关闭。
         service.saveConversationSelfCommandEnabled(CONVERSATION_ID, false);
 
-        org.mockito.ArgumentCaptor<AiSetting> captor =
-                org.mockito.ArgumentCaptor.forClass(AiSetting.class);
+        ArgumentCaptor<AiSetting> captor =
+                ArgumentCaptor.forClass(AiSetting.class);
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getValue()).isEqualTo("false");
     }
@@ -163,7 +167,7 @@ class AiSettingsServiceTest {
         when(repository.findByPlatformIsNullAndAccountIdIsNullAndConversationIdIsNull())
                 .thenReturn(List.of(AiSetting.globalText("self_command_alias", "小艾")));
         when(accounts.findAllById(anyCollection()))
-                .thenReturn(List.of(com.imaia.TestProperties.account(ACCOUNT_ID, "wechat")));
+                .thenReturn(List.of(TestProperties.account(ACCOUNT_ID, "wechat")));
         when(repository.findByConversationIdIn(anyCollection())).thenReturn(List.of(
                 AiSetting.lineBool("autoreply", CONVERSATION_ID, true)));
 
@@ -181,7 +185,7 @@ class AiSettingsServiceTest {
         when(repository.findByPlatformIsNullAndAccountIdIsNullAndConversationIdIsNull())
                 .thenReturn(List.of(AiSetting.globalText("self_command_alias", "小艾")));
         when(accounts.findAllById(anyCollection()))
-                .thenReturn(List.of(com.imaia.TestProperties.account(ACCOUNT_ID, "wechat")));
+                .thenReturn(List.of(TestProperties.account(ACCOUNT_ID, "wechat")));
         when(repository.findByConversationIdIn(anyCollection())).thenReturn(List.of(
                 AiSetting.lineBool("self_command_enabled", CONVERSATION_ID, false)));
 
@@ -201,7 +205,7 @@ class AiSettingsServiceTest {
     @Test
     void lineSettingsToleratsMissingPersona() {
         when(accounts.findAllById(anyCollection()))
-                .thenReturn(List.of(com.imaia.TestProperties.account(ACCOUNT_ID, "wechat")));
+                .thenReturn(List.of(TestProperties.account(ACCOUNT_ID, "wechat")));
         AiSettingsService.LineCaps line =
                 service.lineSettings(List.of(conversation())).get(CONVERSATION_ID);
         assertThat(line.persona()).as("未配置人设时为 null，交给全局提示词").isNull();

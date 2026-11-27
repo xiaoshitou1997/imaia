@@ -12,6 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * The wechat adapter's wiring: resolves the enabled im_account row, parses its structured
@@ -30,7 +31,7 @@ public class WechatConnection {
     private volatile ImAccount appRow;
     private volatile WebClient client;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public WechatConnection(ImAccountRepository accounts, JsonMapper jsonMapper) {
         this(accounts, jsonMapper, null);
     }

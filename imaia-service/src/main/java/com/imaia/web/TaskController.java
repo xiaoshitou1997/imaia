@@ -34,6 +34,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import tools.jackson.databind.JsonNode;
 
 /** 定时任务：run_at 一次性 / cron_expr 周期二选一；prompt 有则 AI 措辞，无则直发 content。 */
 @RestController
@@ -72,7 +73,7 @@ public class TaskController {
             @Size(max = 8000) String prompt,
             String fireAt, String cron,
             @NotBlank @Size(max = 64) String timezone,
-            tools.jackson.databind.JsonNode params) {
+            JsonNode params) {
     }
 
     public record RunRow(Long id, Instant scheduledFor, Instant startedAt, Instant finishedAt,
