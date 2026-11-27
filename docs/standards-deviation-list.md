@@ -44,6 +44,34 @@
 | java-guide 13 不吞异常 | `AiModelCatalog.parseList/parseMap` 把 JSON 解析失败静默返回空列表 | 两处 `catch (RuntimeException) { return List.of(); }` | 区分「字段为空（合法）」与「有内容但解析失败（数据损坏）」，后者记 warn 保留现场；补 2 个用例锁住 |
 | backend-testing 2 新增 Service 必测失败路径 | 本轮新建的 `AiProviderService`、`ConversationSettingsService` 零覆盖 | JaCoCo 报告 0 行覆盖 | 补 12 个用例：缺省/清空语义、别名边界、首次建会话、重复投递幂等、消息身份漂移 |
 
+## 一点五、最终轮补审出的新维度
+
+前几轮遗漏了 `readability-refactoring` 的量化条款，本轮补测：
+
+**单方法 ≤30 行、分支 ≤10**（readability-refactoring「复杂度预算」）。实测 18 个方法超预算，已修剪最大的 `ModelSyncService.sync()`（76 行/11 分支 → 拆为取数、合并、退役三步，行为等价，174 用例回归通过）。
+
+**剩余 17 个超预算方法未修剪**（按行数降序）：
+
+| 行数/分支 | 位置 |
+| --- | --- |
+| 70 / 6 | `ai/TaskRunner.java:115` `fire()` |
+| 67 / 12 | `ai/AiReplyHandler.java:70` `handle()` |
+| 57 / 3 | `handler/MessageArchiveHandler.java:74` `handle()` |
+| 55 / 12 | `web/SettingsController.java:55` `update()` |
+| 55 / 4 | `web/TaskController.java:107` `create()` |
+| 51 / 5 | `ai/InsightService.java:125` `buildStats()` |
+| 50 / 4 | `ai/ContactAnalyzer.java:51` `analyzeContact()` |
+| 48 / 7 | `adapter/wechat/WechatHistoryService.java:46` `pull()` |
+| 43 / 4 | `adapter/feishu/FeishuAdapter.java:214` `uploadMedia()` |
+| 39 / 6 | `ai/AiSettingsService.java:233` `lineSettings()` |
+| 38 / 5 | `web/AiProviderController.java:147` `update()` |
+| 其余 6 个 31–35 行 | 见 `check-method-budget.js` 输出 |
+
+未修剪理由：规范要求「修剪保持行为等价是硬边界」，这些方法普遍缺少测试覆盖（覆盖率 40.4%），
+在无回归网的情况下重构风险高于收益。**建议先补测试再修剪**，不是直接动刀。
+
+复核脚本：`imaia-tmp/review/check-method-budget.js`（按花括号配平统计，可重跑）。
+
 ## 二、未处理项（需你决策或提供资源）
 
 | 条款 | 偏离内容 | 阻塞原因 |
