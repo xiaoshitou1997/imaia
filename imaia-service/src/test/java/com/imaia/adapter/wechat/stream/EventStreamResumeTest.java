@@ -42,6 +42,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class EventStreamResumeTest {
 
+    private static final tools.jackson.databind.json.JsonMapper MAPPER =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+
     private MockWebServer server;
     private CursorStore cursorStore;
     private final Queue<String> streamRequests = new ConcurrentLinkedQueue<>();
@@ -123,7 +127,7 @@ class EventStreamResumeTest {
         WechatConnection connection = TestProperties.wechat(server.url("/").toString(), "acc1");
         DaemonClient daemonClient = new DaemonClient(connection);
         DaemonEventDecoder decoder = new DaemonEventDecoder(JsonMapper.builder().build());
-        WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(IngestLedger.class), connection);
+        WechatAdapter adapter = new WechatAdapter(daemonClient, Mockito.mock(IngestLedger.class), connection, MAPPER);
         LoggingMessageHandler loggingHandler = new LoggingMessageHandler(new ImAdapters(List.of(adapter)));
         ImEventHandler recorder = new ImEventHandler() {
             @Override

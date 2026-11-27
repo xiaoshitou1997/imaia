@@ -45,7 +45,8 @@ public class AiProviderController {
     private static final Logger log = LoggerFactory.getLogger(AiProviderController.class);
     private static final String MASK = "••••••••";
 
-    private static final JsonMapper JSON = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper jsonMapper;
 
     private final AiProviderRepository providers;
     private final AiModelRepository aiModels;
@@ -53,11 +54,12 @@ public class AiProviderController {
     private final ModelSyncService syncService;
 
     public AiProviderController(AiProviderRepository providers, AiModelRepository aiModels,
-            AiModelCatalog catalog, ModelSyncService syncService) {
+            AiModelCatalog catalog, ModelSyncService syncService, JsonMapper jsonMapper) {
         this.providers = providers;
         this.aiModels = aiModels;
         this.catalog = catalog;
         this.syncService = syncService;
+        this.jsonMapper = jsonMapper;
     }
 
     public record ModelRow(Long id, String modelKey, String name, String description, String modalitiesIn,
@@ -242,11 +244,11 @@ public class AiProviderController {
         }
     }
 
-    /** "text,image" → ["text","image"] 的 JSON 文本（经序列化器，避免手拼注入）。 */
+    /** "text,image" → ["text","image"] 的 jsonMapper 文本（经序列化器，避免手拼注入）。 */
     private String toJsonArray(String csv) {
         List<String> items = Arrays.stream(csv.split(","))
                 .map(String::strip).filter(s -> !s.isEmpty()).toList();
-        return JSON.writeValueAsString(items);
+        return jsonMapper.writeValueAsString(items);
     }
 
     private ModelRow toModelRow(AiModel model) {

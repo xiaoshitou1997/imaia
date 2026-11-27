@@ -99,8 +99,8 @@ public class FeishuConnection {
     }
 
     /** Test seam: a connection over an explicit config, no database involved. */
-    public static FeishuConnection forTesting(FeishuAccountConfig fixedConfig) {
-        FeishuConnection connection = new FeishuConnection(null, JsonMapper.builder().build(), fixedConfig);
+    public static FeishuConnection forTesting(FeishuAccountConfig fixedConfig, JsonMapper jsonMapper) {
+        FeishuConnection connection = new FeishuConnection(null, jsonMapper, fixedConfig);
         ImAccount app = ImAccount.builder()
                 .platform(Platform.FEISHU).name("default").enabled(true).config("{}")
                 .build();

@@ -4,6 +4,7 @@ import com.imaia.adapter.wechat.WechatAccountConfig;
 import com.imaia.adapter.wechat.WechatConnection;
 import com.imaia.ai.AiSettingsService;
 import com.imaia.config.AiModelCatalog;
+import com.imaia.config.JsonSupport;
 import com.imaia.config.DispatchProperties;
 import com.imaia.domain.AiModel;
 import com.imaia.domain.AiProvider;
@@ -19,6 +20,7 @@ import com.imaia.repository.AiProviderRepository;
 import com.imaia.repository.AiSettingRepository;
 import com.imaia.repository.ImAccountRepository;
 import org.mockito.Mockito;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -32,6 +34,18 @@ import java.util.stream.Collectors;
 /** Test fixture: entity builders and stubbed-repository services. */
 public final class TestProperties {
 
+    private static final tools.jackson.databind.json.JsonMapper MAPPER =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+
+    /**
+     * 纯单元测试没有 Spring 容器。静态 JSON 工具经 JsonSupport.mapper() 取共享实例，
+     * 这里预置一份与容器同源的配置，避免测试各自 builder().build() 复制一份。
+     */
+    static {
+        JsonSupport.installForTesting(JsonMapper.builder().build());
+    }
+
     private static final AtomicLong IDS = new AtomicLong();
     private static final char QC = '"';
 
@@ -39,7 +53,7 @@ public final class TestProperties {
     }
 
     public static WechatConnection wechat(String baseUrl, String account) {
-        return WechatConnection.forTesting(wechatConfig(baseUrl, account));
+        return WechatConnection.forTesting(wechatConfig(baseUrl, account), MAPPER);
     }
 
     public static WechatAccountConfig wechatConfig(String baseUrl, String account) {
@@ -121,7 +135,7 @@ public final class TestProperties {
         for (AiModel model : models) {
             Mockito.when(modelRepository.findById(model.getId())).thenReturn(Optional.of(model));
         }
-        return new AiModelCatalog(providerRepository, modelRepository);
+        return new AiModelCatalog(providerRepository, modelRepository, MAPPER);
     }
 
     /** The default test catalog: zhipu vision chat. */
@@ -183,7 +197,7 @@ public final class TestProperties {
             }
             return found;
         });
-        return new AiSettingsService(repository, connections);
+        return new AiSettingsService(repository, connections, MAPPER);
     }
 
     private static List<AiSetting> globalRows(AiSettings settings) {

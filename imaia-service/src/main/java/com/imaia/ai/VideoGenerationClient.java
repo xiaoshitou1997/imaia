@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import tools.jackson.databind.json.JsonMapper;
 import com.imaia.ai.AiSettingsService;
 import com.imaia.domain.AiSettings;
 import org.slf4j.Logger;
@@ -30,7 +31,8 @@ public class VideoGenerationClient extends AbstractAiHttpClient {
 
     private final AiSettingsService settings;
 
-    public VideoGenerationClient(AiSettingsService settings) {
+    public VideoGenerationClient(AiSettingsService settings, JsonMapper jsonMapper) {
+        super(jsonMapper);
         this.settings = settings;
     }
 

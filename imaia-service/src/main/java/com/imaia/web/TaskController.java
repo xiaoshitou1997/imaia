@@ -41,7 +41,8 @@ import java.util.NoSuchElementException;
 public class TaskController {
 
     private static final DateTimeFormatter FIRE_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper jsonMapper;
 
     private final ImTaskRepository tasks;
     private final ImTaskLogRepository runs;
@@ -51,12 +52,13 @@ public class TaskController {
 
     public TaskController(ImTaskRepository tasks, ImTaskLogRepository runs,
             ImConversationRepository conversations, ConversationLabels labels,
-            AiSettingsService settings) {
+            AiSettingsService settings, JsonMapper jsonMapper) {
         this.tasks = tasks;
         this.runs = runs;
         this.conversations = conversations;
         this.labels = labels;
         this.settings = settings;
+        this.jsonMapper = jsonMapper;
     }
 
     public record TaskRow(Long id, Long conversationId, String conversationLabel,
@@ -144,7 +146,7 @@ public class TaskController {
                 .content(body.content() == null ? null : body.content().strip())
                 .prompt(body.prompt() == null ? null : body.prompt().strip())
                 .payload(body.params() != null && body.params().isObject()
-                        ? MAPPER.writeValueAsString(body.params()) : "{}")
+                        ? jsonMapper.writeValueAsString(body.params()) : "{}")
                 .runAt(runAt)
                 .cronExpr(cron)
                 .timezone(zone.getId())

@@ -1,5 +1,6 @@
 package com.imaia.config;
 
+import com.imaia.config.JsonSupport;
 import com.imaia.domain.AiModel;
 import com.imaia.domain.AiProvider;
 import com.imaia.domain.ModelSlot;
@@ -39,14 +40,16 @@ public class AiModelCatalog {
         }
     }
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper mapper;
 
     private final AiProviderRepository providers;
     private final AiModelRepository models;
 
-    public AiModelCatalog(AiProviderRepository providers, AiModelRepository models) {
+    public AiModelCatalog(AiProviderRepository providers, AiModelRepository models, JsonMapper jsonMapper) {
         this.providers = providers;
         this.models = models;
+        this.mapper = jsonMapper;
     }
 
     /** Kept for callers that invalidate after directory edits; resolution is uncached. */
@@ -130,7 +133,7 @@ public class AiModelCatalog {
     private static List<String> parseList(String json) {
         try {
             List<String> out = new ArrayList<>();
-            for (JsonNode node : MAPPER.readTree(!StringUtils.hasText(json) ? "[]" : json)) {
+            for (JsonNode node : JsonSupport.mapper().readTree(!StringUtils.hasText(json) ? "[]" : json)) {
                 if (node.isString()) {
                     out.add(node.asString());
                 }
@@ -144,7 +147,7 @@ public class AiModelCatalog {
     private static Map<String, String> parseMap(String json) {
         try {
             Map<String, String> out = new LinkedHashMap<>();
-            for (var field : MAPPER.readTree(!StringUtils.hasText(json) ? "{}" : json).properties()) {
+            for (var field : JsonSupport.mapper().readTree(!StringUtils.hasText(json) ? "{}" : json).properties()) {
                 out.put(field.getKey(), field.getValue().isString()
                         ? field.getValue().asString() : field.getValue().toString());
             }

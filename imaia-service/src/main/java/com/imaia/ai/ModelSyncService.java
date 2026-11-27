@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import tools.jackson.databind.json.JsonMapper;
 import com.imaia.domain.ModelSource;
 import com.imaia.domain.AiModel;
 import com.imaia.domain.AiProvider;
@@ -47,7 +48,8 @@ public class ModelSyncService extends AbstractAiHttpClient {
     private volatile JsonNode modelsDevCache;
     private volatile Instant modelsDevFetchedAt;
 
-    public ModelSyncService(AiProviderRepository providers, AiModelRepository aiModels) {
+    public ModelSyncService(AiProviderRepository providers, AiModelRepository aiModels, JsonMapper jsonMapper) {
+        super(jsonMapper);
         this.providers = providers;
         this.aiModels = aiModels;
     }

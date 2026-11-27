@@ -18,6 +18,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Image generation against a simulated OpenAI images endpoint: b64 and url replies. */
 class ImageGenerationClientTest {
 
+    private static final tools.jackson.databind.json.JsonMapper MAPPER =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+
     private static final byte[] FAKE_PNG = new byte[]{(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
 
     private MockWebServer server;
@@ -27,7 +31,7 @@ class ImageGenerationClientTest {
     void startServer() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new ImageGenerationClient(imageSettings(server.url("/").toString()));
+        client = new ImageGenerationClient(imageSettings(server.url("/").toString()), MAPPER);
     }
 
     private static AiSettingsService imageSettings(String baseUrl) {
@@ -97,7 +101,7 @@ class ImageGenerationClientTest {
     @Test
     void unconfiguredToolFailsFastAndReportsUnavailable() {
         ImageGenerationClient unconfigured = new ImageGenerationClient(
-                TestProperties.settingsService(TestProperties.settings("p", 20, false, false, "00:00", "07:00")));
+                TestProperties.settingsService(TestProperties.settings("p", 20, false, false, "00:00", "07:00")), MAPPER);
 
         assertThat(unconfigured.available()).isFalse();
         assertThatThrownBy(() -> unconfigured.generate("一只猫"))

@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.JsonNode;
@@ -26,7 +27,8 @@ public class ImageGenerationClient extends AbstractAiHttpClient {
 
     private final AiSettingsService settings;
 
-    public ImageGenerationClient(AiSettingsService settings) {
+    public ImageGenerationClient(AiSettingsService settings, JsonMapper jsonMapper) {
+        super(jsonMapper);
         this.settings = settings;
     }
 

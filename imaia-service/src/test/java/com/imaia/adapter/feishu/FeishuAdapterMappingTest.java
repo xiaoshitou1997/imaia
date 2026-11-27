@@ -1,5 +1,6 @@
 package com.imaia.adapter.feishu;
 
+import com.imaia.config.JsonSupport;
 import com.imaia.domain.MessageKind;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -11,6 +12,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FeishuAdapterMappingTest {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
+
+    static {
+        JsonSupport.installForTesting(MAPPER);
+    }
 
     @Test
     void configParsesStructuredFieldsWithDefaults() {

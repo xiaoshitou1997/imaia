@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.JsonNode;
@@ -28,7 +29,8 @@ public class WebSearchClient extends AbstractAiHttpClient {
 
     private final AiSettingsService settings;
 
-    public WebSearchClient(AiSettingsService settings) {
+    public WebSearchClient(AiSettingsService settings, JsonMapper jsonMapper) {
+        super(jsonMapper);
         this.settings = settings;
     }
 

@@ -20,6 +20,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Video generation against a simulated Agnes task API: create, poll, download. */
 class VideoGenerationClientTest {
 
+    private static final tools.jackson.databind.json.JsonMapper MAPPER =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+
     private MockWebServer server;
     private VideoGenerationClient client;
     private final AtomicInteger polls = new AtomicInteger();
@@ -52,7 +56,7 @@ class VideoGenerationClientTest {
         settings.setVideoBaseUrl(server.url("/").toString());
         settings.setVideoApiKey("key");
         settings.setVideoModel("vid-m");
-        client = new VideoGenerationClient(TestProperties.settingsService(settings));
+        client = new VideoGenerationClient(TestProperties.settingsService(settings), MAPPER);
     }
 
     @AfterEach

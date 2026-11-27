@@ -38,7 +38,8 @@ import java.util.Map;
 public class InsightService {
 
     private static final Logger log = LoggerFactory.getLogger(InsightService.class);
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper mapper;
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("MM-dd HH:mm");
     private static final int SAMPLE_MESSAGES = 40;
     private static final int SAMPLE_CHARS = 8_000;
@@ -49,11 +50,12 @@ public class InsightService {
     private final AiModelCatalog catalog;
 
     public InsightService(ImMessageRepository messages,
-            AiChatService chatService, AiSettingsService settings, AiModelCatalog catalog) {
+            AiChatService chatService, AiSettingsService settings, AiModelCatalog catalog, JsonMapper jsonMapper) {
         this.messages = messages;
         this.chatService = chatService;
         this.settings = settings;
         this.catalog = catalog;
+        this.mapper = jsonMapper;
     }
 
     /** In-group command dispatch: 「本周统计/周报」「本月统计/月报」「本年统计/年报」.
@@ -150,7 +152,7 @@ public class InsightService {
             String day = message.getArchivedAt().toString().substring(0, 10);
             byDay.merge(day, 1, Integer::sum);
         }
-        ObjectNode stats = MAPPER.createObjectNode();
+        ObjectNode stats = mapper.createObjectNode();
         stats.put("total", total);
         stats.put("incoming", incoming);
         stats.put("aiOutgoing", aiOutgoing);
@@ -169,7 +171,7 @@ public class InsightService {
         byDay.entrySet().stream()
                 .sorted(Comparator.comparing(Map.Entry::getKey))
                 .forEach(entry -> days.addObject().put(entry.getKey(), entry.getValue()));
-        return MAPPER.writeValueAsString(stats);
+        return mapper.writeValueAsString(stats);
     }
 
     /** The writing prompt: stats JSON plus a recent-message excerpt. */

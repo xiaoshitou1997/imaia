@@ -24,6 +24,10 @@ import static org.mockito.Mockito.when;
  */
 class ModelSyncServiceTest {
 
+    private static final tools.jackson.databind.json.JsonMapper MAPPER =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+
     private static final String GATEWAY_ONLY_IDS = """
             {"object":"list","data":[{"id":"glm-4.5v","object":"model"}]}
             """;
@@ -55,7 +59,7 @@ class ModelSyncServiceTest {
         when(models.findByProviderId(7L)).thenReturn(List.of());
         when(models.save(any(AiModel.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ModelSyncService service = new ModelSyncService(mock(AiProviderRepository.class), models) {
+        ModelSyncService service = new ModelSyncService(mock(AiProviderRepository.class), models, MAPPER) {
             @Override
             JsonNode sendJson(HttpRequest request) {
                 return request.uri().toString().contains("models.dev")

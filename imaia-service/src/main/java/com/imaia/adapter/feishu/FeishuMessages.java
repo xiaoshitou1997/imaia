@@ -3,7 +3,7 @@ package com.imaia.adapter.feishu;
 import com.imaia.domain.MessageKind;
 import tools.jackson.databind.JsonNode;
 import org.springframework.util.StringUtils;
-import tools.jackson.databind.json.JsonMapper;
+import com.imaia.config.JsonSupport;
 
 /**
  * Pure mapping helpers from feishu message payloads to the normalized model:
@@ -12,7 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class FeishuMessages {
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    // 纯静态映射工具无构造注入点，经 JsonSupport 取容器装配的共享实例。
 
     private FeishuMessages() {
     }
@@ -70,7 +70,7 @@ public final class FeishuMessages {
             return null;
         }
         try {
-            return MAPPER.readTree(contentJson);
+            return JsonSupport.mapper().readTree(contentJson);
         } catch (RuntimeException failure) {
             return null;
         }

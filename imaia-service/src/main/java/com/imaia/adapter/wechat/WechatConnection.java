@@ -109,8 +109,8 @@ public class WechatConnection {
     }
 
     /** Test seam: a connection over an explicit config, no database involved. */
-    public static WechatConnection forTesting(WechatAccountConfig fixedConfig) {
-        WechatConnection connection = new WechatConnection(null, JsonMapper.builder().build(), fixedConfig);
+    public static WechatConnection forTesting(WechatAccountConfig fixedConfig, JsonMapper jsonMapper) {
+        WechatConnection connection = new WechatConnection(null, jsonMapper, fixedConfig);
         ImAccount app = ImAccount.builder()
                 .platform(Platform.WECHAT).name("default").enabled(true).config("{}")
                 .build();

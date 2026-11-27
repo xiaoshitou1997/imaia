@@ -37,15 +37,17 @@ public class FeishuPlatformSource implements PlatformSource {
 
     private static final Logger log = LoggerFactory.getLogger(FeishuPlatformSource.class);
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper jsonMapper;
 
     private final FeishuConnection connection;
 
     /** The receive WS client started by the current subscription; closed on stop(). */
     private volatile Client active;
 
-    public FeishuPlatformSource(FeishuConnection connection) {
+    public FeishuPlatformSource(FeishuConnection connection, JsonMapper jsonMapper) {
         this.connection = connection;
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -159,7 +161,7 @@ public class FeishuPlatformSource implements PlatformSource {
         raw.put("content", FeishuMessages.parse(message.getContent()));
         JsonNode rawNode;
         try {
-            rawNode = MAPPER.readTree(MAPPER.writeValueAsString(raw));
+            rawNode = jsonMapper.readTree(jsonMapper.writeValueAsString(raw));
         } catch (RuntimeException failure) {
             rawNode = null;
         }

@@ -22,7 +22,12 @@ abstract class AbstractAiHttpClient {
     static final String USER_AGENT = "imaia/0.1 (AI endpoint client)";
 
     final Logger log = LoggerFactory.getLogger(getClass());
-    final JsonMapper mapper = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：由子类从 Spring 注入后转交，不自建实例。 */
+    final JsonMapper mapper;
+
+    protected AbstractAiHttpClient(JsonMapper mapper) {
+        this.mapper = mapper;
+    }
 
     /**
      * A fresh client per call. Long-lived pooled connections to the AI edge get

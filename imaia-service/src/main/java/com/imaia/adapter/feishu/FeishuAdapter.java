@@ -1,5 +1,6 @@
 package com.imaia.adapter.feishu;
 
+import com.imaia.config.JsonSupport;
 import com.imaia.domain.Platform;
 
 import com.imaia.adapter.ImAdapter;
@@ -50,7 +51,8 @@ public class FeishuAdapter implements ImAdapter {
     /** Feishu chat ids (group conversations) carry the {@code oc_} prefix. */
     private static final String GROUP_THREAD_PREFIX = "oc_";
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper jsonMapper;
 
     private final FeishuConnection connection;
     private final IngestLedger ledger;
@@ -67,9 +69,10 @@ public class FeishuAdapter implements ImAdapter {
                 }
             });
 
-    public FeishuAdapter(FeishuConnection connection, IngestLedger ledger) {
+    public FeishuAdapter(FeishuConnection connection, IngestLedger ledger, JsonMapper jsonMapper) {
         this.connection = connection;
         this.ledger = ledger;
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -386,7 +389,7 @@ public class FeishuAdapter implements ImAdapter {
     }
 
     private static String json(Object payload) {
-        return MAPPER.writeValueAsString(payload);
+        return JsonSupport.mapper().writeValueAsString(payload);
     }
 
     /**
@@ -409,7 +412,7 @@ public class FeishuAdapter implements ImAdapter {
             }
             raw.put("mentions", names);
         }
-        return MAPPER.writeValueAsString(raw);
+        return JsonSupport.mapper().writeValueAsString(raw);
     }
 
     private static Instant parseMillis(String epochMillis) {

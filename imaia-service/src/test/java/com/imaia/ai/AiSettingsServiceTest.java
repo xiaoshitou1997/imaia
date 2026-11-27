@@ -28,6 +28,10 @@ import static org.mockito.Mockito.when;
  */
 class AiSettingsServiceTest {
 
+    private static final tools.jackson.databind.json.JsonMapper MAPPER =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+
     private static final Long CONVERSATION_ID = 9L;
     private static final Long ACCOUNT_ID = 1L;
 
@@ -50,7 +54,7 @@ class AiSettingsServiceTest {
         when(repository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
         when(accounts.findById(anyLong())).thenReturn(java.util.Optional.empty());
         when(accounts.findAllById(anyCollection())).thenReturn(List.of());
-        service = new AiSettingsService(repository, accounts);
+        service = new AiSettingsService(repository, accounts, MAPPER);
     }
 
     private ImConversation conversation() {

@@ -1,5 +1,6 @@
 package com.imaia.adapter;
 
+import com.imaia.config.JsonSupport;
 import com.imaia.domain.Platform;
 
 import com.imaia.adapter.wechat.daemon.DaemonClient;
@@ -37,7 +38,8 @@ public class WechatAdapter implements ImAdapter {
 
     private static final String GROUP_CONVERSATION_SUFFIX = "@chatroom";
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper jsonMapper;
 
     private final DaemonClient daemonClient;
     private final IngestLedger ledger;
@@ -70,10 +72,11 @@ public class WechatAdapter implements ImAdapter {
             });
 
     public WechatAdapter(DaemonClient daemonClient, IngestLedger ledger,
-            WechatConnection connection) {
+            WechatConnection connection, JsonMapper jsonMapper) {
         this.daemonClient = daemonClient;
         this.ledger = ledger;
         this.connection = connection;
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -167,7 +170,7 @@ public class WechatAdapter implements ImAdapter {
     /** The original daemon payload snapshot, re-serialized from the typed DTO. */
     private static String rawJson(Message message) {
         try {
-            return MAPPER.writeValueAsString(message);
+            return JsonSupport.mapper().writeValueAsString(message);
         } catch (RuntimeException failure) {
             return null;
         }

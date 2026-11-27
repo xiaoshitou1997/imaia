@@ -1,5 +1,6 @@
 package com.imaia.ai;
 
+import com.imaia.config.JsonSupport;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.BooleanNode;
@@ -38,7 +39,8 @@ import java.util.stream.Collectors;
 @Component
 public class AiSettingsService {
 
-    private static final JsonMapper JSON = JsonMapper.builder().build();
+    /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
+    private final JsonMapper json;
 
     /** Seed prompt, reused as the code-side default when the key is missing. */
     static final String DEFAULT_SYSTEM_PROMPT = "你是用户的智能助理，用简洁口语化的中文回复，不要用列表。"
@@ -110,9 +112,10 @@ public class AiSettingsService {
     private final ImAccountRepository accounts;
     private volatile AiSettings cachedGlobal;
 
-    public AiSettingsService(AiSettingRepository repository, ImAccountRepository accounts) {
+    public AiSettingsService(AiSettingRepository repository, ImAccountRepository accounts, JsonMapper jsonMapper) {
         this.repository = repository;
         this.accounts = accounts;
+        this.json = jsonMapper;
     }
 
     /** Global view: global rows + code defaults; no scoped keys applied. */
@@ -374,10 +377,10 @@ public class AiSettingsService {
         return value != null ? Boolean.parseBoolean(value) : (Boolean) key.fallback;
     }
 
-    /** JSON value → plain string (text as-is, numbers/booleans via lenient asText). */
+    /** json value → plain string (text as-is, numbers/booleans via lenient asText). */
     private static String decode(AiSetting row) {
         try {
-            return JSON.readTree(row.getValue()).asString();
+            return JsonSupport.mapper().readTree(row.getValue()).asString();
         } catch (Exception malformed) {
             return null;
         }
