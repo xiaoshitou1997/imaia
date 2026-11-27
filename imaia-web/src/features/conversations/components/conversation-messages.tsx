@@ -92,6 +92,7 @@ export function ConversationMessages({
             className='-ms-2 h-full sm:hidden'
             onClick={onBack}
           >
+            <span className='sr-only'>返回</span>
             <ArrowLeft className='rtl:rotate-180' />
           </Button>
           <div className='min-w-0'>

@@ -62,14 +62,14 @@ export function SignIn2() {
           className='dark:hidden'
           width={1024}
           height={1151}
-          alt='Shadcn-Admin'
+          alt=''
         />
         <img
           src={dashboardDark}
           className='hidden dark:block'
           width={1024}
           height={1138}
-          alt='Shadcn-Admin'
+          alt=''
         />
       </div>
     </div>

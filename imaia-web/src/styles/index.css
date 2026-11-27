@@ -85,3 +85,18 @@
     height: 0;
   }
 }
+
+/*
+ * 尊重系统的"减少动态效果"偏好：动画与过渡降到近乎瞬时，而不是完全移除——
+ * 保留状态变化的结构感知，但不再有位移与缩放引起的眩晕。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
