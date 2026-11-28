@@ -3,6 +3,8 @@ package com.imaia.web;
 import com.imaia.common.web.Result;
 
 import com.imaia.ai.AiSettingsService;
+import com.imaia.domain.ImContact;
+import com.imaia.domain.ImMessage;
 import com.imaia.domain.Platform;
 import com.imaia.ai.ImageGenerationClient;
 import com.imaia.ai.VideoGenerationClient;
@@ -26,6 +28,9 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import com.imaia.domain.MessageDirection;
 import com.imaia.domain.MessageOrigin;
 import java.util.HashMap;
@@ -118,8 +123,15 @@ public class OverviewController {
     @GetMapping("/messages/recent")
     public Result<List<RecentMessageRow>> recentMessages() {
         Map<Long, String> labelMap = labels.labels();
-        Map<Long, String> contactNames = new HashMap<>();
-        return Result.ok(messages.findTop8ByOrderByIdDesc().stream()
+        List<ImMessage> recent = messages.findTop8ByOrderByIdDesc();
+        // 批量取联系人名：避免逐条 findById（N+1），与其他端点同款。
+        Set<Long> contactIds = recent.stream().map(ImMessage::getContactId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> contactNames = contactIds.isEmpty() ? Map.of()
+                : contacts.findAllById(contactIds).stream()
+                        .filter(contact -> contact.getDisplayName() != null)
+                        .collect(Collectors.toMap(ImContact::getId, ImContact::getDisplayName));
+        return Result.ok(recent.stream()
                 .map((m) -> {
                     String sender;
                     if (m.getOrigin() == MessageOrigin.AI) {
@@ -129,10 +141,7 @@ public class OverviewController {
                     } else if (m.getContactId() == null) {
                         sender = "对方";
                     } else {
-                        sender = contactNames.computeIfAbsent(m.getContactId(),
-                                (id) -> contacts.findById(id)
-                                        .map(contact -> contact.getDisplayName() == null ? "对方" : contact.getDisplayName())
-                                        .orElse("对方"));
+                        sender = contactNames.getOrDefault(m.getContactId(), "对方");
                     }
                     return new RecentMessageRow(m.getId(),
                             // 兜底不用 conversation_id：id 是存储实现细节，不进用户可见文案。

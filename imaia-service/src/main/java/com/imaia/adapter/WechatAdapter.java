@@ -10,6 +10,8 @@ import com.imaia.adapter.wechat.WechatConnection;
 import com.imaia.domain.ImAccount;
 import com.imaia.domain.MediaKind;
 import com.imaia.domain.MessageKind;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -37,6 +39,8 @@ import java.util.List;
  */
 @Component
 public class WechatAdapter implements ImAdapter {
+
+    private static final Logger log = LoggerFactory.getLogger(WechatAdapter.class);
 
 
     private static final String GROUP_CONVERSATION_SUFFIX = "@chatroom";
@@ -175,6 +179,7 @@ public class WechatAdapter implements ImAdapter {
         try {
             return JsonSupport.mapper().writeValueAsString(message);
         } catch (RuntimeException failure) {
+            log.warn("Could not snapshot wechat message {} for archive: {}", message.id(), failure.getMessage());
             return null;
         }
     }
@@ -356,6 +361,7 @@ public class WechatAdapter implements ImAdapter {
         try {
             return Instant.parse(createdAt);
         } catch (DateTimeParseException failure) {
+            log.warn("Unparseable wechat createdAt \"{}\"; falling back to receive time.", createdAt);
             return Instant.now();
         }
     }

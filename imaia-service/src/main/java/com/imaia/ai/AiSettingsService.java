@@ -13,6 +13,8 @@ import com.imaia.domain.Platform;
 import com.imaia.domain.ImConversation;
 import com.imaia.repository.AiSettingRepository;
 import com.imaia.repository.ImAccountRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -38,6 +40,8 @@ import java.util.stream.Collectors;
  */
 @Component
 public class AiSettingsService {
+
+    private static final Logger log = LoggerFactory.getLogger(AiSettingsService.class);
 
     /** 共享 Jackson 配置：Spring 注入，不自建实例绕过 spring.jackson.* 定制。 */
     private final JsonMapper json;
@@ -382,6 +386,8 @@ public class AiSettingsService {
         try {
             return JsonSupport.mapper().readTree(row.getValue()).asString();
         } catch (Exception malformed) {
+            log.warn("Stored ai_setting {} is not valid JSON; treating as unset. Key: {}, value: {}",
+                    row.getId(), row.getKey(), row.getValue());
             return null;
         }
     }

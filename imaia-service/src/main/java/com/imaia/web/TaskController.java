@@ -1,5 +1,6 @@
 package com.imaia.web;
 
+import com.imaia.common.error.ServiceException;
 import com.imaia.common.web.Result;
 import com.imaia.ai.AiSettingsService;
 import com.imaia.domain.ImConversation;
@@ -33,7 +34,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import tools.jackson.databind.JsonNode;
 
 /** 定时任务：run_at 一次性 / cron_expr 周期二选一；prompt 有则 AI 措辞，无则直发 content。 */
@@ -105,15 +105,12 @@ public class TaskController {
 
     @PostMapping
     public Result<Long> create(@Valid @RequestBody TaskCreate body) {
-        if (body.conversationId() == null) {
-            throw new IllegalArgumentException("conversationId 不能为空。");
-        }
         conversations.findById(body.conversationId())
-                .orElseThrow(() -> new NoSuchElementException("会话不存在：" + body.conversationId()));
+                .orElseThrow(() -> new ServiceException(ImaiaErrorCodeEnum.RESOURCE_NOT_FOUND));
         boolean once = StringUtils.hasText(body.fireAt());
         boolean recurring = StringUtils.hasText(body.cron());
         if (once == recurring) {
-            throw new IllegalArgumentException("fireAt 与 cron 必须二选一。");
+            throw new ServiceException(ImaiaErrorCodeEnum.TASK_SCHEDULE_CONFLICT);
         }
         String timezone = StringUtils.hasText(body.timezone())
                 ? body.timezone().strip() : settings.current().getTimezone();
@@ -121,7 +118,7 @@ public class TaskController {
         try {
             zone = ZoneId.of(timezone);
         } catch (RuntimeException failure) {
-            throw new IllegalArgumentException("timezone 不是有效的 IANA 时区：" + timezone);
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_INVALID);
         }
         Instant now = Instant.now();
         Instant runAt = null;
@@ -136,11 +133,11 @@ public class TaskController {
                 nextRunAt = CronExpression.parse(cron)
                         .next(ZonedDateTime.now(zone)).toInstant();
             } catch (RuntimeException failure) {
-                throw new IllegalArgumentException("cron 表达式无效：" + failure.getMessage());
+                throw new ServiceException(ImaiaErrorCodeEnum.TASK_CRON_INVALID);
             }
         }
         if (!StringUtils.hasText(body.content()) && !StringUtils.hasText(body.prompt())) {
-            throw new IllegalArgumentException("任务需要 content 或 prompt。");
+            throw new ServiceException(ImaiaErrorCodeEnum.TASK_CONTENT_REQUIRED);
         }
         ImTask task = ImTask.builder()
                 .conversationId(body.conversationId())
@@ -164,7 +161,7 @@ public class TaskController {
         try {
             return LocalDateTime.parse(value.strip(), FIRE_AT_FORMAT).atZone(zone).toInstant();
         } catch (DateTimeParseException failure) {
-            throw new IllegalArgumentException("fireAt 格式应为 yyyy-MM-dd HH:mm。");
+            throw new ServiceException(ImaiaErrorCodeEnum.PARAM_TIME_FORMAT);
         }
     }
 
@@ -172,7 +169,7 @@ public class TaskController {
     public Result<String> cancel(@PathVariable Long id) {
         ImTask task = tasks.findById(id).orElseThrow();
         if (task.getStatus() != TaskStatus.ACTIVE && task.getStatus() != TaskStatus.PAUSED) {
-            throw new IllegalArgumentException("只有活动/暂停任务可以取消。");
+            throw new ServiceException(ImaiaErrorCodeEnum.TASK_STATE_NOT_ALLOWED);
         }
         task.setStatus(TaskStatus.CANCELLED);
         task.setUpdatedAt(Instant.now());
@@ -185,7 +182,7 @@ public class TaskController {
     public Result<String> fire(@PathVariable Long id) {
         ImTask task = tasks.findById(id).orElseThrow();
         if (task.getStatus() != TaskStatus.ACTIVE && task.getStatus() != TaskStatus.PAUSED) {
-            throw new IllegalArgumentException("只有活动/暂停任务可以手动触发。");
+            throw new ServiceException(ImaiaErrorCodeEnum.TASK_STATE_NOT_ALLOWED);
         }
         task.setStatus(TaskStatus.ACTIVE);
         task.setNextRunAt(Instant.now());

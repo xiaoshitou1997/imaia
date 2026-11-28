@@ -9,6 +9,8 @@ import com.imaia.adapter.IngestLedger;
 import com.imaia.domain.ImAccount;
 import com.imaia.domain.MediaKind;
 import com.imaia.domain.MessageKind;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.lark.oapi.Client;
 import com.lark.oapi.service.im.v1.model.CreateFileReq;
 import com.lark.oapi.service.im.v1.model.CreateFileReqBody;
@@ -48,6 +50,8 @@ import java.io.ByteArrayOutputStream;
  */
 @Component
 public class FeishuAdapter implements ImAdapter {
+
+    private static final Logger log = LoggerFactory.getLogger(FeishuAdapter.class);
 
 
     /** Feishu chat ids (group conversations) carry the {@code oc_} prefix. */
@@ -424,6 +428,7 @@ public class FeishuAdapter implements ImAdapter {
         try {
             return Instant.ofEpochMilli(Long.parseLong(epochMillis.trim()));
         } catch (NumberFormatException failure) {
+            log.warn("Unparseable feishu createTime \"{}\"; falling back to receive time.", epochMillis);
             return Instant.now();
         }
     }

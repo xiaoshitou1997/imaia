@@ -1,6 +1,8 @@
 package com.imaia.adapter.wechat.cursor;
 
 import com.imaia.adapter.wechat.WechatConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Component;
@@ -19,6 +21,8 @@ import java.time.Duration;
  */
 @Component
 public class RedisCursorStore implements CursorStore {
+
+    private static final Logger log = LoggerFactory.getLogger(RedisCursorStore.class);
 
     /** 游标保留期：覆盖正常重启与短时断连，长时间不活跃即从头开始。 */
     private static final Duration CURSOR_TTL = Duration.ofDays(30);
@@ -63,6 +67,7 @@ public class RedisCursorStore implements CursorStore {
             redis.opsForValue().set(key, cursor, CURSOR_TTL);
         } catch (RuntimeException failure) {
             // Redis unreachable: the in-memory copy holds until it returns.
+            log.warn("Cursor persist to Redis failed; in-memory copy holds: {}", failure.getMessage());
         }
     }
 

@@ -11,6 +11,8 @@ import com.imaia.stream.StreamOrchestrator;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,6 +35,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/accounts")
 public class AccountController {
+
+    private static final Logger log = LoggerFactory.getLogger(AccountController.class);
 
     private final JsonMapper jsonMapper;
     private static final String MASK = "••••••••";
@@ -133,7 +137,9 @@ public class AccountController {
             }
             return jsonMapper.writeValueAsString(config);
         } catch (RuntimeException failure) {
-            return "{}"; // 历史配置可能不是合法 JSON，掩码视图按空对象返回
+            // 历史配置可能不是合法 JSON：掩码视图按空对象返回，但必须留痕供排查。
+            log.warn("Stored account config is not valid JSON; masking as empty object: {}", failure.getMessage());
+            return "{}";
         }
     }
 

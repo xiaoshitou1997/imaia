@@ -164,6 +164,8 @@ public class FeishuPlatformSource implements PlatformSource {
         try {
             rawNode = jsonMapper.readTree(jsonMapper.writeValueAsString(raw));
         } catch (RuntimeException failure) {
+            log.warn("Could not snapshot feishu message {} for archive: {}",
+                    message.getMessageId(), failure.getMessage());
             rawNode = null;
         }
         // Default group permissions deliver only @bot messages, so a group message

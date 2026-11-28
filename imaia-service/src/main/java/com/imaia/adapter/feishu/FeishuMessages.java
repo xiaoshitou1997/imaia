@@ -2,6 +2,8 @@ package com.imaia.adapter.feishu;
 
 import com.imaia.domain.MessageKind;
 import tools.jackson.databind.JsonNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 import com.imaia.config.JsonSupport;
 
@@ -11,6 +13,8 @@ import com.imaia.config.JsonSupport;
  * Spring types here, so the mapping is unit-testable in isolation.
  */
 public final class FeishuMessages {
+
+    private static final Logger log = LoggerFactory.getLogger(FeishuMessages.class);
 
     // 纯静态映射工具无构造注入点，经 JsonSupport 取容器装配的共享实例。
 
@@ -64,7 +68,11 @@ public final class FeishuMessages {
         return content == null ? null : textField(content, "image_key");
     }
 
-    /** Parses one feishu content JSON; malformed payloads yield null (logged upstream). */
+    /**
+     * Parses one feishu content JSON. Blank input is a legal absence (null);
+     * present-but-malformed content is payload corruption — logged here and
+     * returned as null so the archive keeps the rest of the message.
+     */
     public static JsonNode parse(String contentJson) {
         if (!StringUtils.hasText(contentJson)) {
             return null;
@@ -72,6 +80,7 @@ public final class FeishuMessages {
         try {
             return JsonSupport.mapper().readTree(contentJson);
         } catch (RuntimeException failure) {
+            log.warn("Malformed feishu content JSON ({}): {}", failure.getMessage(), contentJson);
             return null;
         }
     }

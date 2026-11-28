@@ -4,6 +4,8 @@ import com.imaia.common.error.ServiceException;
 import com.imaia.common.web.Result;
 import com.imaia.ai.AiSettingsService;
 import com.imaia.domain.AiSettings;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -32,12 +34,20 @@ public class SettingsController {
             String videoBaseUrl, String videoApiKey, String videoModel) {
     }
 
-    public record SettingsUpdate(String systemPrompt, Integer historyLimit, Boolean requireGroupMention,
-            Boolean quietHoursEnabled, String quietHoursStart, String quietHoursEnd,
-            String timezone, Boolean enabled, String selfCommandAlias, Boolean selfCommandEnabled,
-            String webSearchBaseUrl, String webSearchApiKey,
-            String imageBaseUrl, String imageApiKey, String imageModel,
-            String videoBaseUrl, String videoApiKey, String videoModel) {
+    public record SettingsUpdate(
+            @Size(max = 8000) String systemPrompt,
+            @Size(min = 1, max = 100) Integer historyLimit, Boolean requireGroupMention,
+            Boolean quietHoursEnabled,
+            @Size(max = 5) String quietHoursStart,
+            @Size(max = 5) String quietHoursEnd,
+            @Size(max = 64) String timezone,
+            Boolean enabled,
+            @Size(max = 50) String selfCommandAlias, Boolean selfCommandEnabled,
+            @Size(max = 512) String webSearchBaseUrl, @Size(max = 256) String webSearchApiKey,
+            @Size(max = 512) String imageBaseUrl, @Size(max = 256) String imageApiKey,
+            @Size(max = 128) String imageModel,
+            @Size(max = 512) String videoBaseUrl, @Size(max = 256) String videoApiKey,
+            @Size(max = 128) String videoModel) {
     }
 
     private final AiSettingsService settings;
@@ -52,7 +62,7 @@ public class SettingsController {
     }
 
     @PutMapping
-    public Result<SettingsRow> update(@RequestBody SettingsUpdate body) {
+    public Result<SettingsRow> update(@Valid @RequestBody SettingsUpdate body) {
         AiSettings current = settings.current();
         if (StringUtils.hasText(body.systemPrompt())) {
             current.setSystemPrompt(body.systemPrompt());
