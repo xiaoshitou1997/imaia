@@ -123,11 +123,12 @@ describe('SearchProvider and CommandMenu', () => {
 
     await openCommandPalette(screen)
 
-    // 父项「设置」没有 url，渲染为分组标题而非 option；只有子项是 option。
-    const nested = getByRole('option', { name: '设置' })
+    // 父项「设置」没有 url，渲染为分组标题而非 option；只有子项是 option，
+    // 可访问名为「父标题 子标题」。子页有 4 个（助理/图像/网页搜索/视频）。
+    const nested = getByRole('option', { name: '设置 图像' })
     await userEvent.click(nested)
 
-    expect(mocks.navigate).toHaveBeenCalledWith({ to: '/settings' })
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: '/settings/image' })
     await expect
       .element(getByPlaceholder(COMMAND_MENU_PLACEHOLDER))
       .not.toBeInTheDocument()

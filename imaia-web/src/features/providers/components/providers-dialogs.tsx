@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
@@ -11,17 +11,12 @@ import { useProviders } from './providers-provider'
 export function ProvidersDialogs() {
   const { open, setOpen, currentProvider, setCurrentProvider } = useProviders()
   const queryClient = useQueryClient()
-  const [deleteName, setDeleteName] = useState('')
   const [deleting, setDeleting] = useState(false)
 
   const closeRowDialogs = () => {
     setOpen(null)
     setTimeout(() => setCurrentProvider(null), 500)
   }
-
-  useEffect(() => {
-    if (open === 'delete') setDeleteName('')
-  }, [open])
 
   const remove = () => {
     if (!currentProvider) return
@@ -70,34 +65,51 @@ export function ProvidersDialogs() {
       />
 
       {currentProvider && open === 'delete' ? (
-        <ConfirmDialog
-          key='provider-delete'
-          destructive
-          open
-          onOpenChange={(o) => {
-            if (!o) closeRowDialogs()
-          }}
-          handleConfirm={remove}
-          isLoading={deleting}
-          disabled={deleteName.trim() !== currentProvider.name}
-          className='max-w-md'
-          title={'删除供应商 ' + currentProvider.name + '？'}
-          desc={
-            <>
-              「{currentProvider.name}」删除后其模型目录一并移除，引用它的槽位会推导失败。该操作不可撤销。
-              输入供应商名称以确认：
-            </>
-          }
-          confirmText='删除'
-        >
-          <Input
-            value={deleteName}
-            onChange={(e) => setDeleteName(e.target.value)}
-            placeholder={currentProvider.name}
-            autoComplete='off'
-          />
-        </ConfirmDialog>
+        <DeleteProviderConfirm provider={currentProvider} onRemove={remove} deleting={deleting}
+          onClose={closeRowDialogs} />
       ) : null}
     </>
+  )
+}
+
+/**
+ * 删除确认输入独立成组件：仅在删除对话框打开时挂载，输入值随重挂自然清空，
+ * 不需要在 effect 里同步 setState（级联渲染）。
+ */
+function DeleteProviderConfirm({ provider, onRemove, deleting, onClose }: {
+  provider: NonNullable<ReturnType<typeof useProviders>['currentProvider']>
+  onRemove: () => void
+  deleting: boolean
+  onClose: () => void
+}) {
+  const [deleteName, setDeleteName] = useState('')
+  return (
+    <ConfirmDialog
+      key='provider-delete'
+      destructive
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose()
+      }}
+      handleConfirm={onRemove}
+      isLoading={deleting}
+      disabled={deleteName.trim() !== provider.name}
+      className='max-w-md'
+      title={'删除供应商 ' + provider.name + '？'}
+      desc={
+        <>
+          「{provider.name}」删除后其模型目录一并移除，引用它的槽位会推导失败。该操作不可撤销。
+          输入供应商名称以确认：
+        </>
+      }
+      confirmText='删除'
+    >
+      <Input
+        value={deleteName}
+        onChange={(e) => setDeleteName(e.target.value)}
+        placeholder={provider.name}
+        autoComplete='off'
+      />
+    </ConfirmDialog>
   )
 }

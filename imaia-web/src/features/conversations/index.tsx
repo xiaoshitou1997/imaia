@@ -5,13 +5,19 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { api } from '@/lib/api'
+import { Route } from '@/routes/_authenticated/conversations/'
 import { ConversationList } from './components/conversation-list'
 import { ConversationMessages } from './components/conversation-messages'
 import { EditConversationDialog } from './components/edit-conversation-dialog'
 
 export function Conversations() {
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  // 搜索词与页码来自路由 search：URL 是唯一事实源，刷新与分享不丢。
+  const routeSearch = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const search = routeSearch.q ?? ''
+  const page = routeSearch.page ?? 1
+  const updateSearch = (patch: { q?: string; page?: number }) =>
+    navigate({ search: (prev) => ({ ...prev, ...patch }) })
   const [explicitId, setSelectedId] = useState<number | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -42,13 +48,12 @@ export function Conversations() {
           <ConversationList
             search={search}
             onSearchChange={(v) => {
-              setSearch(v)
-              setPage(1)
+              updateSearch({ q: v || undefined, page: undefined })
               setSelectedId(null)
             }}
             page={page}
             onPageChange={(p) => {
-              setPage(p)
+              updateSearch({ page: p > 1 ? p : undefined })
               setSelectedId(null)
             }}
             items={items}

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { Route } from '@/routes/_authenticated/tasks/'
 import { useQuery } from '@tanstack/react-query'
 import {
   flexRender,
   getCoreRowModel,
   useReactTable,
+  type OnChangeFn,
+  type PaginationState,
 } from '@tanstack/react-table'
 import { cn } from '@/lib/utils'
 import { api, type TaskRow } from '@/lib/api'
@@ -21,10 +23,14 @@ import { tasksColumns as columns } from './tasks-columns'
 
 interface TasksTableProps {
   status?: string
+  page?: number
 }
 
 export function TasksTable({ status }: TasksTableProps) {
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
+  // 页码同样来自路由 search，翻页写回 URL；筛选变化时路由已写新 search，页码回落。
+  const navigate = Route.useNavigate()
+  const routePage = Route.useSearch().page ?? 1
+  const pagination = { pageIndex: Math.max(0, routePage - 1), pageSize: 20 }
 
   const query = useQuery({
     queryKey: ['tasks', pagination.pageIndex, pagination.pageSize, status],
@@ -32,10 +38,12 @@ export function TasksTable({ status }: TasksTableProps) {
       api.tasks(pagination.pageIndex + 1, pagination.pageSize, status),
   })
 
-  // 状态过滤变化时回到第一页
-  useEffect(() => {
-    setPagination((p) => ({ ...p, pageIndex: 0 }))
-  }, [status])
+  const setPagination: OnChangeFn<PaginationState> = (updater) => {
+    const next = typeof updater === 'function' ? updater(pagination) : updater
+    navigate({
+      search: (prev) => ({ ...prev, page: next.pageIndex > 0 ? next.pageIndex + 1 : undefined }),
+    })
+  }
 
   const table = useReactTable({
     data: (query.data?.items ?? []) as TaskRow[],

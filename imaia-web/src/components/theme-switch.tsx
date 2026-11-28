@@ -13,10 +13,14 @@ import {
 export function ThemeSwitch() {
   const { theme, setTheme } = useTheme()
 
-  /* Update theme-color meta tag
-   * when theme is updated */
+  /* Update theme-color meta tag when theme is updated; color comes from the
+   * CSS token, not a hard-coded hex, so re-theming keeps the browser chrome
+   * in sync. */
   useEffect(() => {
-    const themeColor = theme === 'dark' ? '#020817' : '#fff'
+    const themeColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--background')
+        .trim() || (theme === 'dark' ? '#020817' : '#ffffff')
     const metaThemeColor = document.querySelector("meta[name='theme-color']")
     if (metaThemeColor) metaThemeColor.setAttribute('content', themeColor)
   }, [theme])

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -15,9 +14,13 @@ import { TasksPrimaryButtons } from './components/tasks-primary-buttons'
 import { TasksProvider } from './components/tasks-provider'
 import { TasksTable } from './components/tasks-table'
 import { taskStatusOptions } from './data/status'
+import { Route } from '@/routes/_authenticated/tasks/'
 
 export function Tasks() {
-  const [status, setStatus] = useState<string>('all')
+  // 筛选与页码来自路由 search：URL 是唯一事实源，刷新与分享不丢。
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const status = search.status ?? 'all'
 
   return (
     <TasksProvider>
@@ -37,7 +40,10 @@ export function Tasks() {
             </p>
           </div>
           <div className='flex items-center gap-2'>
-            <Select value={status} onValueChange={setStatus}>
+            <Select
+              value={status}
+              onValueChange={(v) => navigate({ search: (prev) => ({ ...prev, status: v === 'all' ? undefined : v }) })}
+            >
               <SelectTrigger className='w-32'>
                 <SelectValue />
               </SelectTrigger>
