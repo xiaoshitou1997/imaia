@@ -1,7 +1,7 @@
 target/
 node_modules/
 dist/
-data/
+/data/
 *.log
 .idea/
 .DS_Store
