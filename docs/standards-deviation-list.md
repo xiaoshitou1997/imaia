@@ -142,3 +142,43 @@
 三个脚本位于任务临时区（`imaia-tmp/review/`）：`audit-full.js`（35 项）、`audit-modules.js`（10 项）、`audit-a11y.js`（6 项）。每项输出条款、判定与依据文本，可直接重跑核对。
 
 判定过程中修正过 5 处脚本误判，均已在脚本内注明理由：`routeTree.gen.ts` 为生成产物、`Map<String,Object>` 的三方协议载荷豁免、`@Converter` 的名字解析必需、`@Bean` 定义处自建 mapper 合规、注释中的 `@Transactional` 不算注解使用。
+
+## 六、逐条复审轮（2026-11-28）
+
+本轮不依赖既有审计脚本，按 mv-coding-standards 后端 62 条、前端 12 条、测试 13 条逐条人工判定（两个只读审查 agent 全量扫描 + 逐条复核）。结果：后端 4 FAIL、前端 5 FAIL、测试 2 FAIL；已修全部 FAIL 与 PLAUSIBLE 项。
+
+### 本轮修复
+
+| 条款 | 问题 | 处理 |
+| --- | --- | --- |
+| 构建断裂（`.gitignore`） | `data/` 规则误伤 `features/tasks/data/`、`components/layout/data/` 两个源码目录，文件从未入库，全新 clone 必然编译失败 | 规则收窄为 `/data/`；重建 `tasks/data/status.ts`（值域对齐后端 TaskStatus/TaskLogStatus）与 `layout/data/sidebar-data.ts`（导航以实际路由为准） |
+| java-guide 13 不吞异常 | `FeishuMessages.parse`、`FeishuAdapter.rawJson`/`parseMillis`、`WechatAdapter.rawJson`/`parseTime`、`FeishuPlatformSource` rawNode、`RedisCursorStore.save`、`AiSettingsService.decode`、`AccountController.maskConfig` 共 9 处静默返 null/now/{} | 全部补 warn 留痕；合法缺席（blank 输入）语义不变 |
+| java-guide 49 死代码 | `AuditingConfig` 的请求级 ThreadLocal 全仓无写入/清理调用点（单管理员无多操作人语义），违反「未用代码删除」且给读者错误暗示 | 删除 ThreadLocal 与 set/clear 方法，操作人恒为 system，注释说明引入多操作人时再接身份解析 |
+| spring-guide 错误码 9 | `ImaiaErrorCodeEnum` 已定义的 TASK_* / RESOURCE_NOT_FOUND / PARAM_TIME_FORMAT 在 main 零使用；TaskController 抛裸 IllegalArgumentException → 客户端收到 500 而非 400 业务码 | TaskController 全部改抛 `ServiceException(对应枚举)`；预置错误码全部接线 |
+| java-guide 12 校验 | `SettingsController.update` 无 `@Valid`、SettingsUpdate 零约束注解，systemPrompt/timezone 无长度上限直落库 | 补 `@Valid` + 各字段 `@Size`（与后端落库列宽、前端提示同口径） |
+| java-guide 22 N+1 | `OverviewController.recentMessages` 逐条 `contacts.findById`（上限 8，但同文件同类场景均已批量） | 改 `findAllById` 批量取联系人名 |
+| 条款 43 profile | 仅一份 application.yml，无环境差异化机制 | 记录偏离理由：单环境本地部署（loopback 单机、凭据全部 env 注入），无多环境诉求；引入第二部署环境时补 profile |
+| 前端条款 4 | 会话搜索/页码、任务状态筛选/分页全是组件局部 state，刷新即丢；自建 `use-table-url-state.ts`（18 测试）零消费 | 改用 TanStack Router `validateSearch` 把筛选与页码写进 URL（两页路由 + feature 层）；删除形态不匹配的死 hook 及其测试 |
+| 前端条款 9 | `analytics-chart.tsx` 硬编码 `#888888`、`theme-switch.tsx` 硬编码 `#020817/#fff` 绕开令牌 | 图表轴色改 `var(--color-muted-foreground)`；theme-color meta 改读 `--background` 令牌（带硬编码兜底） |
+| 前端条款 12 | 脚手架演示资产残留：4 个演示 auth 路由（sign-up/sign-in-2/otp/forgot-password）无业务入口、`shadcn-admin.png` 无引用、`show-submitted-data.tsx`、`ui/input-otp.tsx` 仅演示引用 | 全部删除；routeTree 重生成；`search-provider.test.tsx` 嵌套项断言对齐真实子页（4 个设置子页） |
+| eslint 2 error | 两个删除对话框的 setState-in-effect（此前记录为「删除会回归」） | 找到第三种修法：删除确认输入下沉为仅在对话框打开时挂载的小组件，重挂自然清空，无 effect、无行为回归；2 error 清零 |
+| backend-testing 2 | `ModelSyncService` 多公有方法仅 1 用例；`InsightService` 无专属测试 | 补 ModelSyncService 2 个失败路径用例（网关失败必须传播不得静默清目录；增强源失败降级且手工标注不被覆盖）、新建 InsightServiceTest（AI 评析失败降级纯统计 + 成功路径） |
+| backend-testing 3 | `QueryState` 三态切换无交互测试 | 新建 `query-state.test.tsx` 5 用例：错误优先于空、重试回调、加载、空、有数据渲染 |
+
+### 仍偏离（如实保留）
+
+- **覆盖率**：本轮新增 3 个测试文件 10 用例后未重测，仍低于 70%/50% 基线；缺口分布不变（FeishuAdapter、ConversationController、AiProviderController、TaskRunner）。
+- **Controller 直连仓储（条款 1）**：AccountController/AiProviderController/TaskController/ConversationController 的写端点仍直接操作 repository。本轮未下沉——写用例下沉 Service 是跨 4 个 Controller 的结构性重构，且这些路径无事务原子性诉求（单表写或幂等读改写），在覆盖率 48% 无回归网的现状下动刀风险大于收益；建议作为独立重构任务，先补测试再迁移（与「先补测试再修剪」同一策略）。**已记录，未修剪**。
+- **条款 38/40 成功路径文案**：syncNote、任务回执、报告头等系统生成文案仍硬编码中文。ADR-0001 的单中文用户豁免覆盖产品语言判断；错误文案已按 ADR-0003 资源化。成功文案迁移到 MessageSource 与 Controller 下沉耦合（同一批代码），与上项同一批处理。**已记录，未修剪**。
+- **E2E（测试规则 4/13）**：无 Playwright 资产。裁剪依据（本轮补记）：单管理员 loopback 控制台，认证是环境变量校验无会话态，前端 70 用例 + 后端 190 用例覆盖核心写操作与错误路径；带认证 CRUD 项目要求的「登录→核心列表→一条写操作→登出」旅程在无真实部署环境的现状下未执行，属「未执行」而非「不适用」——引入真实部署/公网场景时须补。
+- **AiChatServiceTest mock 客户端接口（规则 6 PLAUSIBLE）**：保留现状——被测对象是分派逻辑而非 HTTP 语义，超时/5xx 路径可后续以 MockWebServer（项目已有依赖）补，不阻塞本轮。
+
+### 本轮验证证据
+
+| 项 | 命令 | 结果 |
+| --- | --- | --- |
+| 后端全量测试 | `mvn test` | exit 0，BUILD SUCCESS，**190 用例 / 0 失败 / 12 skipped**（新增 InsightServiceTest 2 + ModelSyncServiceTest 2；12 个真实库集成用例无凭据如实跳过） |
+| 前端类型 | `tsc -b` | exit 0（修复后首次证明全新 clone 可编译——两个 data 目录已入库） |
+| 前端 lint | `eslint src` | **0 error** / 6 warning（均为 HEAD 既有 fast-refresh 提示类） |
+| 前端测试 | `vitest run --browser.headless` | exit 0，**12 文件 70 用例全通过**（净变化：-use-table-url-state 18 用例，+query-state 5、演示路由相关 auth 用例随演示路由删除，任务/会话页 URL 状态由路由层承接） |
+| 前端构建 | `vite build` | exit 0，dist 生成 |
